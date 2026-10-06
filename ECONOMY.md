@@ -6,23 +6,24 @@
 - Her kaynakta kimlik, Türkçe ad, tür, derinlik, satış değeri, ağırlık, nadirlik ve tarif kullanımı bulunur.
 - Üretim kaynak miktarı ve kargo yükünü birlikte günceller.
 - Para bakiyesi negatif olamaz. Rezerv miktarı mevcut adedi aşamaz.
-- Kızıl Elmas, Mavi Obsidyen ve Kaliforniyum sırasıyla 100, 150 ve 200 km'de açılır; satış ve yönetici geliştirmelerinde kullanılır.
+- Earth kaynak eşikleri Mr. Mine Wiki ilerleyişidir: Red Diamond 80 km, Blue Obsidian 93 km, Californium 305 km. Eski oyuna özel 100/150/200 km kaynak açılımı kaldırıldı.
 - Einsteinyum/Fermiyum I–III yalnızca reaktör enerjisi harcanarak üretilir; normal tarama bunları düşürmez.
 
 ## Temel formüller
 
 | Sistem | Kural |
 |---|---|
-| İlk vardiya | Yeni kayıt `0` kasa ve `0` madenciyle başlar; ilk işe alım için en az bir kaynak satışı gerekir. |
-| İşçi işe alma | İlk madenci `50` kasa; ikinci `500` kasa; sonraki alımlar `round(500 × 1,43^(işçi sayısı − 1))` kasa. |
+| İlk vardiya | `GameState.newGame` yeni kaydı `0` kasa ve `0` madenciyle başlatır; ilk kaynak garantili yüzey kömür yığınıdır. İlk madenci 50 kasa tutar ve ilk satıştan sonra alınabilir. |
+| İşçi işe alma | İlk on toplam ekip üyesinin maliyeti Mr. Mine tablosundaki sırayı izler: `50, 500, 2.000, 10.000, 25.000, 75.000, 150.000, 500.000, 3M, 10M`; bu projede onuncudan sonraki küresel ekip için `2×` büyüme kullanılır. |
 | Sondaj geliştirme | Sondaj seviye 2 `150` kasa; seviye 3 `3.500` kasa + `20` kömür + `3` bakır + `1` gümüş. Kaynak tarifi rezervleri harcamaz. |
-| Sondaj montajı | Uç `100 W`, fan `50 W`, motor `5 W` tabanından başlar. Güç `(fan + uç) × motor çarpanı + motor taban gücü × motor çarpanı` ile bulunur; parça gücü toplam sondaj hızına en çok `6×` katkı verir. Parça başı maliyetler 250/150/500 kasa tabanından ve 3,0/2,8/3,5 büyüme oranından hesaplanır. |
-| Mk II şemaları | Her parçada 24–26. seviyeler 1.257 km'de açılır ve sırasıyla Helyum Cevheri, Selenit ve yapı malzemesi ister. |
+| Sondaj montajı | Uç `100 W`, fan `50 W`, motor `5 W` tabanından başlar. Güç `(fan + uç + motor tabanı) × motor çarpanı` ile bulunur; motor çarpanı seviye başına `1,5×` büyür. Oyundaki metre/sn hızına dönüşüm `1 + ln(güç / 155) × 0,30`, üst sınır `6×` olarak dengelenmiştir. |
+| Erken blueprint fiyatları | 2–13. seviye uç/fan/motor para fiyatları Mr. Mine Wiki blueprint tablosuyla eşlenmiştir. Kaynak tarifleri aynı cevher sırasını korur, mevcut küçük ambar ölçeğine göre küçültülmüştür. |
+| Montaj ilerleyişi | 6–9. seviye şemalar 50 km, 10–13. seviyeler 225 km, sandıktan çıkan 14–17. ve 21–23. seviye şemalar bu projede ilgili derinlikten sonra malzemeyle üretilir. Robot Mk II 24–26. seviyeleri 1.257 km'de; Robot Mk III 37–40. seviyeleri 2.039 km'de açar. Uç/fan/motor için 43 seviye bulunur. |
 | Vardiya yöneticisi | Kademe I: 100 km'de 2 yapı malzemesi + 100 Kızıl Elmas; II: 150 km'de 10 yapı malzemesi + 10 Mavi Obsidyen; III: 300 km'de 50 yapı malzemesi + 25 Kaliforniyum + 50 Petrol. Her kademe kaynak kilidi ve rezervleri gözetir. |
 | Petrol pompası | Yeraltı şehrinde başlangıç hızı 0,2 varil/sn, depo 100 varildir. Her yükseltme hızı ×1,6, depoyu +150 varil artırır; maliyet mevcut seviye ×10.000 kasa, üst sınır 50. Seviye 1 petrolü varil başına 500 kasaya satabilir veya 5 petrolü 2 yapı malzemesine işleyebilir. Depo Dünya envanterinde tutulur. |
 | Yükseltme maliyeti | Sekiz katalog ailesinin her biri 100 seviyelidir; sondajın erken fiyat/tarif istisnaları ve diğer ailelerin büyümesi `UpgradeCatalog` içinde kayıtlıdır. |
 | Kazı işçileri | Her açık kilometre kuyusunda kalan kazı ekibi kendi üretim yuvalarından kaynak toplar. Taban aralık 4 saniyedir; işçi eğitimi ve uzman bonusları aralığı kısaltır. |
-| Cevher yığınları | Yeni kayıtta yalnızca öğretici kömür yığını garantilidir. Derinlik 100 m'yi geçince, kapasite dolu değilken drill ilerleyişiyle olasılıklı yeni yığın doğar; konumu son 100 m içinde ve 1–9 kaya cebinden seçilir. Kaynağı o derinlikte açılmış mineraller belirler; daha yeni açılmış mineraller daha yüksek ağırlık alır. Normal yığın 5 vuruş sürer ve her vuruş sabit bir cevher payı verir. Açık katlar yığınlarla önceden doldurulmaz. |
+| Cevher yığınları | Yeni kayıtta yalnızca öğretici kömür yığını garantilidir. Derinlik 100 m'yi geçince, kapasite dolu değilken drill ilerleyişinde metre başına `%0,045` olasılıkla yeni yığın doğar; konumu son 100 m içinde ve kaya cebinden seçilir. Mr. Mine'ın dünya ve ilk açılma eşikleri uygulanır; daha yeni mineraller daha yüksek ağırlık alır, wiki'deki Earth/Ay zengin bölgeleri ayrıca ağırlık kazanır. Normal yığın 5 vuruş sürer ve her vuruş sabit cevher verir. Açık katlar yığınla doldurulmaz. |
 | Taşıma ekibi | Her taşıyıcı etkin ambar kapasitesine %4 ekler. |
 | Tarama ekibi | Her tarayıcı izotop olasılığına 4/1000 ve sandık bulma ihtimaline ek katkı verir. |
 | Ayıklama ekibi | Her ayıklayıcı kaynak satışına %2 ekler; toplam rol bonusu en fazla %100'dür. |
@@ -47,7 +48,7 @@
 
 Başlangıç üretimi, yükseltmeler ve fiyatlar denge verisi olarak tutulur. Büyük yükseltmeler küçük artışları kesintiye uğratmamalı; yeni ekipman, dünya ve kalıcı çekirdek hissedilir güç sıçraması vermelidir.
 
-Referans gözleminde ilk işçi 50 kasa, ikinci 500 kasa; sondaj seviye 2 ise yalnızca para istiyordu. Sonraki sondaj seviyesi para ve birden çok cevher istiyor. Bu oyunda ilk drill yükseltmesinin erken satın alınabilir kalması ve sonraki seviyede satışla geliştirme arasında seçim doğması korunur; çok-kaynaklı tarif küçük başlangıç ambarına ölçeklenmiştir. Yığınların beş vuruş ve olasılıklı doğma davranışı referans gözlemine dayanır; metrede %1 doğma şansı denge için bu projede seçilmiş ayardır.
+Wiki gözleminde işe alım maliyetleri ilk on işçi için sabit tabloyu izler. Sondaj seviye 2 yalnızca para ister; sonraki seviyeler para ve birden çok cevher gerektirir. Bu oyunda kaynak tarifleri küçük başlangıç ambarına ölçeklenmiştir. Yığınların beş vuruş ve olasılıklı doğma davranışı kaynak sistemi izler; `%0,045` metre başı olasılık bu projede daha seyrek tıklanabilir damar üretmek için seçilmiştir.
 
 ## Kapasite kuralları
 

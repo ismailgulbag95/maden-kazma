@@ -207,7 +207,7 @@ abstract final class AchievementCatalog {
       title: 'Titan Kaşifi',
       description: 'Titan katmanlarına ulaş.',
       kind: 'world',
-      target: 1782000,
+      target: 1814000,
       reward: 5000,
     ),
     AchievementDefinition(

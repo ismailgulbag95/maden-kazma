@@ -16,8 +16,8 @@ import 'drill_assembly_definition.dart';
 import 'buff_lab_definition.dart';
 
 class GameState {
-  static const int currentSchemaVersion = 18;
-  static const List<double> worldEntryDepths = [0, 1032000, 1782000];
+  static const int currentSchemaVersion = 19;
+  static const List<double> worldEntryDepths = [0, 1032000, 1814000];
   static const List<double> autoSellThresholdChoices = [.6, .75, .85, .95];
 
   GameState({
@@ -1082,9 +1082,15 @@ class GameState {
     state.oilPumpLevel = state.oilPumpLevel.clamp(1, 50).toInt();
     if (!state.oilPumpProgress.isFinite) state.oilPumpProgress = 0;
     state.oilPumpProgress = state.oilPumpProgress.clamp(0, 1000000).toDouble();
-    state.drillBitLevel = state.drillBitLevel.clamp(1, 26).toInt();
-    state.drillFanLevel = state.drillFanLevel.clamp(1, 26).toInt();
-    state.drillEngineLevel = state.drillEngineLevel.clamp(1, 26).toInt();
+    state.drillBitLevel = state.drillBitLevel
+        .clamp(1, DrillAssemblyCatalog.maxLevel)
+        .toInt();
+    state.drillFanLevel = state.drillFanLevel
+        .clamp(1, DrillAssemblyCatalog.maxLevel)
+        .toInt();
+    state.drillEngineLevel = state.drillEngineLevel
+        .clamp(1, DrillAssemblyCatalog.maxLevel)
+        .toInt();
     state.scientistsSacrificedToCore = state.scientistsSacrificedToCore
         .clamp(0, 1000000)
         .toInt();

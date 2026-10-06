@@ -28,6 +28,8 @@ class GameScreen extends StatefulWidget {
 
 class _GameScreenState extends State<GameScreen> {
   bool _offlineDialogShown = false;
+  String? _activeNotice;
+  Timer? _noticeTimer;
 
   @override
   void initState() {
@@ -44,16 +46,11 @@ class _GameScreenState extends State<GameScreen> {
     if (notices.isEmpty) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final messenger = ScaffoldMessenger.of(context);
-      messenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(notices.last),
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 3),
-          ),
-        );
+      _noticeTimer?.cancel();
+      setState(() => _activeNotice = notices.last);
+      _noticeTimer = Timer(const Duration(seconds: 3), () {
+        if (mounted) setState(() => _activeNotice = null);
+      });
     });
   }
 
@@ -116,35 +113,93 @@ class _GameScreenState extends State<GameScreen> {
           builder: (context, _) => LayoutBuilder(
             builder: (context, constraints) {
               final compact = constraints.maxWidth < 1120;
-              return DecoratedBox(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Color(0xFF0D2D3B), MinePalette.ink],
+              final hudHeight = constraints.maxWidth < 560
+                  ? 92.0
+                  : compact
+                  ? 58.0
+                  : 70.0;
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  DecoratedBox(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Color(0xFF0D2D3B), MinePalette.ink],
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        _HudBar(
+                          state: widget.controller.state,
+                          onSave: widget.controller.saveNow,
+                        ),
+                        Expanded(
+                          child: compact
+                              ? _CompactGameLayout(
+                                  controller: widget.controller,
+                                  onBuilding: _openBuilding,
+                                  onUtility: _openUtilities,
+                                )
+                              : _WideGameLayout(
+                                  controller: widget.controller,
+                                  onBuilding: _openBuilding,
+                                  onUtility: _openUtilities,
+                                ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                child: Column(
-                  children: [
-                    _HudBar(
-                      state: widget.controller.state,
-                      onSave: widget.controller.saveNow,
-                    ),
-                    Expanded(
-                      child: compact
-                          ? _CompactGameLayout(
-                              controller: widget.controller,
-                              onBuilding: _openBuilding,
-                              onUtility: _openUtilities,
-                            )
-                          : _WideGameLayout(
-                              controller: widget.controller,
-                              onBuilding: _openBuilding,
-                              onUtility: _openUtilities,
+                  if (_activeNotice != null)
+                    Positioned(
+                      top: hudHeight + 8,
+                      left: 12,
+                      right: 12,
+                      child: IgnorePointer(
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 520),
+                            child: AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 180),
+                              child: Container(
+                                key: ValueKey(_activeNotice),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 9,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xEA092129),
+                                  border: Border.all(
+                                    color: MinePalette.cyan,
+                                    width: 1.2,
+                                  ),
+                                  borderRadius: BorderRadius.circular(10),
+                                  boxShadow: const [
+                                    BoxShadow(
+                                      color: Colors.black38,
+                                      blurRadius: 9,
+                                      offset: Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: Text(
+                                  _activeNotice!,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    color: MinePalette.cream,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
                             ),
+                          ),
+                        ),
+                      ),
                     ),
-                  ],
-                ),
+                ],
               );
             },
           ),
@@ -156,6 +211,7 @@ class _GameScreenState extends State<GameScreen> {
   @override
   void dispose() {
     widget.controller.removeListener(_onControllerChanged);
+    _noticeTimer?.cancel();
     super.dispose();
   }
 }
@@ -863,7 +919,21 @@ const _surfaceBuildingSourceCrops = <Rect>[
   Rect.fromLTRB(0, 0, 1, .867188),
   Rect.fromLTRB(0, .029297, .978516, .855469),
 ];
-const _galleryHeightRatios = <double>[.25, .46, .67, .86];
+
+double _surfaceBuildingSpriteHeight(
+  int spriteIndex,
+  double width,
+  double height,
+) {
+  final crop = _surfaceBuildingSourceCrops[spriteIndex];
+  final croppedAspectRatio = crop.width / crop.height;
+  final availableHeight = math.max(0.0, height - 42);
+  return math.min(availableHeight, width / croppedAspectRatio).toDouble();
+}
+
+// Four galleries at a quarter-height pitch. The first and last are offset by
+// one eighth so the spacing stays even when consecutive 1 km tiles meet.
+const _galleryHeightRatios = <double>[.125, .375, .625, .875];
 const double _mineVisualFloorMeters = 1000;
 
 String _mineWallAsset({required int worldIndex, required int majorBand}) {
@@ -1041,6 +1111,14 @@ class _BuildingButton extends StatelessWidget {
       'expedition' => (5, CrewAction.exploring),
       _ => (0, CrewAction.mining),
     };
+    final spriteHeight = _surfaceBuildingSpriteHeight(
+      spriteIndex,
+      width,
+      height,
+    );
+    final labelTop = (height - spriteHeight - 18)
+        .clamp(0.0, math.max(0.0, height - 15))
+        .toDouble();
     return Semantics(
       button: true,
       label: '$label binasını aç',
@@ -1093,7 +1171,7 @@ class _BuildingButton extends StatelessWidget {
                 Positioned(
                   left: 0,
                   right: 0,
-                  top: height * .2,
+                  top: labelTop,
                   height: 15,
                   child: Center(
                     child: ConstrainedBox(
@@ -1126,7 +1204,7 @@ class _BuildingButton extends StatelessWidget {
                 if (pending)
                   Positioned(
                     right: 4,
-                    top: height * .2 + 16,
+                    top: labelTop + 16,
                     child: Container(
                       width: 14,
                       height: 14,
@@ -1171,6 +1249,7 @@ class _DepthRail extends StatelessWidget {
       500000,
       1032000,
       1782000,
+      1814000,
     ];
     return Container(
       decoration: const BoxDecoration(
@@ -1507,7 +1586,7 @@ class _MineShaftViewState extends State<_MineShaftView> {
         );
         final localDeepest = math.max(0.0, worldDepth - worldStartDepth);
         final floorCount = (localDeepest / _mineVisualFloorMeters).floor() + 1;
-        final floorHeight = math.max(288.0, height * 1.05);
+        final floorHeight = math.max(288.0, height);
         final localDepth = (state.depthMeters - worldStartDepth)
             .clamp(0.0, localDeepest)
             .toDouble();
@@ -1515,8 +1594,6 @@ class _MineShaftViewState extends State<_MineShaftView> {
           0,
           floorCount - 1,
         );
-        final progressInFloor =
-            (localDepth % _mineVisualFloorMeters) / _mineVisualFloorMeters;
         const buffBottom = 56.0;
         _followActiveDepth(
           localDepth / _mineVisualFloorMeters * floorHeight - height * .46,
@@ -1549,7 +1626,6 @@ class _MineShaftViewState extends State<_MineShaftView> {
                           narrow: narrow,
                           floorIndex: floorIndex,
                           isActiveFloor: floorIndex == activeFloor,
-                          progressInFloor: progressInFloor,
                         ),
                       );
                     },
@@ -1691,7 +1767,6 @@ class _MineWorld extends StatelessWidget {
     required this.narrow,
     required this.floorIndex,
     required this.isActiveFloor,
-    required this.progressInFloor,
   });
 
   final GameController controller;
@@ -1700,7 +1775,6 @@ class _MineWorld extends StatelessWidget {
   final bool narrow;
   final int floorIndex;
   final bool isActiveFloor;
-  final double progressInFloor;
 
   @override
   Widget build(BuildContext context) {
@@ -1770,7 +1844,7 @@ class _MineWorld extends StatelessWidget {
                 worldIndex: worldIndex,
                 majorBand: floorIndex ~/ 100,
               ),
-              floorVariant: floorIndex,
+              verticalOffset: floorIndex * height,
               minorTint: _mineMinorTint(
                 worldIndex: worldIndex,
                 variant: minorVariant,
@@ -1851,19 +1925,12 @@ class _MineWorld extends StatelessWidget {
         if (isActiveFloor)
           Positioned(
             left: (width - elevatorWidth) / 2,
-            top:
-                galleryFloors.first -
-                elevatorHeight +
-                (galleryFloors.last - galleryFloors.first) * progressInFloor,
+            top: galleryFloors.first - elevatorHeight,
             width: elevatorWidth,
-            height: elevatorHeight,
-            child: IgnorePointer(
-              child: Image.asset(
-                'assets/packs/mine-elevator-car.png',
-                fit: BoxFit.contain,
-                alignment: Alignment.bottomCenter,
-                filterQuality: FilterQuality.none,
-              ),
+            height: galleryFloors.last - galleryFloors.first + elevatorHeight,
+            child: _MineElevatorMotion(
+              width: elevatorWidth,
+              height: elevatorHeight,
             ),
           ),
         for (var worker = 0; worker < workerSlots.length; worker++)
@@ -1906,7 +1973,8 @@ class _MineWorld extends StatelessWidget {
         if (isActiveFloor)
           Positioned(
             left: (width - rigWidth) / 2,
-            top: galleryFloors.last - rigHeight * .52,
+            // The drill point reaches about 98% down its transparent asset.
+            top: height - rigHeight * .98,
             child: IgnorePointer(
               child: ContinuousDrillRig(width: rigWidth, height: rigHeight),
             ),
@@ -1957,6 +2025,60 @@ class _MineWorld extends StatelessWidget {
   }
 }
 
+class _MineElevatorMotion extends StatefulWidget {
+  const _MineElevatorMotion({required this.width, required this.height});
+
+  final double width;
+  final double height;
+
+  @override
+  State<_MineElevatorMotion> createState() => _MineElevatorMotionState();
+}
+
+class _MineElevatorMotionState extends State<_MineElevatorMotion>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _position;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat(reverse: true);
+    _position = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeInOutSine,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _position,
+    builder: (context, child) =>
+        Align(alignment: Alignment(0, -1 + _position.value * 2), child: child),
+    child: SizedBox(
+      width: widget.width,
+      height: widget.height,
+      child: IgnorePointer(
+        child: Image.asset(
+          'assets/packs/mine-elevator-car.png',
+          fit: BoxFit.contain,
+          alignment: Alignment.bottomCenter,
+          filterQuality: FilterQuality.none,
+        ),
+      ),
+    ),
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+}
+
 class _MineWorkerPlacement {
   const _MineWorkerPlacement({
     required this.left,
@@ -1987,7 +2109,7 @@ List<_MineWorkerPlacement> _layoutMineWorkers({
   required double workerGap,
 }) {
   if (crewCount <= 0) return const [];
-  final workerCount = math.min(crewCount, 8);
+  final workerCount = math.min(crewCount, 10);
   final workerWidth = (narrow ? 46.0 : 60.0) * .7;
   final workerHeight = (narrow ? 62.0 : 80.0) * .7;
   final galleryFloors = _galleryHeightRatios

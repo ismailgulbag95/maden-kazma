@@ -652,7 +652,7 @@ class BuildingDialog extends StatelessWidget {
       _subheading('SONDAJ MONTAJI'),
       _sectionIntro(
         'UÇ • FAN • MOTOR',
-        'Her parça ayrı güç verir. Parça gücü sondaj hızına aktarılır; 24–26. şemalar 1.257 km’de Robot Mk II ile açılır.',
+        'Toplam güç: (fan + uç + motor taban gücü) × motor çarpanı. Şemalar para ve maden ister; üst parçalar kendi dünya ve derinlik eşiklerinde açılır.',
       ),
       _statTile(
         'Toplam montaj gücü',
@@ -678,9 +678,21 @@ class BuildingDialog extends StatelessWidget {
       state,
       component.id,
     );
-    final mk2Locked =
-        nextLevel >= DrillAssemblyCatalog.robotMk2Level &&
-        !state.unlockedBuildings.contains('robot_mk2');
+    final requiredDepth = DrillAssemblyCatalog.requiredDepthFor(nextLevel);
+    final depthLocked =
+        nextLevel <= DrillAssemblyCatalog.maxLevel &&
+        state.deepestMeters < requiredDepth;
+    final requiredBuilding = DrillAssemblyCatalog.requiredBuildingFor(
+      nextLevel,
+    );
+    final buildingLocked =
+        requiredBuilding != null &&
+        !state.unlockedBuildings.contains(requiredBuilding);
+    final requiredBuildingName = switch (requiredBuilding) {
+      'robot_mk2' => 'Robot Mk II',
+      'robot_mk3' => 'Robot Mk III',
+      _ => '',
+    };
     final recipeText = requirements.entries
         .map(
           (entry) =>
@@ -700,17 +712,24 @@ class BuildingDialog extends StatelessWidget {
       title: '${component.name} • Lv $level/${DrillAssemblyCatalog.maxLevel}',
       description: level >= DrillAssemblyCatalog.maxLevel
           ? 'Son şema tamamlandı • ${currentWatts.toStringAsFixed(0)} W.'
-          : mk2Locked
-          ? 'Sonraki şema ${DrillAssemblyCatalog.robotMk2Level}. seviyede. Robot Mk II 1.257 km’de bulunur.'
+          : depthLocked
+          ? 'Sonraki şema ${requiredDepth ~/ 1000} km derinlikte açılır.'
+          : buildingLocked
+          ? 'Bu şema için $requiredBuildingName bulunmalı.'
           : '${currentWatts.toStringAsFixed(0)} → ${nextWatts.toStringAsFixed(0)} W${recipeText.isEmpty ? '' : ' • Tarif: $recipeText'}.',
       buttonLabel: level >= DrillAssemblyCatalog.maxLevel
           ? 'MAKSİMUM'
-          : mk2Locked
-          ? '1.257 KM'
+          : depthLocked
+          ? '${requiredDepth ~/ 1000} KM'
+          : buildingLocked
+          ? requiredBuildingName.toUpperCase()
+          : cost == 0
+          ? 'TARİFİ ÜRET'
           : '$cost KASA',
       enabled:
           level < DrillAssemblyCatalog.maxLevel &&
-          !mk2Locked &&
+          !depthLocked &&
+          !buildingLocked &&
           state.crewCount > 0 &&
           state.coins >= cost &&
           deficits.isEmpty,
@@ -1550,7 +1569,7 @@ class BuildingDialog extends StatelessWidget {
         ),
         _statTile('Keşif dronları', '${state.drones} hazır'),
         _statTile('Tamamlanan mağaralar', '${state.cavesCompleted}'),
-        _statTile(
+        _detailTile(
           'Mağara tehlikeleri',
           'Kaya bloğu: +1 yakıt • çamur: yer dronuna +1 yakıt • radyasyon: tüm dronlara hasar • lav (300 km+): yer dronuna hasar. Buff Lab kalkanı hasarı engeller.',
         ),
@@ -3665,19 +3684,60 @@ Widget _statTile(String label, String value) => Container(
     borderRadius: BorderRadius.circular(7),
   ),
   child: Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Expanded(
+        flex: 2,
         child: Text(
           label,
           style: const TextStyle(color: MinePalette.muted, fontSize: 10),
         ),
       ),
+      const SizedBox(width: 8),
+      Expanded(
+        flex: 3,
+        child: Text(
+          value,
+          textAlign: TextAlign.right,
+          style: const TextStyle(
+            color: MinePalette.cream,
+            fontSize: 10,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+    ],
+  ),
+);
+
+Widget _detailTile(String label, String value) => Container(
+  margin: const EdgeInsets.only(bottom: 6),
+  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
+  decoration: BoxDecoration(
+    color: const Color(0xFF0B222C),
+    border: Border.all(color: MinePalette.border),
+    borderRadius: BorderRadius.circular(7),
+  ),
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        label,
+        style: const TextStyle(
+          color: MinePalette.muted,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      const SizedBox(height: 4),
       Text(
         value,
+        softWrap: true,
         style: const TextStyle(
           color: MinePalette.cream,
           fontSize: 10,
-          fontWeight: FontWeight.w900,
+          height: 1.35,
+          fontWeight: FontWeight.w800,
         ),
       ),
     ],

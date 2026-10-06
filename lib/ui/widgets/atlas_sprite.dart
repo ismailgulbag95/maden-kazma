@@ -111,12 +111,12 @@ class CaveTextureBackground extends StatelessWidget {
   const CaveTextureBackground({
     super.key,
     required this.asset,
-    required this.floorVariant,
+    required this.verticalOffset,
     required this.minorTint,
   });
 
   final String asset;
-  final int floorVariant;
+  final double verticalOffset;
   final Color? minorTint;
 
   @override
@@ -132,7 +132,7 @@ class CaveTextureBackground extends StatelessWidget {
             size: size,
             painter: _CaveTexturePainter(
               image: image,
-              floorVariant: floorVariant,
+              verticalOffset: verticalOffset,
               minorTint: minorTint,
             ),
           );
@@ -248,12 +248,12 @@ class _MineEdgeRockPainter extends CustomPainter {
 class _CaveTexturePainter extends CustomPainter {
   const _CaveTexturePainter({
     required this.image,
-    required this.floorVariant,
+    required this.verticalOffset,
     required this.minorTint,
   });
 
   final ui.Image image;
-  final int floorVariant;
+  final double verticalOffset;
   final Color? minorTint;
 
   @override
@@ -265,8 +265,7 @@ class _CaveTexturePainter extends CustomPainter {
       ..[5] = 1
       ..[10] = 1
       ..[15] = 1
-      ..[12] = image.width * ((floorVariant % 4) * .21)
-      ..[13] = image.height * ((floorVariant % 5) * .13);
+      ..[13] = verticalOffset;
     final texture = ui.ImageShader(
       image,
       ui.TileMode.mirror,
@@ -292,7 +291,7 @@ class _CaveTexturePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _CaveTexturePainter oldDelegate) =>
       image != oldDelegate.image ||
-      floorVariant != oldDelegate.floorVariant ||
+      verticalOffset != oldDelegate.verticalOffset ||
       minorTint != oldDelegate.minorTint;
 }
 

@@ -263,7 +263,7 @@ abstract final class ScientistExpeditionCatalog {
       id: 'titan_archive',
       name: 'Titan Kristal Arşivi',
       description: 'Yüksek risk • derin sandık ve ender kalıntı.',
-      minimumDepth: 1782000,
+      minimumDepth: 1814000,
       duration: Duration(hours: 4),
       baseSuccessChance: .68,
       coinReward: 14500,

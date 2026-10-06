@@ -13,6 +13,7 @@ import '../models/special_worker_definition.dart';
 import '../models/scientist_definition.dart';
 import '../models/ore_deposit.dart';
 import '../models/drill_assembly_definition.dart';
+import '../models/mr_mine_progression.dart';
 import '../models/reactor_definition.dart';
 import '../models/buff_lab_definition.dart';
 
@@ -167,8 +168,9 @@ abstract final class GameEngine {
     '1133000': 'reactor',
     '1135000': 'buff_lab',
     '1257000': 'robot_mk2',
-    '1782000': 'titan_world',
-    '1814000': 'titan_domain',
+    '1814000': 'titan_world',
+    '1829000': 'titan_trader',
+    '2039000': 'robot_mk3',
   };
 
   static const Map<String, (String, int, int)> hiddenEncounters = {
@@ -176,7 +178,8 @@ abstract final class GameEngine {
     '225000': ('Uykudaki Sondaj Robotu', 1600, 1),
     '700000': ('Sandık Sıkıştırıcı Oyuğu', 3200, 1),
     '1032000': ('Ay Gölge Krateri', 5200, 2),
-    '1782000': ('Titan Kristal Arşivi', 8000, 3),
+    '1782000': ('Kayıp Uzay Sinyali', 8000, 0),
+    '1814000': ('Titan Kristal Arşivi', 9500, 3),
   };
 
   static int upgradeCost(GameState state, String track) {
@@ -255,7 +258,7 @@ abstract final class GameEngine {
         currentLevel >= DrillAssemblyCatalog.maxLevel) {
       return 0;
     }
-    return component.upgradeCost(currentLevel);
+    return DrillAssemblyCatalog.cashCost(component, currentLevel);
   }
 
   static Map<String, int> drillAssemblyMaterialRequirements(
@@ -264,6 +267,7 @@ abstract final class GameEngine {
   ) {
     if (!DrillAssemblyCatalog.byId.containsKey(componentId)) return const {};
     return DrillAssemblyCatalog.materialCosts(
+      componentId,
       drillAssemblyLevel(state, componentId) + 1,
     );
   }
@@ -282,10 +286,24 @@ abstract final class GameEngine {
 
   static bool upgradeDrillAssembly(GameState state, String componentId) {
     final currentLevel = drillAssemblyLevel(state, componentId);
+    final nextLevel = currentLevel + 1;
     final cost = drillAssemblyUpgradeCost(state, componentId);
-    if (cost <= 0 || state.crewCount <= 0 || state.coins < cost) return false;
-    if (currentLevel + 1 >= DrillAssemblyCatalog.robotMk2Level &&
-        !state.unlockedBuildings.contains('robot_mk2')) {
+    if (!DrillAssemblyCatalog.byId.containsKey(componentId) ||
+        currentLevel < 1 ||
+        currentLevel >= DrillAssemblyCatalog.maxLevel ||
+        state.crewCount <= 0 ||
+        state.coins < cost) {
+      return false;
+    }
+    if (state.deepestMeters <
+        DrillAssemblyCatalog.requiredDepthFor(nextLevel)) {
+      return false;
+    }
+    final requiredBuilding = DrillAssemblyCatalog.requiredBuildingFor(
+      nextLevel,
+    );
+    if (requiredBuilding != null &&
+        !state.unlockedBuildings.contains(requiredBuilding)) {
       return false;
     }
     if (drillAssemblyMaterialDeficits(state, componentId).isNotEmpty) {
@@ -515,19 +533,48 @@ abstract final class GameEngine {
     };
   }
 
-  static int minerCost(GameState state) => state.crewCount == 0
-      ? 50
-      : (500 * pow(1.43, max(0, state.crewCount - 1))).round();
+  static const List<int> _sourceMinerHireCosts = [
+    50,
+    500,
+    2000,
+    10000,
+    25000,
+    75000,
+    150000,
+    500000,
+    3000000,
+    10000000,
+  ];
+
+  static int minerCost(GameState state) {
+    final currentCrew = state.crewCount.clamp(0, 80).toInt();
+    if (currentCrew < _sourceMinerHireCosts.length) {
+      return _sourceMinerHireCosts[currentCrew];
+    }
+    return min(1e18, 10000000 * pow(2, currentCrew - 9)).round();
+  }
 
   static const int mineFloorMeters = 1000;
   static const int mineDepositSpawnDepth = 100;
-  static const double mineDepositSpawnChancePerMeter = .004;
+  static const double mineDepositSpawnChancePerMeter = .00045;
   static const int maxLiveDepositsPerFloor = 4;
 
   /// Gives a fresh surface shift its guaranteed coal tutorial deposit.
   /// Other deposits spawn as the drill advances; open floors stay empty until
   /// a random spawn lands in them.
   static void ensureOpenMineDeposits(GameState state) {
+    state.oreDeposits.removeWhere((_, deposit) {
+      if (deposit.depleted) return false;
+      final spawnDepth =
+          deposit.spawnDepthMeters ??
+          deposit.floorIndex * mineFloorMeters.toDouble();
+      final band = MrMineProgression.bandByResourceId[deposit.resourceId];
+      return band == null ||
+          band.worldIndex != deposit.worldIndex ||
+          spawnDepth < band.firstDepthMeters ||
+          MrMineProgression.worldAtDepth(spawnDepth) != deposit.worldIndex;
+    });
+
     if (state.activeWorldIndex != 0 || state.depthMeters >= mineFloorMeters) {
       return;
     }
@@ -559,6 +606,10 @@ abstract final class GameEngine {
     if (state.cargoFull ||
         state.depthMeters <= mineDepositSpawnDepth ||
         metersAdvanced <= 0) {
+      return false;
+    }
+    if (MrMineProgression.worldAtDepth(state.depthMeters) !=
+        state.activeWorldIndex) {
       return false;
     }
     final chance = chancePerMeter.clamp(0, 1).toDouble();
@@ -617,24 +668,32 @@ abstract final class GameEngine {
     final worldEnd = worldIndex + 1 < GameState.worldEntryDepths.length
         ? GameState.worldEntryDepths[worldIndex + 1]
         : double.infinity;
-    final eligible = ResourceCatalog.minerals
-        .where((resource) => resource.minDepthMeters <= depth)
-        .where((resource) => resource.minDepthMeters >= worldStart)
-        .where((resource) => resource.minDepthMeters < worldEnd)
+    if (MrMineProgression.worldAtDepth(depth) != worldIndex) return null;
+    final eligible = MrMineProgression.minerals
+        .where((band) => band.worldIndex == worldIndex)
+        .where((band) => band.firstDepthMeters <= depth)
+        .where((band) => band.firstDepthMeters >= worldStart)
+        .where((band) => band.firstDepthMeters < worldEnd)
+        .map((band) => (band, ResourceCatalog.byId[band.resourceId]))
+        .where((entry) => entry.$2 != null)
         .toList(growable: false);
     if (eligible.isEmpty) return null;
 
     final weights = [
       for (var index = 0; index < eligible.length; index++)
-        pow(.58, eligible.length - index - 1).toDouble(),
+        pow(.58, eligible.length - index - 1).toDouble() *
+            (eligible[index].$1.worldIndex < 2 &&
+                    eligible[index].$1.isRichAt(depth)
+                ? 4
+                : 1),
     ];
     final totalWeight = weights.fold<double>(0, (sum, weight) => sum + weight);
     var choice = random.nextDouble() * totalWeight;
     for (var index = 0; index < eligible.length; index++) {
       choice -= weights[index];
-      if (choice < 0) return eligible[index];
+      if (choice < 0) return eligible[index].$2;
     }
-    return eligible.last;
+    return eligible.last.$2;
   }
 
   static OreDepositState? _createMineDeposit(
@@ -824,11 +883,15 @@ abstract final class GameEngine {
             state.amount('building_material') + 1;
         break;
       case 'rich_vein':
-        final resource = ResourceCatalog.atDepth(state.depthMeters);
-        final added = _addResource(state, resource, 3);
-        if (added <= 0) return false;
-        state.totalMined += added;
-        recordDailyProgress(state, 'mine', added);
+        final resource = ResourceCatalog.mineableAtDepth(state.depthMeters);
+        if (resource == null) {
+          state.coins += 500;
+        } else {
+          final added = _addResource(state, resource, 3);
+          if (added <= 0) return false;
+          state.totalMined += added;
+          recordDailyProgress(state, 'mine', added);
+        }
         break;
       case 'lost_explorer':
         state.inventory['building_material'] =
@@ -1022,20 +1085,24 @@ abstract final class GameEngine {
 
     final isSuccess = outcome == 'success';
     final isPartial = outcome == 'partial';
-    final ore = ResourceCatalog.atDepth(
+    final ore = ResourceCatalog.mineableAtDepth(
       max(state.depthMeters, mission.minimumDepth),
     );
-    final resourceCount = isSuccess
+    final resourceCount = ore == null
+        ? 0
+        : isSuccess
         ? (mission.resourceCount * (1 + scientist.trait.mineralBonus)).round()
         : isPartial
         ? max(1, mission.resourceCount ~/ 3)
         : 0;
-    if (resourceCount > _availableUnits(state, ore)) return false;
+    if (ore != null && resourceCount > _availableUnits(state, ore)) {
+      return false;
+    }
 
     if (isSuccess || isPartial) {
       final reward = isSuccess ? mission.coinReward : mission.coinReward ~/ 3;
       state.coins += reward;
-      _addResource(state, ore, resourceCount);
+      if (ore != null) _addResource(state, ore, resourceCount);
       if (isSuccess) {
         switch (mission.chestTier) {
           case 'gold':
@@ -1391,12 +1458,14 @@ abstract final class GameEngine {
             floorIndex++
           ) {
             final floorDepth = worldStart + floorIndex * mineFloorMeters;
-            final minerals = ResourceCatalog.minerals
-                .where((resource) => resource.minDepthMeters <= floorDepth)
-                .where(
-                  (resource) =>
-                      worldIndex == 0 || resource.minDepthMeters >= worldStart,
-                )
+            if (MrMineProgression.worldAtDepth(floorDepth) != worldIndex) {
+              continue;
+            }
+            final minerals = MrMineProgression.minerals
+                .where((band) => band.worldIndex == worldIndex)
+                .where((band) => band.firstDepthMeters <= floorDepth)
+                .map((band) => ResourceCatalog.byId[band.resourceId])
+                .whereType<ResourceDefinition>()
                 .toList(growable: false);
             if (minerals.isEmpty) continue;
             final ore = minerals[random.nextInt(minerals.length)];
@@ -1425,7 +1494,13 @@ abstract final class GameEngine {
             }
 
             final isotopes = ResourceCatalog.isotopes
-                .where((resource) => resource.minDepthMeters <= floorDepth)
+                .where(
+                  (resource) => MrMineProgression.isotopeAvailableAtDepth(
+                    resource.id,
+                    worldIndex,
+                    floorDepth,
+                  ),
+                )
                 .where(
                   (resource) =>
                       !ReactorCatalog.isotopeById.containsKey(resource.id),
@@ -1966,14 +2041,14 @@ abstract final class GameEngine {
       _ => 0,
     };
     if (count <= 0) return 0;
-    final ore = ResourceCatalog.atDepth(state.depthMeters);
-    final freeUnits = _availableUnits(state, ore);
+    final ore = ResourceCatalog.mineableAtDepth(state.depthMeters);
+    final freeUnits = ore == null ? 0 : _availableUnits(state, ore);
     final unitsRequired = tier == 'deep'
         ? 6
         : tier == 'gold'
         ? 4
         : 1;
-    if (freeUnits < unitsRequired) return 0;
+    if (ore != null && freeUnits < unitsRequired) return 0;
     final tierSeed = switch (tier) {
       'gold' => 0x601d,
       'deep' => 0xdee9,
@@ -1985,7 +2060,9 @@ abstract final class GameEngine {
       'deep' => 12,
       _ => 2,
     };
-    final oreAmount = min(oreBase + random.nextInt(4), freeUnits);
+    final oreAmount = ore == null
+        ? 0
+        : min(oreBase + random.nextInt(4), freeUnits);
     switch (tier) {
       case 'basic':
         state.chestsFound--;
@@ -2005,7 +2082,7 @@ abstract final class GameEngine {
       _ => 90 + random.nextInt(240) + state.chestsOpened * 8,
     };
     state.coins += reward;
-    _addResource(state, ore, oreAmount);
+    if (ore != null && oreAmount > 0) _addResource(state, ore, oreAmount);
     if (random.nextInt(
           tier == 'deep'
               ? 2
@@ -2332,10 +2409,15 @@ abstract final class GameEngine {
         (1 + (state.caveDroneCount - 1) * .35 + state.expeditionLevel * .025);
     switch (nodeId) {
       case 'mineral':
-        addLoot(
-          ResourceCatalog.atDepth(state.depthMeters).id,
-          max(1, ((2 + random.nextInt(3)) * routeMultiplier).round()),
-        );
+        final ore = ResourceCatalog.mineableAtDepth(state.depthMeters);
+        if (ore == null) {
+          addLoot('cave_coins', max(1, (120 * routeMultiplier).round()));
+        } else {
+          addLoot(
+            ore.id,
+            max(1, ((2 + random.nextInt(3)) * routeMultiplier).round()),
+          );
+        }
         break;
       case 'money':
         addLoot(
@@ -2644,16 +2726,21 @@ abstract final class GameEngine {
   }
 
   static TradeOffer merchantOffer(GameState state) {
-    final eligible = ResourceCatalog.minerals
-        .where((resource) => resource.minDepthMeters <= state.depthMeters)
+    final eligible = MrMineProgression.minerals
+        .where((band) => band.worldIndex == state.activeWorldIndex)
+        .where((band) => band.firstDepthMeters <= state.depthMeters)
+        .map((band) => ResourceCatalog.byId[band.resourceId])
+        .whereType<ResourceDefinition>()
         .toList();
     final index = max(0, eligible.length - 1);
     final give = eligible[max(0, index - 1)];
     final get = eligible[index];
     final giveAmount = 4 + (state.crewCount % 5);
-    final lunarTradeBonus = state.unlockedBuildings.contains('lunar_trader')
-        ? 1.25
-        : 1.0;
+    final localTradeBonus = switch (state.activeWorldIndex) {
+      1 when state.unlockedBuildings.contains('lunar_trader') => 1.25,
+      2 when state.unlockedBuildings.contains('titan_trader') => 1.25,
+      _ => 1.0,
+    };
     return TradeOffer(
       giveId: give.id,
       giveAmount: giveAmount,
@@ -2664,7 +2751,7 @@ abstract final class GameEngine {
                 give.baseValue /
                 max(1, get.baseValue) *
                 1.15 *
-                lunarTradeBonus)
+                localTradeBonus)
             .floor(),
       ),
     );
@@ -2867,7 +2954,7 @@ abstract final class GameEngine {
   }
 
   static void _generateCaveLoot(GameState state, Random random) {
-    final ore = ResourceCatalog.atDepth(state.depthMeters);
+    final ore = ResourceCatalog.mineableAtDepth(state.depthMeters);
     final route = CaveRouteCatalog.byId[state.caveRoute]!;
     final caveBonus =
         1 +
@@ -2876,14 +2963,16 @@ abstract final class GameEngine {
             : 0) +
         (state.specialists['scout'] ?? 0) * 0.1;
     final droneMultiplier = 1 + (state.caveDroneCount - 1) * .35;
-    state.pendingCaveLoot[ore.id] = max(
-      1,
-      ((6 + state.expeditionLevel * 3 + random.nextInt(8)) *
-              caveBonus *
-              route.lootMultiplier *
-              droneMultiplier)
-          .round(),
-    );
+    if (ore != null) {
+      state.pendingCaveLoot[ore.id] = max(
+        1,
+        ((6 + state.expeditionLevel * 3 + random.nextInt(8)) *
+                caveBonus *
+                route.lootMultiplier *
+                droneMultiplier)
+            .round(),
+      );
+    }
     state.pendingCaveLoot['building_material'] =
         1 + random.nextInt(4) + max(0, state.caveDroneCount - 1);
     if (random.nextInt(route.ticketChance) == 0) {
@@ -2953,6 +3042,8 @@ abstract final class GameEngine {
       'Sondaj Robotu Mk II bulundu! 24–26. parça şemaları erişilebilir.',
     'titan_domain' =>
       'Titan etki alanı açıldı! Derin metan ve hidrojen damarları belirdi.',
+    'titan_trader' => 'Titan Ticaret İstasyonu açıldı! Titan kaynakları için yeni takaslar kullanılabilir.',
+    'robot_mk3' => 'Sondaj Robotu Mk III bulundu! İleri Titan parça şemalarına erişim açıldı.',
     _ => 'Yeni bir derinlik sistemi açıldı!',
   };
 

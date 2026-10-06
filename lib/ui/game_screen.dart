@@ -856,12 +856,12 @@ const _surfaceBuildingAnchors = <double>[.08, .22, .35, .5, .65, .87];
 const _surfacePortraitBuildingAnchors = <double>[.07, .215, .36, .5, .67, .92];
 // Crop each atlas cell to its visible sprite so its foot meets the shared soil.
 const _surfaceBuildingSourceCrops = <Rect>[
-  Rect.fromLTRB(0, .0625, 1, .923828),
+  Rect.fromLTRB(0, .0625, 1, .925781),
   Rect.fromLTRB(0, .105469, 1, .917969),
   Rect.fromLTRB(0, .199219, 1, .904297),
-  Rect.fromLTRB(0, .066406, 1, .904297),
-  Rect.fromLTRB(0, 0, 1, .865234),
-  Rect.fromLTRB(0, .029297, .978516, .853516),
+  Rect.fromLTRB(0, .066406, 1, .841797),
+  Rect.fromLTRB(0, 0, 1, .867188),
+  Rect.fromLTRB(0, .029297, .978516, .855469),
 ];
 const _galleryHeightRatios = <double>[.25, .46, .67, .86];
 const double _mineVisualFloorMeters = 1000;
@@ -904,7 +904,8 @@ class _SurfaceOutpost extends StatelessWidget {
         final anchors = wide
             ? _surfaceBuildingAnchors
             : _surfacePortraitBuildingAnchors;
-        final buttonHeight = math.max(0.0, height - 18);
+        const groundBandHeight = 12.0;
+        final buttonHeight = math.max(0.0, height - groundBandHeight);
         final buttonWidth = wide
             ? math.min(150.0, width * .122)
             : width < 560
@@ -929,7 +930,7 @@ class _SurfaceOutpost extends StatelessWidget {
               left: 0,
               right: 0,
               bottom: 0,
-              height: 18,
+              height: groundBandHeight,
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
@@ -946,7 +947,7 @@ class _SurfaceOutpost extends StatelessWidget {
               left: 0,
               right: 0,
               top: 0,
-              bottom: 18,
+              bottom: groundBandHeight,
               child: Stack(
                 key: const ValueKey('surface-building-layer'),
                 clipBehavior: Clip.hardEdge,
@@ -1724,6 +1725,20 @@ class _MineWorld extends StatelessWidget {
     final elevatorHeight = elevatorWidth * 2 / 3;
     final rigWidth = narrow ? 108.0 : 136.0;
     final rigHeight = rigWidth * 1.107;
+    final edgeRockWidth = narrow ? 32.0 : 48.0;
+    final unminedGroundHeight = math
+        .min(108.0, math.max(72.0, height * .15))
+        .toDouble();
+    final edgeTint = switch (worldIndex) {
+      1 => const Color(0xFFA9CFDE),
+      2 => const Color(0xFFA9C9B0),
+      _ => null,
+    };
+    final groundTint = switch (worldIndex) {
+      1 => const Color(0xFF9CC4D2),
+      2 => const Color(0xFFB3C79D),
+      _ => null,
+    };
     final robotWidth = narrow ? 38.0 : 48.0;
     final robotHeight = narrow ? 38.0 : 48.0;
     final workerGap = narrow ? 7.0 : 12.0;
@@ -1765,6 +1780,39 @@ class _MineWorld extends StatelessWidget {
         ),
         const Positioned.fill(
           child: CustomPaint(painter: _MineLightingPainter()),
+        ),
+        Positioned(
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: edgeRockWidth,
+          child: IgnorePointer(
+            child: Opacity(
+              opacity: .94,
+              child: MineEdgeRockStrip(
+                asset: 'mine-edge-rock-tile.png',
+                verticalOffset: floorIndex * height,
+                tint: edgeTint,
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          right: 0,
+          top: 0,
+          bottom: 0,
+          width: edgeRockWidth,
+          child: IgnorePointer(
+            child: Opacity(
+              opacity: .94,
+              child: MineEdgeRockStrip(
+                asset: 'mine-edge-rock-tile.png',
+                verticalOffset: floorIndex * height,
+                mirroredX: true,
+                tint: edgeTint,
+              ),
+            ),
+          ),
         ),
         Positioned(
           left: (width - shaftWidth) / 2,
@@ -1823,14 +1871,21 @@ class _MineWorld extends StatelessWidget {
             left: workerSlots[worker].left,
             top: workerSlots[worker].top,
             child: IgnorePointer(
-              child: AnimatedCrewSprite(
-                key: ValueKey('mine-worker-$floorIndex-$worker'),
-                index: worker.isEven ? 0 : 1,
-                action: CrewAction.mining,
-                detailedMiningAnimation: true,
-                width: workerSlots[worker].width,
-                height: workerSlots[worker].height,
-                phaseOffset: worker * .31,
+              child: Transform.flip(
+                flipX: workerSlots[worker].mirrored,
+                child: AnimatedCrewSprite(
+                  key: ValueKey(
+                    'mine-worker-$floorIndex-${workerSlots[worker].gallery}-${workerSlots[worker].crewIndex}',
+                  ),
+                  index: 0,
+                  action: CrewAction.mining,
+                  detailedMiningAnimation: true,
+                  width: workerSlots[worker].width,
+                  height: workerSlots[worker].height,
+                  phaseOffset:
+                      workerSlots[worker].crewIndex * .31 +
+                      workerSlots[worker].gallery * .17,
+                ),
               ),
             ),
           ),
@@ -1851,17 +1906,51 @@ class _MineWorld extends StatelessWidget {
         if (isActiveFloor)
           Positioned(
             left: (width - rigWidth) / 2,
-            top: galleryFloors.last - rigHeight,
+            top: galleryFloors.last - rigHeight * .52,
             child: IgnorePointer(
               child: ContinuousDrillRig(width: rigWidth, height: rigHeight),
             ),
           ),
+        if (isActiveFloor)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: unminedGroundHeight,
+            child: IgnorePointer(
+              child: groundTint == null
+                  ? Image.asset(
+                      'assets/packs/mine-dug-ground-cap.png',
+                      fit: BoxFit.fill,
+                      filterQuality: FilterQuality.none,
+                    )
+                  : ColorFiltered(
+                      colorFilter: ColorFilter.mode(
+                        groundTint,
+                        BlendMode.modulate,
+                      ),
+                      child: Image.asset(
+                        'assets/packs/mine-dug-ground-cap.png',
+                        fit: BoxFit.fill,
+                        filterQuality: FilterQuality.none,
+                      ),
+                    ),
+            ),
+          ),
         for (var index = 0; index < deposits.length; index++)
           _OreNode(
+            key: ValueKey('ore-node-${deposits[index].id}'),
             deposit: deposits[index],
             resource: ResourceCatalog.byId[deposits[index].resourceId]!,
             placement: oreNodes[index],
-            onTap: () => controller.mineDeposit(deposits[index].id),
+            onTap: () {
+              final deposit = deposits[index];
+              final amountBefore =
+                  controller.state.inventory[deposit.resourceId] ?? 0;
+              if (!controller.mineDeposit(deposit.id)) return null;
+              return (controller.state.inventory[deposit.resourceId] ?? 0) -
+                  amountBefore;
+            },
           ),
       ],
     );
@@ -1874,12 +1963,18 @@ class _MineWorkerPlacement {
     required this.top,
     required this.width,
     required this.height,
+    required this.crewIndex,
+    required this.gallery,
+    required this.mirrored,
   });
 
   final double left;
   final double top;
   final double width;
   final double height;
+  final int crewIndex;
+  final int gallery;
+  final bool mirrored;
 }
 
 List<_MineWorkerPlacement> _layoutMineWorkers({
@@ -1892,29 +1987,46 @@ List<_MineWorkerPlacement> _layoutMineWorkers({
   required double workerGap,
 }) {
   if (crewCount <= 0) return const [];
-  final workerCount = math.min(crewCount, _galleryHeightRatios.length);
-  final workerWidth = narrow ? 46.0 : 60.0;
-  final workerHeight = narrow ? 62.0 : 80.0;
+  final workerCount = math.min(crewCount, 8);
+  final workerWidth = (narrow ? 46.0 : 60.0) * .7;
+  final workerHeight = (narrow ? 62.0 : 80.0) * .7;
   final galleryFloors = _galleryHeightRatios
       .map((ratio) => height * ratio)
       .toList(growable: false);
-  final firstGallery = galleryFloors.length - workerCount;
   final placements = <_MineWorkerPlacement>[];
 
-  for (var worker = 0; worker < workerCount; worker++) {
-    final side = worker.isEven ? 0 : 1;
-    final left = side == 0
-        ? shaftLeft - workerGap - workerWidth
-        : shaftLeft + shaftWidth + workerGap;
-    final floorY = galleryFloors[firstGallery + worker];
-    placements.add(
-      _MineWorkerPlacement(
-        left: left,
-        top: floorY - 8 - workerHeight,
-        width: workerWidth,
-        height: workerHeight,
-      ),
-    );
+  for (var gallery = 0; gallery < galleryFloors.length; gallery++) {
+    for (var crewIndex = 0; crewIndex < workerCount; crewIndex++) {
+      final mirrored = crewIndex >= 4;
+      final sideIndex = crewIndex % 4;
+      final sideCount = mirrored ? workerCount - 4 : math.min(workerCount, 4);
+      final edgeInset = narrow ? 34.0 : 50.0;
+      final firstLeft = mirrored ? edgeInset : width - edgeInset - workerWidth;
+      final firstInwardDistance = mirrored
+          ? shaftLeft - workerGap - firstLeft - workerWidth
+          : firstLeft - shaftLeft - shaftWidth - workerGap;
+      final stride = sideCount <= 1
+          ? workerWidth + workerGap
+          : math.min(
+              workerWidth + workerGap,
+              math.max(0.0, firstInwardDistance) / (sideCount - 1),
+            );
+      final left = mirrored
+          ? firstLeft + sideIndex * stride
+          : firstLeft - sideIndex * stride;
+      final floorY = galleryFloors[gallery];
+      placements.add(
+        _MineWorkerPlacement(
+          left: left,
+          top: floorY - 8 - workerHeight,
+          width: workerWidth,
+          height: workerHeight,
+          crewIndex: crewIndex,
+          gallery: gallery,
+          mirrored: mirrored,
+        ),
+      );
+    }
   }
   return placements;
 }
@@ -1935,8 +2047,9 @@ const Map<int, double> _oreSpriteBottoms = {
 Rect _oreSpriteCrop(int iconIndex) =>
     Rect.fromLTRB(0, 0, 1, _oreSpriteBottoms[iconIndex] ?? 1);
 
-class _OreNode extends StatelessWidget {
+class _OreNode extends StatefulWidget {
   const _OreNode({
+    super.key,
     required this.deposit,
     required this.resource,
     required this.placement,
@@ -1946,37 +2059,83 @@ class _OreNode extends StatelessWidget {
   final OreDepositState deposit;
   final ResourceDefinition resource;
   final _OreNodePlacement placement;
-  final VoidCallback onTap;
+  final int? Function() onTap;
 
   @override
-  Widget build(BuildContext context) {
-    return Positioned(
-      left: placement.left,
-      top: placement.top,
-      child: SizedBox(
-        key: ValueKey('ore-node-${deposit.id}'),
-        width: placement.width,
-        height: placement.height,
-        child: Semantics(
-          button: true,
-          label: '${resource.name} cevher taşı',
-          hint: 'Kırmak için dokun.',
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onTap,
-            child: Align(
-              alignment: Alignment.bottomCenter,
-              child: SizedBox(
-                width: placement.iconWidth,
-                height: placement.iconHeight,
-                child: AtlasSprite(
-                  asset: 'resources-treasure-sheet.png',
-                  index: resource.iconIndex,
-                  columns: 4,
-                  rows: 4,
-                  fit: BoxFit.contain,
-                  alignment: Alignment.bottomCenter,
-                  sourceCrop: _oreSpriteCrop(resource.iconIndex),
+  State<_OreNode> createState() => _OreNodeState();
+}
+
+class _OreNodeState extends State<_OreNode> {
+  static const _popupDuration = Duration(milliseconds: 1500);
+
+  final List<_OreGainPopupHandle> _activePopups = [];
+  int _popupSequence = 0;
+
+  void _handleTap() {
+    final amount = widget.onTap();
+    if (amount != null && amount > 0) _showGainPopup(amount);
+  }
+
+  void _showGainPopup(int amount) {
+    final nodeObject = context.findRenderObject();
+    final overlay = Overlay.of(context, rootOverlay: true);
+    final overlayObject = overlay.context.findRenderObject();
+    if (nodeObject is! RenderBox || overlayObject is! RenderBox) return;
+    final anchor = nodeObject.localToGlobal(
+      Offset(nodeObject.size.width / 2, nodeObject.size.height * .44),
+      ancestor: overlayObject,
+    );
+    while (_activePopups.length >= 2) {
+      _activePopups.removeAt(0).remove();
+    }
+
+    final sequence = _popupSequence++;
+    final label = '$amount ${widget.resource.name.toLowerCase()}';
+    final color = Color(widget.resource.colorHex);
+    final maxLeft = math.max(4.0, overlayObject.size.width - 132);
+    final left = (anchor.dx - 50 + (sequence.isEven ? -14 : 14))
+        .clamp(4.0, maxLeft)
+        .toDouble();
+    final maxTop = math.max(4.0, overlayObject.size.height - 36);
+    final top = (anchor.dy - 40 - (sequence.isEven ? 0 : 13))
+        .clamp(4.0, maxTop)
+        .toDouble();
+    final entry = OverlayEntry(
+      builder: (context) => Positioned(
+        left: left,
+        top: top,
+        child: IgnorePointer(
+          child: TweenAnimationBuilder<double>(
+            duration: _popupDuration,
+            tween: Tween(begin: 0, end: 1),
+            builder: (context, progress, child) => Opacity(
+              opacity: (1 - progress).clamp(0.0, 1.0).toDouble(),
+              child: Transform.translate(
+                offset: Offset(0, -18 * progress),
+                child: child,
+              ),
+            ),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xE60A2029),
+                border: Border.all(color: color, width: 1),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x66000000),
+                    blurRadius: 5,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color: MinePalette.cream,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                  shadows: [Shadow(color: Colors.black87, blurRadius: 3)],
                 ),
               ),
             ),
@@ -1984,6 +2143,65 @@ class _OreNode extends StatelessWidget {
         ),
       ),
     );
+    final popup = _OreGainPopupHandle(entry);
+    _activePopups.add(popup);
+    overlay.insert(entry);
+    popup.timer = Timer(_popupDuration, () {
+      _activePopups.remove(popup);
+      popup.remove();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      left: widget.placement.left,
+      top: widget.placement.top,
+      child: SizedBox(
+        width: widget.placement.width,
+        height: widget.placement.height,
+        child: Semantics(
+          button: true,
+          label: '${widget.resource.name} cevher taşı',
+          hint: 'Kırmak için dokun.',
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _handleTap,
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: SizedBox(
+                width: widget.placement.iconWidth,
+                height: widget.placement.iconHeight,
+                child: AtlasSprite(
+                  asset: 'resources-treasure-sheet.png',
+                  index: widget.resource.iconIndex,
+                  columns: 4,
+                  rows: 4,
+                  fit: BoxFit.contain,
+                  alignment: Alignment.bottomCenter,
+                  sourceCrop: _oreSpriteCrop(widget.resource.iconIndex),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _OreGainPopupHandle {
+  _OreGainPopupHandle(this.entry);
+
+  final OverlayEntry entry;
+  Timer? timer;
+  bool _removed = false;
+
+  void remove() {
+    if (_removed) return;
+    _removed = true;
+    timer?.cancel();
+    entry.remove();
   }
 }
 
@@ -2022,8 +2240,8 @@ List<_OreNodePlacement> _layoutMineOreNodes({
     math.max(48.0, shaftLeft - workerGap - workerWidth - wallInset - 4),
   );
   final nodeHeight = narrow ? 76.0 : 90.0;
-  final iconWidth = math.min(nodeWidth - 4, narrow ? 84.0 : 104.0);
-  final iconHeight = narrow ? 68.0 : 82.0;
+  final iconWidth = math.min(nodeWidth - 4, narrow ? 84.0 : 104.0) * .8;
+  final iconHeight = (narrow ? 68.0 : 82.0) * .8;
   final floors = _galleryHeightRatios
       .map((ratio) => height * ratio)
       .toList(growable: false);

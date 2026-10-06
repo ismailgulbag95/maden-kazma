@@ -9,8 +9,10 @@
 - Telefon kadrajı yalnızca portre yönde oynanır. Dikey katman, yüzey karakolu ve kuyu aynı ekranda okunaklı kalır.
 - Saha sahnesinde yüzey, kuyu/asma kafes, kaya duvarı, yatay galeri, cevher, karakter/makine, ışık ve HUD ayrı katmanlardır.
 - Maden zemini/duvarı oyun alanının sınırları içinde kırpılır. Kuyu çizgisi yüzey asansörü ile aynı merkez eksenini korur.
+- Galerinin iki dış kenarında `mine-edge-rock-tile.png` dikey devam eder; karşı kenar aynı dokunun yatay aynasıdır. En alt etkin galeride `mine-dug-ground-cap.png` merkezde aşağı oyuk bırakır; delici ucu bu açıklıktan görünür.
 - Karakter ve makineler galeri zeminine oturur. Bilerek uçan dron dışında hiçbir karakter boşlukta yüzmez.
 - Cevher damarları kaya duvarına gömülü görünür; boşlukların ortasında bağımsız sprite olarak durmaz.
+- Cevher sprite'ları dokunma alanı korunarak %20 küçültülür. Başarılı vuruşun kaynak miktarı kayan metinle gösterilir; aynı damarda en fazla iki bildirim 1,5 saniye görünür.
 - Ekran dışı katlar matematiksel olarak simüle edilir; yalnızca görünür katlar çizilir.
 
 ## Renk paleti
@@ -44,13 +46,14 @@ Yeni dünya varlıkları kendi biome renklerine sahip olabilir; ışık ve siyah
 
 - İnsan silueti madenci kaskı, okunaklı gövde ve koyu botlarla çizilir.
 - Karakter genişliği aynı galerideki cevher düğümünün yaklaşık yarısıdır; makine ondan belirgin büyük olabilir.
-- Sondaj burgusu kaya yüzeyine değer. Asansör rayı dikey ve kesintisiz kalır.
+- Sondaj burgusu en alt galeri çizgisinin altındaki kazılmamış kaya tabakasına girer. Asansör rayı dikey ve kesintisiz kalır.
 - Bir animasyon, varlığın siluetini ve piksel keskinliğini bozmamalıdır.
 
 ## Animasyon
 
 - Madenci: kısa kazma darbesi, bekleme ve küçük gövde ağırlık değişimi.
 - Kuyu madencisi: `miner-mining-cycle.png` içindeki sekiz hazırlık, kaldırma, darbe ve toparlanma karesi. Kareler arasında yalnızca poz değişir; bot tabanı tüm döngü boyunca galeri zeminine değmelidir.
+- Her galeri, ekip büyüdükçe aynı konumdaki madencileri çoğaltır; ilk dört sağ kenarda duvara dönük çalışır, sonraki madenciler sol tarafta aynalanır. Kadrodaki madenci çizimleri önceki ölçüsünden %30 küçük tutulur.
 - Taşıyıcı: yavaş iki adımlı salınım, az miktarda toz.
 - Dron: küçük hover hareketi ve aralıklı tarama ışığı.
 - Sondaj: düşük genlikli titreşim, seyrek kıvılcım/toz; sürekli yüksek yoğunlukta partikül yok.

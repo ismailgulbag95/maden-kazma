@@ -1299,7 +1299,6 @@ abstract final class GameEngine {
 
     final events = <String>[];
     var mined = 0;
-    var autoSellCoins = 0;
     var lastNoticeDepth = state.deepestMeters;
     final random = Random(state.seed);
     for (var second = 0; second < requestedSeconds; second++) {
@@ -1308,7 +1307,7 @@ abstract final class GameEngine {
         _moveRoamingSpecialWorkers(state, random);
       }
       if (state.miningSeconds % 60 == 0) {
-        autoSellCoins += _specialWorkerAutoSell(state);
+        _specialWorkerAutoSell(state);
       }
       if (state.miningSeconds % 300 == 0) {
         if (state.activeSpecialWorkerPower('buff_generator') > 0) {
@@ -1469,7 +1468,7 @@ abstract final class GameEngine {
       _completeTimedActivities(state, currentTime, events, random);
       _advanceGemCrafting(state, events);
       _unlockMilestones(state, events);
-      autoSellCoins += _autoSellToThreshold(state);
+      _autoSellToThreshold(state);
 
       if (allowRandomEvents &&
           state.activeMineEventId == null &&
@@ -1496,11 +1495,6 @@ abstract final class GameEngine {
     }
     state.seed = random.nextInt(0x7fffffff);
     ensureOpenMineDeposits(state);
-    if (autoSellCoins > 0) {
-      events.add(
-        'Otomatik satış +$autoSellCoins kasa getirdi; kilitli ve rezervli kaynaklar korundu.',
-      );
-    }
     return GameTickResult(events: events, mined: mined);
   }
 

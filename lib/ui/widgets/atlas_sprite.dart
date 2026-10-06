@@ -142,6 +142,109 @@ class CaveTextureBackground extends StatelessWidget {
   );
 }
 
+/// Draws the mine-edge rock tile at its authored aspect ratio and repeats it
+/// vertically so adjacent mine floors join without restarting the texture.
+class MineEdgeRockStrip extends StatelessWidget {
+  const MineEdgeRockStrip({
+    super.key,
+    required this.asset,
+    required this.verticalOffset,
+    this.mirroredX = false,
+    this.tint,
+  });
+
+  final String asset;
+  final double verticalOffset;
+  final bool mirroredX;
+  final Color? tint;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final size = Size(constraints.maxWidth, constraints.maxHeight);
+      return FutureBuilder<ui.Image>(
+        future: AtlasSprite._load('assets/packs/$asset'),
+        builder: (context, snapshot) {
+          final image = snapshot.data;
+          if (image == null) return const SizedBox.expand();
+          return CustomPaint(
+            size: size,
+            painter: _MineEdgeRockPainter(
+              image: image,
+              verticalOffset: verticalOffset,
+              mirroredX: mirroredX,
+              tint: tint,
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
+class _MineEdgeRockPainter extends CustomPainter {
+  const _MineEdgeRockPainter({
+    required this.image,
+    required this.verticalOffset,
+    required this.mirroredX,
+    required this.tint,
+  });
+
+  final ui.Image image;
+  final double verticalOffset;
+  final bool mirroredX;
+  final Color? tint;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.isEmpty) return;
+    final tileHeight = size.width * image.height / image.width;
+    if (tileHeight <= 0) return;
+    final source = Rect.fromLTWH(
+      0,
+      0,
+      image.width.toDouble(),
+      image.height.toDouble(),
+    );
+    final paint = Paint()
+      ..filterQuality = FilterQuality.none
+      ..colorFilter = tint == null
+          ? null
+          : ui.ColorFilter.mode(tint!, ui.BlendMode.modulate);
+    canvas.save();
+    canvas.clipRect(Offset.zero & size);
+    if (mirroredX) {
+      canvas
+        ..translate(size.width, 0)
+        ..scale(-1, 1);
+    }
+    final firstTile = (verticalOffset / tileHeight).floor();
+    var tile = firstTile;
+    var top = tile * tileHeight - verticalOffset;
+    while (top < size.height) {
+      final destination = Rect.fromLTWH(0, top, size.width, tileHeight);
+      canvas.save();
+      if (tile.isOdd) {
+        canvas
+          ..translate(0, top * 2 + tileHeight)
+          ..scale(1, -1);
+      }
+      canvas.drawImageRect(image, source, destination, paint);
+      canvas.restore();
+      tile++;
+      top += tileHeight;
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _MineEdgeRockPainter oldDelegate) =>
+      image != oldDelegate.image ||
+      verticalOffset != oldDelegate.verticalOffset ||
+      mirroredX != oldDelegate.mirroredX ||
+      tint != oldDelegate.tint;
+}
+
 class _CaveTexturePainter extends CustomPainter {
   const _CaveTexturePainter({
     required this.image,

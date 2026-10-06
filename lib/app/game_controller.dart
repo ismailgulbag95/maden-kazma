@@ -221,9 +221,6 @@ class GameController extends ChangeNotifier {
 
   bool mineDeposit(String depositId) {
     final deposit = state.oreDeposits[depositId];
-    final resourceName = deposit == null
-        ? 'Maden'
-        : ResourceCatalog.byId[deposit.resourceId]?.name ?? 'Maden';
     final nextYield = deposit == null
         ? 0
         : GameEngine.nextMineDepositYield(state, deposit);
@@ -247,9 +244,6 @@ class GameController extends ChangeNotifier {
       );
       notifyListeners();
       return false;
-    }
-    if (deposit?.depleted == true) {
-      _notices.add('Damar kırıldı: son vuruşta +$nextYield $resourceName.');
     }
     unawaited(SoundService.instance.playOreCollect());
     _refreshState();
@@ -705,9 +699,6 @@ class GameController extends ChangeNotifier {
 
   void setAutoSellEnabled(bool enabled) {
     state.autoSellEnabled = enabled;
-    _notices.add(
-      enabled ? 'Otomatik satış açıldı.' : 'Otomatik satış duraklatıldı.',
-    );
     _refreshState();
   }
 

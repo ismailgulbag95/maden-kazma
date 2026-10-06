@@ -37,6 +37,7 @@ Bilim ekibinin portreleri ve sekiz özel madencinin yetenek portreleri özgün, 
 - Derinlik içerik açar; yeni dünyalar önceki kayıt ve kalıcı yükseltmeleri silmez.
 - Kaynak kapasitesi gerçek bir sınırdır. Hiçbir ödül veya üretim kayıtlı kapasiteyi aşırmaz; taşan ganimet beklemede kalır ya da oyuncuya açıkça bildirilir.
 - Rezerv kaynaklar toplu satış ve takasta korunur.
+- Otomatik satış ayarlara göre sessizce çalışır; satış ve aç/kapat bildirimleri oyun eylem çubuğunu kapatmaz.
 - Geçici yanlış karar kalıcı kaynak kaybı yaratmaz. Rezonans hatası yalnızca mevcut diziyi sıfırlar.
 - Her bina gerçek oyun durumunu okuyup en az bir sonuç doğuran eylem sunar.
 - Prestij sıfırlayacağı ve koruyacağı durumu oyuncuya önceden gösterir; onaysız uygulanmaz.

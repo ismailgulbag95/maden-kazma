@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import '../models/game_state.dart';
+import '../models/mr_mine_big_number.dart';
 import '../models/achievement_definition.dart';
 import '../models/resource_definition.dart';
 import '../models/gem_definition.dart';
@@ -14,8 +15,11 @@ import '../models/scientist_definition.dart';
 import '../models/ore_deposit.dart';
 import '../models/drill_assembly_definition.dart';
 import '../models/mr_mine_progression.dart';
+import '../models/mr_mine_level_table.dart';
 import '../models/reactor_definition.dart';
 import '../models/buff_lab_definition.dart';
+import '../models/cargo_equipment.dart';
+import '../models/mine_biome.dart';
 
 class GameTickResult {
   const GameTickResult({this.events = const [], this.mined = 0});
@@ -182,9 +186,192 @@ abstract final class GameEngine {
     '1814000': ('Titan Kristal Arşivi', 9500, 3),
   };
 
+  /// World clicks that reveal source-game drill blueprint ranges.
+  static const Map<String, (String, int, int, int)> blueprintEncounters = {
+    'golem': ('Golem', 50000, 16, 31),
+    'gidget': ('Gidget', 225000, 32, 47),
+    'robot_mk2': ('Robot Mk II', 1257000, 79, 87),
+    'robot_mk3': ('Robot Mk III', 2039000, 120, 131),
+  };
+
+  static const List<(int, int)> discoveredBlueprintRanges = [
+    (48, 60),
+    (70, 78),
+    (88, 106),
+    (132, 158),
+  ];
+
+  static bool canClaimBlueprintEncounter(GameState state, String id) {
+    final encounter = blueprintEncounters[id];
+    return encounter != null &&
+        state.deepestMeters >= encounter.$2 &&
+        !state.discoveredEncounters.contains('blueprint_encounter_$id');
+  }
+
+  static bool claimBlueprintEncounter(GameState state, String id) {
+    final encounter = blueprintEncounters[id];
+    if (encounter == null || !canClaimBlueprintEncounter(state, id)) {
+      return false;
+    }
+    state.discoveredEncounters.add('blueprint_encounter_$id');
+    state.discoveredEncounters.add('${encounter.$1} • montaj planları');
+    for (var blueprintId = encounter.$3;
+        blueprintId <= encounter.$4;
+        blueprintId++) {
+      state.knownBlueprintIds.add(blueprintId);
+    }
+    return true;
+  }
+
+  static int _levelForBlueprintPart(GameState state, int partSlot) =>
+      switch (partSlot) {
+        0 => state.drillEngineLevel,
+        1 => state.drillBitLevel,
+        2 => state.drillFanLevel,
+        3 => state.cargoLevel,
+        _ => 0,
+      };
+
+  static int _targetLevelForBlueprint(int blueprintId) =>
+      blueprintId ~/ 4 + 2;
+
+  static int _highestEquipmentLevel(GameState state) => max(
+    max(state.drillEngineLevel, state.drillBitLevel),
+    max(state.drillFanLevel, state.cargoLevel),
+  );
+
+  static List<int> _discoverableBlueprints(GameState state) => [
+    for (final range in discoveredBlueprintRanges)
+      for (var id = range.$1; id <= range.$2; id++)
+        if (!state.knownBlueprintIds.contains(id) &&
+            (id % 4 != 3 ||
+                _targetLevelForBlueprint(id) <= CargoEquipmentCatalog.all.length) &&
+            _targetLevelForBlueprint(id) >
+                _levelForBlueprintPart(state, id % 4))
+          id,
+  ];
+
+  static String blueprintName(int id) {
+    final level = _targetLevelForBlueprint(id);
+    final part = switch (id % 4) {
+      0 => 'Sondaj motoru',
+      1 => 'Sondaj ucu',
+      2 => 'Soğutma fanı',
+      _ => 'Kargo',
+    };
+    return '$part • Lv $level';
+  }
+
+  static double blueprintCashPrice(int id) {
+    final targetLevel = _targetLevelForBlueprint(id);
+    return switch (id % 4) {
+      0 => DrillAssemblyCatalog.cashCost(
+        DrillAssemblyCatalog.byId['engine']!,
+        targetLevel - 1,
+      ),
+      1 => DrillAssemblyCatalog.cashCost(
+        DrillAssemblyCatalog.byId['bit']!,
+        targetLevel - 1,
+      ),
+      2 => DrillAssemblyCatalog.cashCost(
+        DrillAssemblyCatalog.byId['fan']!,
+        targetLevel - 1,
+      ),
+      _ => CargoEquipmentCatalog.all
+          .where((equipment) => equipment.level == targetLevel)
+          .firstOrNull
+          ?.cashCost ?? 0,
+    };
+  }
+
+  static int? _rollDiscoveredBlueprint(GameState state, Random random) {
+    final candidates = _discoverableBlueprints(state);
+    if (candidates.isEmpty) return null;
+
+    final hasDiscoveredPlan = discoveredBlueprintRanges.any(
+      (range) =>
+          state.knownBlueprintIds.any((id) => id >= range.$1 && id <= range.$2),
+    );
+    final firstDiscovery = _highestEquipmentLevel(state) == 13 &&
+        !hasDiscoveredPlan;
+    final depthKm = state.depthMeters / 1000;
+    if (!firstDiscovery && random.nextDouble() > 500 / (depthKm + 1)) {
+      return null;
+    }
+    final blueprintId = _weightedBlueprintChoice(state, candidates, random);
+    state.knownBlueprintIds.add(blueprintId);
+    return blueprintId;
+  }
+
+  static List<int> _tradableBlueprints(GameState state) {
+    if (state.knownBlueprintIds.isEmpty) return const [];
+    final lastOwnedId = state.knownBlueprintIds.reduce(max);
+    final currentBlueprintLevel = _targetLevelForBlueprint(lastOwnedId);
+    return _discoverableBlueprints(state)
+        .where((id) {
+          final level = _targetLevelForBlueprint(id);
+          return level == currentBlueprintLevel ||
+              level == currentBlueprintLevel + 1;
+        })
+        .toList();
+  }
+
+  static double _sourceErf(double value) {
+    final sign = value >= 0 ? 1.0 : -1.0;
+    final x = value.abs();
+    const a1 = 0.254829592;
+    const a2 = -0.284496736;
+    const a3 = 1.421413741;
+    const a4 = -1.453152027;
+    const a5 = 1.061405429;
+    const p = 0.3275911;
+    final t = 1 / (1 + p * x);
+    final y =
+        1 -
+        (((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t) *
+            exp(-x * x);
+    return sign * y;
+  }
+
+  static double _relativeBlueprintWeight(double levelDifference) =>
+      levelDifference < 1
+      ? 2 + levelDifference.abs() * levelDifference.abs()
+      : 1 - _sourceErf(levelDifference / sqrt2);
+
+  static int _weightedBlueprintChoice(
+    GameState state,
+    List<int> candidates,
+    Random random,
+  ) {
+    final levels = [
+      state.drillBitLevel,
+      state.drillEngineLevel,
+      state.drillFanLevel,
+      state.cargoLevel,
+    ]..sort();
+    final averageHighestTwo = (levels[3] + levels[2]) / 2;
+    final weights = [
+      for (final id in candidates)
+        _relativeBlueprintWeight(
+          _targetLevelForBlueprint(id) - averageHighestTwo,
+        ),
+    ];
+    final sum = weights.fold<double>(0, (value, weight) => value + weight);
+    var roll = random.nextDouble() * sum;
+    for (var index = 0; index < candidates.length; index++) {
+      roll -= weights[index];
+      if (roll <= 0) return candidates[index];
+    }
+    return candidates.last;
+  }
+
   static int upgradeCost(GameState state, String track) {
     if (track == 'reactor') {
       return reactorUpgradeEnergyCost(state.upgradeLevel('reactor') + 1);
+    }
+    if (track == 'workers') return workerLevelCost(state).round();
+    if (track == 'warehouse') {
+      return (nextCargoEquipment(state)?.cashCost ?? 0).round();
     }
     return UpgradeCatalog.next(track, state.upgradeLevel(track))?.cost ?? 0;
   }
@@ -250,7 +437,7 @@ abstract final class GameEngine {
         _ => 0,
       };
 
-  static int drillAssemblyUpgradeCost(GameState state, String componentId) {
+  static double drillAssemblyUpgradeCost(GameState state, String componentId) {
     final component = DrillAssemblyCatalog.byId[componentId];
     final currentLevel = drillAssemblyLevel(state, componentId);
     if (component == null ||
@@ -292,7 +479,7 @@ abstract final class GameEngine {
         currentLevel < 1 ||
         currentLevel >= DrillAssemblyCatalog.maxLevel ||
         state.crewCount <= 0 ||
-        state.coins < cost) {
+        !state.canAfford(cost)) {
       return false;
     }
     if (state.deepestMeters <
@@ -306,10 +493,18 @@ abstract final class GameEngine {
         !state.unlockedBuildings.contains(requiredBuilding)) {
       return false;
     }
+    final blueprintId = DrillAssemblyCatalog.blueprintIdFor(
+      componentId,
+      nextLevel,
+    );
+    if (blueprintId != null &&
+        !state.knownBlueprintIds.contains(blueprintId)) {
+      return false;
+    }
     if (drillAssemblyMaterialDeficits(state, componentId).isNotEmpty) {
       return false;
     }
-    state.coins -= cost;
+    state.spendCoins(cost);
     for (final entry in drillAssemblyMaterialRequirements(
       state,
       componentId,
@@ -347,27 +542,18 @@ abstract final class GameEngine {
 
   static int oilPumpUpgradeCost(GameState state) => state.oilPumpLevel * 10000;
 
-  static int oilPumpStored(GameState state) {
-    final earthInventory = state.currentWorldIndex == 0
-        ? state.inventory
-        : state.worldInventories['0'];
-    return earthInventory?['oil'] ?? 0;
-  }
+  static int oilPumpStored(GameState state) => state.amount('oil');
 
-  static int unreservedOil(GameState state) {
-    final reserved = state.currentWorldIndex == 0
-        ? state.reserve('oil')
-        : state.worldReserves['0']?['oil'] ?? 0;
-    return max(0, oilPumpStored(state) - reserved);
-  }
+  static int unreservedOil(GameState state) =>
+      max(0, oilPumpStored(state) - state.reserve('oil'));
 
   static bool upgradeOilPump(GameState state) {
     if (!state.unlockedBuildings.contains('underground_city') ||
         state.oilPumpLevel >= oilPumpMaximumLevel ||
-        state.coins < oilPumpUpgradeCost(state)) {
+        !state.canAfford(oilPumpUpgradeCost(state))) {
       return false;
     }
-    state.coins -= oilPumpUpgradeCost(state);
+    state.spendCoins(oilPumpUpgradeCost(state));
     state.oilPumpLevel++;
     return true;
   }
@@ -376,11 +562,10 @@ abstract final class GameEngine {
     if (!state.unlockedBuildings.contains('underground_city')) return false;
     final quantity = unreservedOil(state);
     if (quantity <= 0) return false;
-    final earthInventory = state.currentWorldIndex == 0
-        ? state.inventory
-        : state.worldInventories.putIfAbsent('0', () => <String, int>{});
-    earthInventory['oil'] = oilPumpStored(state) - quantity;
-    state.coins = min(1e18, state.coins + quantity * oilPumpSaleValuePerBarrel);
+    state.inventory['oil'] = oilPumpStored(state) - quantity;
+    final value = MrMineBigNumber.fromNum(quantity)
+        .multiply(MrMineBigNumber.fromNum(oilPumpSaleValuePerBarrel));
+    state.addCoins(value);
     recordDailyProgress(state, 'sell', quantity);
     return true;
   }
@@ -533,7 +718,7 @@ abstract final class GameEngine {
     };
   }
 
-  static const List<int> _sourceMinerHireCosts = [
+  static const List<double> _earthMinerHireCosts = [
     50,
     500,
     2000,
@@ -545,17 +730,151 @@ abstract final class GameEngine {
     3000000,
     10000000,
   ];
+  static const List<double> _moonMinerHireCosts = [
+    0,
+    1e13,
+    2.5e13,
+    1e14,
+    4e14,
+    1.8e15,
+    8e15,
+    3e16,
+    1.1e17,
+    3e17,
+  ];
+  static const List<double> _titanMinerHireCosts = [
+    0,
+    1e20,
+    3e20,
+    1e21,
+    5e21,
+    2.5e22,
+    1e23,
+    3e23,
+    9e23,
+    3e24,
+  ];
+  static const List<double> _earthWorkerLevelCosts = [
+    0,
+    1e7,
+    5e7,
+    2e8,
+    1e9,
+    6e9,
+    4e10,
+    3.5e11,
+    1e12,
+    1e13,
+    1e14,
+  ];
+  static const List<double> _moonWorkerLevelCosts = [
+    0,
+    2e18,
+    8e18,
+    2e19,
+    5e19,
+    8e19,
+    1e20,
+    1.4e20,
+    2e20,
+    3e20,
+    5e20,
+  ];
+  static const List<double> _titanWorkerLevelCosts = [
+    0,
+    2e25,
+    8e25,
+    3.2e26,
+    1.28e27,
+    5.12e27,
+    2.048e28,
+    8.192e28,
+    3.2768e29,
+    1.31072e30,
+    5.24288e30,
+  ];
 
-  static int minerCost(GameState state) {
-    final currentCrew = state.crewCount.clamp(0, 80).toInt();
-    if (currentCrew < _sourceMinerHireCosts.length) {
-      return _sourceMinerHireCosts[currentCrew];
+  static double minerCost(GameState state) {
+    final world = state.activeWorldIndex.clamp(0, 2).toInt();
+    final hired = state.activeMinerCount.clamp(0, 10).toInt();
+    final costs = switch (world) {
+      1 => _moonMinerHireCosts,
+      2 => _titanMinerHireCosts,
+      _ => _earthMinerHireCosts,
+    };
+    if (hired >= 10) return double.infinity;
+    return costs[hired];
+  }
+
+  static double workerLevelCost(GameState state) {
+    final world = state.activeWorldIndex.clamp(0, 2).toInt();
+    final level = state.activeWorkerLevel.clamp(0, 10).toInt();
+    final costs = switch (world) {
+      1 => _moonWorkerLevelCosts,
+      2 => _titanWorkerLevelCosts,
+      _ => _earthWorkerLevelCosts,
+    };
+    return costs[level];
+  }
+
+  static bool upgradeWorkerLevel(GameState state) {
+    final level = state.activeWorkerLevel;
+    final cost = workerLevelCost(state);
+    if (state.activeMinerCount < 10 || level >= 10 || !state.canAfford(cost)) {
+      return false;
     }
-    return min(1e18, 10000000 * pow(2, currentCrew - 9)).round();
+    state.spendCoins(cost);
+    final nextLevel = level + 1;
+    state.upgrades['workers'] = nextLevel;
+    state.worldWorkerLevels[state.activeWorldIndex.toString()] = nextLevel;
+    recordDailyProgress(state, 'upgrade', 1);
+    return true;
+  }
+
+  static CargoEquipmentDefinition? nextCargoEquipment(GameState state) =>
+      CargoEquipmentCatalog.next(state.cargoLevel);
+
+  static Map<String, int> cargoUpgradeDeficits(GameState state) {
+    final next = nextCargoEquipment(state);
+    if (next == null) return const {};
+    return {
+      for (final entry in next.materialCosts.entries)
+        if (_unreserved(state, entry.key) < entry.value)
+          entry.key: entry.value - _unreserved(state, entry.key),
+    };
+  }
+
+  static bool canUpgradeCargo(GameState state) {
+    final next = nextCargoEquipment(state);
+    final blueprintId = next == null
+        ? null
+        : DrillAssemblyCatalog.blueprintIdFor('cargo', next.level);
+    return next != null &&
+        (blueprintId == null || state.knownBlueprintIds.contains(blueprintId)) &&
+        state.canAfford(next.cashCost) &&
+        cargoUpgradeDeficits(state).isEmpty;
+  }
+
+  static bool upgradeCargo(GameState state) {
+    final next = nextCargoEquipment(state);
+    if (next == null || !canUpgradeCargo(state)) return false;
+    state.spendCoins(next.cashCost);
+    for (final entry in next.materialCosts.entries) {
+      _consumeResource(state, entry.key, entry.value);
+    }
+    state.cargoLevel = next.level;
+    state.cargoCapacity = next.capacity;
+    state.upgrades['warehouse'] = next.level;
+    recordDailyProgress(state, 'upgrade', 1);
+    return true;
   }
 
   static const int mineFloorMeters = 1000;
-  static const int mineDepositSpawnDepth = 100;
+  static double maxDrillDepthForWorld(int worldIndex) =>
+      worldIndex + 1 < GameState.worldEntryDepths.length
+      ? GameState.worldEntryDepths[worldIndex + 1]
+      : MrMineLevelTable.rows.length * mineFloorMeters - 1.0;
+  static const int mineDepositSpawnDepth = 100000;
   static const double mineDepositSpawnChancePerMeter = .00045;
   static const int maxLiveDepositsPerFloor = 4;
 
@@ -567,12 +886,10 @@ abstract final class GameEngine {
       if (deposit.depleted) return false;
       final spawnDepth =
           deposit.spawnDepthMeters ??
-          deposit.floorIndex * mineFloorMeters.toDouble();
-      final band = MrMineProgression.bandByResourceId[deposit.resourceId];
-      return band == null ||
-          band.worldIndex != deposit.worldIndex ||
-          spawnDepth < band.firstDepthMeters ||
-          MrMineProgression.worldAtDepth(spawnDepth) != deposit.worldIndex;
+          GameState.worldEntryDepths[deposit.worldIndex] +
+              deposit.floorIndex * mineFloorMeters.toDouble();
+      return MineBiome.worldAt(spawnDepth) != deposit.worldIndex ||
+          !MineBiome.containsMineral(spawnDepth, deposit.resourceId);
     });
 
     if (state.activeWorldIndex != 0 || state.depthMeters >= mineFloorMeters) {
@@ -603,9 +920,7 @@ abstract final class GameEngine {
     required double metersAdvanced,
     double chancePerMeter = mineDepositSpawnChancePerMeter,
   }) {
-    if (state.cargoFull ||
-        state.depthMeters <= mineDepositSpawnDepth ||
-        metersAdvanced <= 0) {
+    if (state.depthMeters <= mineDepositSpawnDepth || metersAdvanced <= 0) {
       return false;
     }
     if (MrMineProgression.worldAtDepth(state.depthMeters) !=
@@ -620,7 +935,7 @@ abstract final class GameEngine {
         .clamp(0, GameState.worldEntryDepths.length - 1)
         .toInt();
     final worldStart = GameState.worldEntryDepths[worldIndex];
-    final lowerBound = max(worldStart, state.depthMeters - 100);
+    final lowerBound = max(worldStart, state.depthMeters - 100000);
     final possibleDepths = max(1, (state.depthMeters - lowerBound).floor() + 1);
     final spawnDepth = max(
       worldStart,
@@ -637,15 +952,24 @@ abstract final class GameEngine {
         .length;
     if (activeInFloor >= maxLiveDepositsPerFloor) return false;
 
-    final resource = _weightedMineralAtDepth(worldIndex, spawnDepth, random);
+    final resource = _mineralAtDepth(worldIndex, spawnDepth);
     if (resource == null) return false;
-    final localDepth = max(0, spawnDepth - worldStart);
-    final abundanceBand = (localDepth / 10000).floor().clamp(0, 10);
-    final targetPileValue = 20 + abundanceBand * 2;
-    final valuePerClick = max(
+    final depthKm = (spawnDepth / mineFloorMeters).floor();
+    final expectedRates = _expectedOpenShaftRates(state);
+    final ratePerMinute = (expectedRates[resource.id] ?? 0) * 60;
+    final totalValuePerSecond = _expectedMineralValuePerSecond(expectedRates);
+    final estimateA =
+        (10 + random.nextDouble() * max(0, depthKm / 2 - 10)) * ratePerMinute;
+    final estimateB =
+        totalValuePerSecond *
+        (10 + random.nextDouble() * 10) *
+        60 /
+        max(1, resource.baseValue);
+    final pileAmount = max(
       1,
-      (targetPileValue / (resource.baseValue * 5)).round(),
+      max(estimateA, estimateB).clamp(1, 500000000).round(),
     );
+    final valuePerClick = max(1, (pileAmount / 5).round());
     return _createMineDeposit(
           state,
           worldIndex: worldIndex,
@@ -659,42 +983,110 @@ abstract final class GameEngine {
         null;
   }
 
-  static ResourceDefinition? _weightedMineralAtDepth(
-    int worldIndex,
-    double depth,
-    Random random,
-  ) {
-    final worldStart = GameState.worldEntryDepths[worldIndex];
-    final worldEnd = worldIndex + 1 < GameState.worldEntryDepths.length
-        ? GameState.worldEntryDepths[worldIndex + 1]
-        : double.infinity;
-    if (MrMineProgression.worldAtDepth(depth) != worldIndex) return null;
-    final eligible = MrMineProgression.minerals
-        .where((band) => band.worldIndex == worldIndex)
-        .where((band) => band.firstDepthMeters <= depth)
-        .where((band) => band.firstDepthMeters >= worldStart)
-        .where((band) => band.firstDepthMeters < worldEnd)
-        .map((band) => (band, ResourceCatalog.byId[band.resourceId]))
-        .where((entry) => entry.$2 != null)
-        .toList(growable: false);
-    if (eligible.isEmpty) return null;
-
-    final weights = [
-      for (var index = 0; index < eligible.length; index++)
-        pow(.58, eligible.length - index - 1).toDouble() *
-            (eligible[index].$1.worldIndex < 2 &&
-                    eligible[index].$1.isRichAt(depth)
-                ? 4
-                : 1),
-    ];
-    final totalWeight = weights.fold<double>(0, (sum, weight) => sum + weight);
-    var choice = random.nextDouble() * totalWeight;
-    for (var index = 0; index < eligible.length; index++) {
-      choice -= weights[index];
-      if (choice < 0) return eligible[index].$2;
-    }
-    return eligible.last.$2;
+  static ResourceDefinition? _mineralAtDepth(int worldIndex, double depth) {
+    if (MineBiome.worldAt(depth) != worldIndex) return null;
+    return MineBiome.dominantMineral(depth);
   }
+
+  static Map<String, double> _expectedOpenShaftRates(GameState state) {
+    final rates = <String, double>{};
+    for (var world = 0; world < GameState.worldEntryDepths.length; world++) {
+      final startDepth = GameState.worldEntryDepths[world];
+      if (world > 0 && state.deepestMeters < startDepth) continue;
+      final key = world.toString();
+      final worldDepth = world == state.activeWorldIndex
+          ? state.depthMeters
+          : (state.worldDepths[key] ?? startDepth);
+      final firstFloor = (startDepth / mineFloorMeters).floor();
+      final worldEndFloor = world + 1 < GameState.worldEntryDepths.length
+          ? (GameState.worldEntryDepths[world + 1] / mineFloorMeters).floor()
+          : MrMineLevelTable.rows.length;
+      final endFloor = min(
+        worldEndFloor,
+        (worldDepth / mineFloorMeters).floor() + 1,
+      );
+      if (endFloor <= firstFloor) continue;
+      final hired = state.worldMinerCounts[key] ?? 0;
+      final workerLevel = state.worldWorkerLevels[key] ?? 0;
+      final workerGate = ((hired * 2 + workerLevel * 3) / 40)
+          .clamp(0, 1)
+          .toDouble();
+      if (workerGate == 0) continue;
+      final highLevelFindBonus = workerLevel > 7
+          ? 1 + (workerLevel - 7) * .05
+          : 1.0;
+      final mineralFindMultiplier =
+          (1 + state.upgradeLevel('scanner') * .02) *
+          (state.activeBuffIds.contains('buff_resonance')
+              ? BuffLabCatalog.oreYieldMultiplier
+              : 1);
+      final isotopeFindMultiplier = 1 + state.upgradeLevel('scanner') * .03;
+      final gateRate = workerGate * 10 / 1000;
+      final rarityTotals = MrMineLevelTable.rarityWeightsBetween(
+        firstFloor,
+        endFloor,
+      );
+      for (final entry in rarityTotals.entries) {
+        final resource = ResourceCatalog.byId[entry.key];
+        if (resource == null ||
+            (resource.kind != ResourceKind.mineral &&
+                resource.kind != ResourceKind.isotope)) {
+          continue;
+        }
+        final multiplier = resource.kind == ResourceKind.isotope
+            ? isotopeFindMultiplier * highLevelFindBonus
+            : mineralFindMultiplier * highLevelFindBonus;
+        rates[entry.key] =
+            (rates[entry.key] ?? 0) + entry.value * multiplier * gateRate;
+      }
+
+      final firstDepthBand = firstFloor ~/ 100;
+      final lastDepthBand = (endFloor - 1) ~/ 100;
+      for (
+        var depthBand = firstDepthBand;
+        depthBand <= lastDepthBand;
+        depthBand++
+      ) {
+        final bandStartFloor = max(firstFloor, depthBand * 100);
+        final bandEndFloor = min(endFloor, (depthBand + 1) * 100);
+        final mineralBonus = state.specialWorkerPowerAt(
+          'miner_booster',
+          worldIndex: world,
+          depthBand: depthBand,
+        );
+        final isotopeBonus = state.specialWorkerPowerAt(
+          'rare_drop_booster',
+          worldIndex: world,
+          depthBand: depthBand,
+        );
+        if (mineralBonus <= 0 && isotopeBonus <= 0) continue;
+        final bandWeights = MrMineLevelTable.rarityWeightsBetween(
+          bandStartFloor,
+          bandEndFloor,
+        );
+        for (final entry in bandWeights.entries) {
+          final resource = ResourceCatalog.byId[entry.key];
+          if (resource == null) continue;
+          final bonus = resource.kind == ResourceKind.isotope
+              ? isotopeBonus * .18 * highLevelFindBonus
+              : resource.kind == ResourceKind.mineral
+              ? mineralBonus * .22 * highLevelFindBonus
+              : 0.0;
+          if (bonus <= 0) continue;
+          rates[entry.key] =
+              (rates[entry.key] ?? 0) + entry.value * bonus * gateRate;
+        }
+      }
+    }
+    return rates;
+  }
+
+  static double _expectedMineralValuePerSecond(Map<String, double> rates) =>
+      ResourceCatalog.minerals.fold<double>(
+        0,
+        (total, resource) =>
+            total + (rates[resource.id] ?? 0) * resource.baseValue,
+      );
 
   static OreDepositState? _createMineDeposit(
     GameState state, {
@@ -847,7 +1239,7 @@ abstract final class GameEngine {
       return false;
     }
     state.claimedDailyChallengeIds.add(challengeId);
-    state.coins += challenge.rewardCoins;
+    state.addCoins(challenge.rewardCoins);
     state.weeklyChallengeProgress = (state.weeklyChallengeProgress + 1)
         .clamp(0, DailyChallengeCatalog.weeklyTarget)
         .toInt();
@@ -861,7 +1253,7 @@ abstract final class GameEngine {
       return false;
     }
     state.weeklyChallengeClaimed = true;
-    state.coins += DailyChallengeCatalog.weeklyRewardCoins;
+    state.addCoins(DailyChallengeCatalog.weeklyRewardCoins);
     state.coreShards += DailyChallengeCatalog.weeklyRewardCoreShards;
     return true;
   }
@@ -874,7 +1266,7 @@ abstract final class GameEngine {
     final stage = (state.depthMeters / 100000).floor().clamp(0, 49) + 1;
     switch (eventId) {
       case 'gold_rush':
-        state.coins += 550 * stage;
+        state.addCoins(550 * stage);
         break;
       case 'collapsed_tunnel':
         state.pressure = (state.pressure - 14).clamp(0, 100).toDouble();
@@ -883,9 +1275,9 @@ abstract final class GameEngine {
             state.amount('building_material') + 1;
         break;
       case 'rich_vein':
-        final resource = ResourceCatalog.mineableAtDepth(state.depthMeters);
+        final resource = MineBiome.dominantMineral(state.depthMeters);
         if (resource == null) {
-          state.coins += 500;
+          state.addCoins(500);
         } else {
           final added = _addResource(state, resource, 3);
           if (added <= 0) return false;
@@ -899,7 +1291,7 @@ abstract final class GameEngine {
         state.drillParts++;
         break;
       case 'merchant':
-        state.coins += 260 * stage;
+        state.addCoins(260 * stage);
         state.drillParts++;
         break;
       case 'ancient_chamber':
@@ -907,7 +1299,7 @@ abstract final class GameEngine {
         state.coreShards++;
         break;
       case 'monster_nest':
-        state.coins += 240 * stage;
+        state.addCoins(240 * stage);
         state.drillParts += 2;
         break;
       default:
@@ -973,10 +1365,10 @@ abstract final class GameEngine {
   static bool hireScientist(GameState state) {
     if (!state.unlockedBuildings.contains('scientists') ||
         state.scientistRoster.length >= 8 ||
-        state.coins < scientistCost(state)) {
+        !state.canAfford(scientistCost(state))) {
       return false;
     }
-    state.coins -= scientistCost(state);
+    state.spendCoins(scientistCost(state));
     addScientist(state);
     return true;
   }
@@ -1085,7 +1477,7 @@ abstract final class GameEngine {
 
     final isSuccess = outcome == 'success';
     final isPartial = outcome == 'partial';
-    final ore = ResourceCatalog.mineableAtDepth(
+    final ore = MineBiome.dominantMineral(
       max(state.depthMeters, mission.minimumDepth),
     );
     final resourceCount = ore == null
@@ -1101,7 +1493,7 @@ abstract final class GameEngine {
 
     if (isSuccess || isPartial) {
       final reward = isSuccess ? mission.coinReward : mission.coinReward ~/ 3;
-      state.coins += reward;
+      state.addCoins(reward);
       if (ore != null) _addResource(state, ore, resourceCount);
       if (isSuccess) {
         switch (mission.chestTier) {
@@ -1175,10 +1567,10 @@ abstract final class GameEngine {
     final cost = specialWorkerCost(state);
     if (!state.unlockedBuildings.contains('super_miners') ||
         state.specialWorkerRoster.length >= 12 ||
-        state.coins < cost) {
+        !state.canAfford(cost)) {
       return false;
     }
-    state.coins -= cost;
+    state.spendCoins(cost);
     final random = Random(
       state.seed ^ state.specialWorkerRoster.length ^ 0x5e11,
     );
@@ -1269,7 +1661,7 @@ abstract final class GameEngine {
     }
     if (openPositions.isEmpty) return;
     for (final worker in state.specialWorkerRoster.where(
-      (item) => item.autoMove,
+      (item) => item.autoMove && item.abilityId != 'auto_seller',
     )) {
       final position = openPositions[random.nextInt(openPositions.length)];
       worker
@@ -1278,36 +1670,45 @@ abstract final class GameEngine {
     }
   }
 
-  static int _specialWorkerAutoSell(GameState state) {
+  static MrMineBigNumber _specialWorkerAutoSell(GameState state) {
     final sellers = state.specialWorkerRoster
-        .where(
-          (worker) =>
-              worker.abilityId == 'auto_seller' &&
-              worker.assignedWorld == state.activeWorldIndex &&
-              worker.assignedFloor == state.activeDepthFloor,
-        )
+        .where((worker) => worker.abilityId == 'auto_seller')
         .toList();
-    if (sellers.isEmpty) return 0;
-    final resources = <ResourceDefinition>[
-      ...ResourceCatalog.minerals,
-      ...ResourceCatalog.isotopes,
-    ]..sort((a, b) => a.baseValue.compareTo(b.baseValue));
-    var total = 0;
+    if (sellers.isEmpty) return MrMineBigNumber.zero;
+    var total = MrMineBigNumber.zero;
     for (final worker in sellers) {
-      for (final resource in resources) {
-        final available = _unreserved(state, resource.id);
-        if (available <= 0 || state.lockedResources.contains(resource.id)) {
-          continue;
-        }
-        total += sellResource(
+      final resource = ResourceCatalog.byId[worker.selectedResourceId];
+      if (resource == null || resource.kind != ResourceKind.mineral) continue;
+      final available = _unreserved(state, resource.id);
+      if (available <= 0) continue;
+      total = total.add(
+        sellResource(
           state,
           resource.id,
-          requested: min(available, max(1, worker.power.ceil())),
-        );
-        break;
-      }
+          requested: min(
+            available,
+            worker.rarity.sellerUnitsPerLevel * worker.level,
+          ),
+        ),
+      );
     }
     return total;
+  }
+
+  static bool setSpecialWorkerResource(
+    GameState state,
+    String workerId,
+    String resourceId,
+  ) {
+    final worker = specialWorkerById(state, workerId);
+    final resource = ResourceCatalog.byId[resourceId];
+    if (worker == null ||
+        worker.abilityId != 'auto_seller' ||
+        resource?.kind != ResourceKind.mineral) {
+      return false;
+    }
+    worker.selectedResourceId = resourceId;
+    return true;
   }
 
   static bool hireSpecialist(GameState state, String role) {
@@ -1318,8 +1719,8 @@ abstract final class GameEngine {
       return false;
     }
     final cost = specialistCost(state, role);
-    if (state.coins < cost) return false;
-    state.coins -= cost;
+    if (!state.canAfford(cost)) return false;
+    state.spendCoins(cost);
     state.specialists[role] = (state.specialists[role] ?? 0) + 1;
     return true;
   }
@@ -1332,7 +1733,9 @@ abstract final class GameEngine {
         'mine' => state.totalMined,
         'depth' || 'world' => state.deepestMeters.floor(),
         'crew' => state.crewCount,
-        'sale' => state.totalSold.floor(),
+        'sale' => state.totalSold.exponent >= 9
+            ? 1000000000
+            : state.totalSold.toDouble().clamp(0, 1000000000).floor(),
         'chest' => state.chestsOpened,
         'cave' => state.cavesCompleted,
         'relic' => state.relicsFound,
@@ -1343,7 +1746,7 @@ abstract final class GameEngine {
       };
       if (progress >= achievement.target) {
         state.unlockedAchievements.add(achievement.id);
-        state.coins += achievement.reward;
+        state.addCoins(achievement.reward);
         earned.add(achievement);
       }
     }
@@ -1373,9 +1776,7 @@ abstract final class GameEngine {
       if (state.miningSeconds % 300 == 0) {
         _moveRoamingSpecialWorkers(state, random);
       }
-      if (state.miningSeconds % 60 == 0) {
-        _specialWorkerAutoSell(state);
-      }
+      _specialWorkerAutoSell(state);
       if (state.miningSeconds % 300 == 0) {
         if (state.activeSpecialWorkerPower('buff_generator') > 0) {
           final buffUntil = currentTime.add(const Duration(seconds: 75));
@@ -1386,144 +1787,54 @@ abstract final class GameEngine {
           }
         }
       }
-      if (!state.cargoFull) {
-        final previousDepth = state.depthMeters;
-        final drillDistance = state.drillRateMetersPerSecond;
-        state.depthMeters += drillDistance;
-        rollForMineralDepositSpawn(
-          state,
-          random,
-          metersAdvanced: drillDistance,
-        );
-        final metersAdvanced = (state.depthMeters - previousDepth).floor();
-        if (metersAdvanced > 0) {
-          recordDailyProgress(state, 'depth', metersAdvanced, now: currentTime);
-        }
-        state.deepestMeters = max(state.deepestMeters, state.depthMeters);
-        final relicPressureResistance = state.equippedRelics.contains('relic_6')
-            ? 1 - (0.4 + state.relicLevel('relic_6') * 0.1)
-            : 1.0;
-        final workerPressureResistance = max(
-          .55,
-          1 - state.activeSpecialWorkerPower('support') * .07,
-        );
-        state.pressure =
-            (state.pressure +
-                    state.drillRateMetersPerSecond *
-                        0.00045 *
-                        relicPressureResistance *
-                        workerPressureResistance)
-                .clamp(0, 100)
-                .toDouble();
-        final diggingWorkers = state.diggingWorkers;
-        final workerEfficiency = 1 + state.upgradeLevel('workers') * 0.03;
-        final specialMiningSpeed =
-            1 + state.activeSpecialWorkerPower('miner_booster') * .22;
-        final miningInterval = max(
-          1,
-          (4 / (workerEfficiency * specialMiningSpeed)).ceil(),
-        );
-        if (diggingWorkers > 0 && state.miningSeconds % miningInterval == 0) {
-          final worldIndex = state.activeWorldIndex;
-          final worldStart = GameState.worldEntryDepths[worldIndex];
-          final localDeepest = max(0.0, state.depthMeters - worldStart);
-          final openFloorCount = (localDeepest / mineFloorMeters).floor() + 1;
-          final isotopeBonus =
-              (state.equippedRelics.contains('relic_5')
-                  ? 12 * state.relicLevel('relic_5')
-                  : 0) +
-              (state.equippedGems.contains('amethyst') ? 25 : 0) +
-              (state.specialists['geologist'] ?? 0) * 8 +
-              state.scannerWorkers * 4 +
-              (state.activeSpecialWorkerPower('rare_drop_booster') * 18)
-                  .round();
-          final resourceWorkerPower = state.activeSpecialWorkerPower(
-            'resource_booster',
-          );
-          final chestOdds = max(
-            200,
-            1700 -
-                state.scannerWorkers * 90 -
-                (state.activeSpecialWorkerPower('chest_hunter') * 210).round() -
-                (state.equippedRelics.contains('relic_9')
-                    ? state.relicLevel('relic_9') * 120
-                    : 0),
-          );
+      final previousDepth = state.depthMeters;
+      state.depthMeters = min(
+        maxDrillDepthForWorld(state.activeWorldIndex),
+        state.depthMeters + state.drillRateMetersPerSecond,
+      );
+      final drillDistance = max(0.0, state.depthMeters - previousDepth);
+      rollForMineralDepositSpawn(state, random, metersAdvanced: drillDistance);
+      final metersAdvanced = (state.depthMeters - previousDepth).floor();
+      if (metersAdvanced > 0) {
+        recordDailyProgress(state, 'depth', metersAdvanced, now: currentTime);
+      }
+      state.deepestMeters = max(state.deepestMeters, state.depthMeters);
+      final relicPressureResistance = state.equippedRelics.contains('relic_6')
+          ? 1 - (0.4 + state.relicLevel('relic_6') * 0.1)
+          : 1.0;
+      final workerPressureResistance = max(
+        .55,
+        1 - state.activeSpecialWorkerPower('support') * .07,
+      );
+      state.pressure =
+          (state.pressure +
+                  drillDistance *
+                      0.00045 *
+                      relicPressureResistance *
+                      workerPressureResistance)
+              .clamp(0, 100)
+              .toDouble();
 
-          // Each open kilometer has its own hired-worker slots and yields its
-          // depth-eligible minerals into the same cargo hold.
-          for (
-            var floorIndex = 0;
-            floorIndex < openFloorCount && !state.cargoFull;
-            floorIndex++
-          ) {
-            final floorDepth = worldStart + floorIndex * mineFloorMeters;
-            if (MrMineProgression.worldAtDepth(floorDepth) != worldIndex) {
-              continue;
-            }
-            final minerals = MrMineProgression.minerals
-                .where((band) => band.worldIndex == worldIndex)
-                .where((band) => band.firstDepthMeters <= floorDepth)
-                .map((band) => ResourceCatalog.byId[band.resourceId])
-                .whereType<ResourceDefinition>()
-                .toList(growable: false);
-            if (minerals.isEmpty) continue;
-            final ore = minerals[random.nextInt(minerals.length)];
-            final oreYieldMultiplier =
-                state.activeBuffIds.contains('buff_resonance')
-                ? BuffLabCatalog.oreYieldMultiplier.round()
-                : 1;
-            final oreAdded = _addResource(
-              state,
-              ore,
-              diggingWorkers * oreYieldMultiplier,
-            );
-            state.totalMined += oreAdded;
-            mined += oreAdded;
-            if (oreAdded > 0) {
-              recordDailyProgress(state, 'mine', oreAdded, now: currentTime);
-            }
-            if (oreAdded > 0 &&
-                resourceWorkerPower > 0 &&
-                random.nextInt(100) <
-                    min(75, (resourceWorkerPower * 28).round())) {
-              final extraOre = _addResource(state, ore, 1);
-              state.totalMined += extraOre;
-              mined += extraOre;
-              recordDailyProgress(state, 'mine', extraOre, now: currentTime);
-            }
-
-            final isotopes = ResourceCatalog.isotopes
-                .where(
-                  (resource) => MrMineProgression.isotopeAvailableAtDepth(
-                    resource.id,
-                    worldIndex,
-                    floorDepth,
-                  ),
-                )
-                .where(
-                  (resource) =>
-                      !ReactorCatalog.isotopeById.containsKey(resource.id),
-                )
-                .toList(growable: false);
-            if (oreAdded > 0 &&
-                isotopes.isNotEmpty &&
-                random.nextInt(1000) <
-                    min(
-                      150,
-                      6 + state.upgradeLevel('scanner') * 3 + isotopeBonus,
-                    )) {
-              final isotope = isotopes[random.nextInt(isotopes.length)];
-              _addResource(state, isotope, 1);
-            }
-            if (oreAdded > 0 && random.nextInt(chestOdds) == 0) {
-              state.chestsFound++;
-              events.add(
-                'Eski sandık bulundu! Tüccar binasından ganimetini al.',
-              );
-            }
-          }
-        }
+      final producedThisSecond = _mineOpenShafts(
+        state,
+        random: random,
+        now: currentTime,
+        useSourceRolls: requestedSeconds <= 4 && allowRandomEvents,
+      );
+      mined += producedThisSecond;
+      if (producedThisSecond > 0 &&
+          random.nextInt(
+                max(
+                  200,
+                  1700 -
+                      state.scannerWorkers * 90 -
+                      (state.activeSpecialWorkerPower('chest_hunter') * 210)
+                          .round(),
+                ),
+              ) ==
+              0) {
+        state.chestsFound++;
+        events.add('Eski sandık bulundu! Tüccar binasından ganimetini al.');
       }
 
       _advanceReactor(state, events);
@@ -1543,8 +1854,6 @@ abstract final class GameEngine {
       _completeTimedActivities(state, currentTime, events, random);
       _advanceGemCrafting(state, events);
       _unlockMilestones(state, events);
-      _autoSellToThreshold(state);
-
       if (allowRandomEvents &&
           state.activeMineEventId == null &&
           state.miningSeconds >= state.nextMineEventAtSeconds) {
@@ -1573,6 +1882,209 @@ abstract final class GameEngine {
     return GameTickResult(events: events, mined: mined);
   }
 
+  /// Uses source 100 ms rolls during live play and expected rates for long
+  /// offline advances so timelapses do not loop over every roll individually.
+  static int _mineOpenShafts(
+    GameState state, {
+    required Random random,
+    required DateTime now,
+    required bool useSourceRolls,
+  }) {
+    if (state.cargoFull) return 0;
+    if (useSourceRolls) {
+      state.productionRemainders.clear();
+      return _rollOpenShaftsFromSource(state, random: random, now: now);
+    }
+    var totalAdded = 0;
+    for (final entry in _expectedOpenShaftRates(state).entries) {
+      if (state.cargoFull) break;
+      final resource = ResourceCatalog.byId[entry.key];
+      if (resource == null) continue;
+      final accrued =
+          (state.productionRemainders[resource.id] ?? 0) + entry.value;
+      final quantity = accrued.floor();
+      state.productionRemainders[resource.id] = accrued - quantity;
+      if (quantity <= 0) continue;
+
+      if (resource.kind == ResourceKind.isotope) {
+        final tier = resource.isotopeTier;
+        var decayedAmount = 0;
+        ResourceDefinition? decayedResource;
+        if (tier == 1 && state.isotopeOneDecayChance > 0) {
+          decayedResource = ResourceCatalog.decayedIsotope(resource.id);
+          if (decayedResource != null) {
+            decayedAmount = (quantity * state.isotopeOneDecayChance).floor();
+          }
+        } else if (tier == 2 && state.isotopeTwoDecayChance > 0) {
+          decayedResource = ResourceCatalog.decayedIsotope(resource.id);
+          if (decayedResource != null) {
+            decayedAmount = (quantity * state.isotopeTwoDecayChance).floor();
+          }
+        }
+
+        final undecayedAmount = quantity - decayedAmount;
+        var addedThis = 0;
+        if (undecayedAmount > 0) {
+          final addedUndecayed = _addResource(
+            state,
+            resource,
+            undecayedAmount,
+            capacityLimited: true,
+          );
+          addedThis += addedUndecayed;
+        }
+        if (decayedAmount > 0 && decayedResource != null) {
+          final addedDecayed = _addResource(
+            state,
+            decayedResource,
+            decayedAmount,
+            capacityLimited: true,
+          );
+          addedThis += addedDecayed;
+        }
+        state.totalMined += addedThis;
+        totalAdded += addedThis;
+        if (addedThis > 0) recordDailyProgress(state, 'mine', addedThis, now: now);
+      } else {
+        final added = _addResource(
+          state,
+          resource,
+          quantity,
+          capacityLimited: true,
+        );
+        state.totalMined += added;
+        totalAdded += added;
+        if (added > 0) recordDailyProgress(state, 'mine', added, now: now);
+      }
+    }
+    return totalAdded;
+  }
+
+  static int _rollOpenShaftsFromSource(
+    GameState state, {
+    required Random random,
+    required DateTime now,
+  }) {
+    var totalAdded = 0;
+    final minedByResource = <String, int>{};
+    for (var world = 0; world < GameState.worldEntryDepths.length; world++) {
+      final worldStart = GameState.worldEntryDepths[world];
+      if (world > 0 && state.deepestMeters < worldStart) continue;
+      final worldDepth = world == state.activeWorldIndex
+          ? state.depthMeters
+          : (state.worldDepths[world.toString()] ?? worldStart);
+      final firstFloor = (worldStart / mineFloorMeters).floor();
+      final worldEndFloor = world + 1 < GameState.worldEntryDepths.length
+          ? (GameState.worldEntryDepths[world + 1] / mineFloorMeters).floor()
+          : MrMineLevelTable.rows.length;
+      final endFloor = min(
+        worldEndFloor,
+        (worldDepth / mineFloorMeters).floor() + 1,
+      );
+      if (endFloor <= firstFloor) continue;
+
+      final hired = state.worldMinerCounts[world.toString()] ?? 0;
+      final workerLevel = state.worldWorkerLevels[world.toString()] ?? 0;
+      final workerGateThreshold = (hired * 2 + workerLevel * 3)
+          .clamp(0, 40)
+          .toInt();
+      if (workerGateThreshold <= 0) continue;
+      final highLevelFindBonus = workerLevel > 7
+          ? 1 + (workerLevel - 7) * .05
+          : 1.0;
+      final mineralStatMultiplier =
+          (1 + state.upgradeLevel('scanner') * .02) *
+          (state.activeBuffIds.contains('buff_resonance')
+              ? BuffLabCatalog.oreYieldMultiplier
+              : 1.0);
+      final isotopeStatMultiplier = 1 + state.upgradeLevel('scanner') * .03;
+      final mineralBonusByBand = <int, double>{};
+      final isotopeBonusByBand = <int, double>{};
+
+      sourceRolls:
+      for (var tick = 0; tick < 10; tick++) {
+        for (var floor = firstFloor; floor < endFloor; floor++) {
+          if (state.cargoFull) break sourceRolls;
+          if (random.nextInt(40) >= workerGateThreshold) continue;
+          final depthBand = floor ~/ 100;
+          final mineralBonus = mineralBonusByBand.putIfAbsent(
+            depthBand,
+            () => state.specialWorkerPowerAt(
+              'miner_booster',
+              worldIndex: world,
+              depthBand: depthBand,
+            ),
+          );
+          final isotopeBonus = isotopeBonusByBand.putIfAbsent(
+            depthBand,
+            () => state.specialWorkerPowerAt(
+              'rare_drop_booster',
+              worldIndex: world,
+              depthBand: depthBand,
+            ),
+          );
+          for (final entry in MrMineLevelTable.rows[floor].entries) {
+            final resource = ResourceCatalog.byId[entry.key];
+            if (resource == null ||
+                (resource.kind != ResourceKind.mineral &&
+                    resource.kind != ResourceKind.isotope)) {
+              continue;
+            }
+            final findMultiplier = switch (resource.kind) {
+              ResourceKind.mineral =>
+                (mineralStatMultiplier + mineralBonus * .22) *
+                    highLevelFindBonus,
+              ResourceKind.isotope =>
+                (isotopeStatMultiplier + isotopeBonus * .18) *
+                    highLevelFindBonus,
+              _ => 0.0,
+            };
+            final threshold = (entry.value * findMultiplier).round();
+            if (threshold <= 0 || random.nextInt(1000) >= threshold) {
+              continue;
+            }
+            var finalResource = resource;
+            if (resource.kind == ResourceKind.isotope) {
+              final tier = resource.isotopeTier;
+              if (tier == 1 && state.isotopeOneDecayChance > 0) {
+                if (random.nextDouble() < state.isotopeOneDecayChance) {
+                  final decayed = ResourceCatalog.decayedIsotope(resource.id);
+                  if (decayed != null) finalResource = decayed;
+                }
+              } else if (tier == 2 && state.isotopeTwoDecayChance > 0) {
+                if (random.nextDouble() < state.isotopeTwoDecayChance) {
+                  final decayed = ResourceCatalog.decayedIsotope(resource.id);
+                  if (decayed != null) finalResource = decayed;
+                }
+              }
+            }
+            final added = _addResource(
+              state,
+              finalResource,
+              1,
+              capacityLimited: true,
+            );
+            if (added <= 0) continue;
+            totalAdded += added;
+            minedByResource.update(
+              finalResource.id,
+              (amount) => amount + added,
+              ifAbsent: () => added,
+            );
+          }
+        }
+      }
+    }
+
+    if (totalAdded > 0) {
+      state.totalMined += totalAdded;
+      for (final entry in minedByResource.entries) {
+        recordDailyProgress(state, 'mine', entry.value, now: now);
+      }
+    }
+    return totalAdded;
+  }
+
   static bool switchWorld(GameState state, int worldIndex) {
     if (worldIndex < 0 || worldIndex >= GameState.worldEntryDepths.length) {
       return false;
@@ -1585,26 +2097,47 @@ abstract final class GameEngine {
     final key = worldIndex.toString();
     state.worldDepths.putIfAbsent(key, () => entryDepth);
     state.worldPressures.putIfAbsent(key, () => 14);
-    state.worldCargoUsed.putIfAbsent(key, () => 0);
-    state.worldInventories.putIfAbsent(key, () => {'coal': 0, 'copper': 0});
-    state.worldReserves.putIfAbsent(key, () => <String, int>{});
+    state.worldMinerCounts.putIfAbsent(key, () => worldIndex == 0 ? 0 : 1);
+    state.worldWorkerLevels.putIfAbsent(key, () => 0);
 
     state.activeWorldIndex = worldIndex;
     state.depthMeters = state.worldDepths[key]!
         .clamp(entryDepth, state.deepestMeters)
         .toDouble();
     state.pressure = state.worldPressures[key]!.clamp(0, 100).toDouble();
-    state.inventory
-      ..clear()
-      ..addAll(state.worldInventories[key]!);
-    state.reserves
-      ..clear()
-      ..addAll(state.worldReserves[key]!);
-    state.cargoUsed = state.worldCargoUsed[key]!
-        .clamp(0, state.effectiveCargoCapacity)
-        .toDouble();
+    state.crewCount = state.worldMinerCounts[key]!.clamp(0, 10).toInt();
+    state.upgrades['workers'] = state.worldWorkerLevels[key]!
+        .clamp(0, 10)
+        .toInt();
     ensureOpenMineDeposits(state);
     return true;
+  }
+
+  static void debugJumpToEnd(GameState state) {
+    final finalDepth = MrMineLevelTable.rows.length * mineFloorMeters - 1.0;
+    state.storeActiveWorldSnapshot();
+    state
+      ..deepestMeters = finalDepth
+      ..activeWorldIndex = 2
+      ..depthMeters = finalDepth
+      ..tutorialStep = max(state.tutorialStep, 5);
+    state.worldDepths
+      ..['0'] = MrMineProgression.earthEndMeters - 1
+      ..['1'] = MrMineProgression.moonEndMeters - 1
+      ..['2'] = finalDepth;
+    state.worldPressures.putIfAbsent('0', () => 14);
+    state.worldPressures.putIfAbsent('1', () => 14);
+    state.worldPressures.putIfAbsent('2', () => 14);
+    state.pressure = state.worldPressures['2']!;
+    state.worldMinerCounts.putIfAbsent('2', () => 1);
+    state.worldWorkerLevels.putIfAbsent('2', () => 0);
+    state.crewCount = state.worldMinerCounts['2']!;
+    state.upgrades['workers'] = state.worldWorkerLevels['2']!;
+    state.unlockedBuildings.addAll(milestoneBuildings.values);
+    state.discoveredEncounters.addAll(
+      hiddenEncounters.values.map((encounter) => encounter.$1),
+    );
+    ensureOpenMineDeposits(state);
   }
 
   static bool tapOre(GameState state, String resourceId, {DateTime? now}) {
@@ -1632,7 +2165,6 @@ abstract final class GameEngine {
     String depositId, {
     DateTime? now,
   }) {
-    if (state.cargoFull) return false;
     final deposit = state.oreDeposits[depositId];
     if (deposit == null || deposit.depleted) return false;
     final resource = ResourceCatalog.byId[deposit.resourceId];
@@ -1640,15 +2172,14 @@ abstract final class GameEngine {
     final worldStart = GameState.worldEntryDepths[deposit.worldIndex];
     final floorDepth = worldStart + deposit.floorIndex * mineFloorMeters;
     if (floorDepth > state.depthMeters ||
-        (deposit.spawnDepthMeters != null &&
-            resource.minDepthMeters > deposit.spawnDepthMeters!) ||
-        resource.minDepthMeters > state.depthMeters) {
+        !MineBiome.containsMineral(
+          deposit.spawnDepthMeters ?? floorDepth,
+          deposit.resourceId,
+        )) {
       return false;
     }
     final yield = nextMineDepositYield(state, deposit);
-    if (yield <= 0 || _availableUnits(state, resource) < yield) {
-      return false;
-    }
+    if (yield <= 0) return false;
 
     deposit.damage = min(
       deposit.hitPoints,
@@ -1677,19 +2208,20 @@ abstract final class GameEngine {
 
   /// The KAZI button advances the active drill without awarding ore.
   static bool manualDig(GameState state, {DateTime? now}) {
-    if (state.cargoFull) return false;
     final drillLevel = state.upgradeLevel('drill');
     final distance = 1 + drillLevel ~/ 5;
-    state.depthMeters += distance;
+    final previousDepth = state.depthMeters;
+    state.depthMeters = min(
+      maxDrillDepthForWorld(state.activeWorldIndex),
+      state.depthMeters + distance,
+    );
+    final metersAdvanced = state.depthMeters - previousDepth;
+    if (metersAdvanced <= 0) return false;
     state.deepestMeters = max(state.deepestMeters, state.depthMeters);
     final random = Random(state.seed);
-    rollForMineralDepositSpawn(
-      state,
-      random,
-      metersAdvanced: distance.toDouble(),
-    );
+    rollForMineralDepositSpawn(state, random, metersAdvanced: metersAdvanced);
     state.seed = random.nextInt(0x7fffffff);
-    recordDailyProgress(state, 'depth', distance, now: now);
+    recordDailyProgress(state, 'depth', metersAdvanced.floor(), now: now);
     if (state.tutorialStep == 4) state.tutorialStep = 5;
     _unlockMilestones(state, []);
     ensureOpenMineDeposits(state);
@@ -1697,26 +2229,22 @@ abstract final class GameEngine {
   }
 
   static bool buyUpgrade(GameState state, String track) {
+    if (track == 'workers') return upgradeWorkerLevel(state);
+    if (track == 'warehouse') return upgradeCargo(state);
     if (track == 'reactor') return upgradeReactor(state);
     final nextLevel = UpgradeCatalog.next(track, state.upgradeLevel(track));
     if (nextLevel == null) return false;
-    if (track == 'drill' && state.crewCount <= 0) return false;
     if (track == 'reactor' && !state.unlockedBuildings.contains('reactor')) {
       return false;
     }
     final cost = nextLevel.cost;
-    if (state.coins < cost) return false;
+    if (!state.canAfford(cost)) return false;
     if (upgradeMaterialDeficits(state, track).isNotEmpty) return false;
-    state.coins -= cost;
+    state.spendCoins(cost);
     for (final entry in nextLevel.materialCosts.entries) {
       _consumeResource(state, entry.key, entry.value);
     }
     state.upgrades[track] = nextLevel.level;
-    if (track == 'warehouse') {
-      final added = 10 + nextLevel.level * 5;
-      state.cargoCapacity += added;
-    }
-    if (track == 'lift') state.cargoCapacity += 2 + nextLevel.level;
     if (track == 'weapon') state.drillParts += 1;
     state.tutorialStep = max(state.tutorialStep, 4);
     recordDailyProgress(state, 'upgrade', 1);
@@ -1775,13 +2303,12 @@ abstract final class GameEngine {
 
   static bool hireMiner(GameState state) {
     final cost = minerCost(state);
-    if (state.coins < cost ||
-        state.crewCount >= 80 ||
-        (state.crewCount == 0 && state.totalSold <= 0)) {
+    if (!state.canAfford(cost) || state.activeMinerCount >= 10) {
       return false;
     }
-    state.coins -= cost;
-    state.crewCount++;
+    state.spendCoins(cost);
+    state.crewCount = state.activeMinerCount + 1;
+    state.worldMinerCounts[state.activeWorldIndex.toString()] = state.crewCount;
     state.tutorialStep = max(state.tutorialStep, 3);
     recordDailyProgress(state, 'hire', 1);
     return true;
@@ -1909,60 +2436,92 @@ abstract final class GameEngine {
     final resource = ResourceCatalog.byId[id];
     if (resource == null) return;
     state.inventory[id] = max(0, state.amount(id) - amount);
-    state.cargoUsed = max(
-      0,
-      state.cargoUsed - amount * resource.weight,
-    ).toDouble();
+    if (resource.countsTowardsCapacityAndValue) {
+      state.cargoUsed = max(
+        0,
+        state.cargoUsed - amount * max(1, resource.weight),
+      ).toDouble();
+    }
   }
 
-  static int sellResource(
+  static MrMineBigNumber sellResource(
     GameState state,
     String resourceId, {
     int? requested,
   }) {
     final resource = ResourceCatalog.byId[resourceId];
     if (resource == null ||
-        state.lockedResources.contains(resourceId) ||
         (resource.kind != ResourceKind.mineral &&
             resource.kind != ResourceKind.isotope)) {
-      return 0;
+      return MrMineBigNumber.zero;
     }
     final available = max(
       0,
       state.amount(resourceId) - state.reserve(resourceId),
     );
     final quantity = min(available, requested ?? available);
-    if (quantity <= 0) return 0;
+    if (quantity <= 0) return MrMineBigNumber.zero;
     state.inventory[resourceId] = state.amount(resourceId) - quantity;
-    state.cargoUsed = max(
-      0,
-      state.cargoUsed - quantity * resource.weight,
-    ).toDouble();
+    if (resource.countsTowardsCapacityAndValue) {
+      state.cargoUsed = max(
+        0,
+        state.cargoUsed - quantity * max(1, resource.weight),
+      ).toDouble();
+    }
     final relicSaleBonus = state.equippedRelics.contains('relic_2')
         ? 1 + .15 * state.relicLevel('relic_2')
         : 1.0;
     final gemSaleBonus = state.equippedGems.contains('ruby') ? 1.08 : 1.0;
     final sortingBonus = 1 + min(1, state.sortingWorkers * 0.02);
-    final saleBonus = relicSaleBonus * gemSaleBonus * sortingBonus;
-    final value = (quantity * resource.baseValue * saleBonus).round();
-    state.coins += value;
-    state.totalSold += value;
+    final value = MrMineBigNumber.fromNum(quantity)
+        .multiply(MrMineBigNumber.fromNum(resource.baseValue))
+        .multiply(MrMineBigNumber.fromNum(relicSaleBonus))
+        .multiply(MrMineBigNumber.fromNum(gemSaleBonus))
+        .multiply(MrMineBigNumber.fromNum(sortingBonus));
+    state.addCoins(value);
+    state.totalSold = state.totalSold.add(value);
     state.tutorialStep = max(state.tutorialStep, 2);
-    recordDailyProgress(state, 'sell', value);
+    final dailySellProgress = value.exponent >= 9
+        ? 1000000000
+        : value.toDouble().clamp(0, 1000000000).floor();
+    recordDailyProgress(state, 'sell', dailySellProgress);
     return value;
   }
 
-  static int sellAll(GameState state) {
-    var total = 0;
+  static MrMineBigNumber sellAll(
+    GameState state, {
+    int? worldIndex,
+    bool? isotopesOnly,
+  }) {
+    final selectedWorld = worldIndex ?? state.activeWorldIndex;
+    var total = MrMineBigNumber.zero;
     for (final id in state.inventory.keys.toList()) {
-      total += sellResource(state, id);
+      final resource = ResourceCatalog.byId[id];
+      if (resource == null ||
+          _resourceWorld(resource) != selectedWorld ||
+          (isotopesOnly != null &&
+              (resource.kind == ResourceKind.isotope) != isotopesOnly)) {
+        continue;
+      }
+      total = total.add(sellResource(state, id));
     }
     return total;
   }
 
-  static int sellFraction(GameState state, double fraction) {
-    if (fraction <= 0 || fraction > 1) return 0;
-    var total = 0;
+  static int? _resourceWorld(ResourceDefinition resource) {
+    final band = MrMineProgression.bandByResourceId[resource.id];
+    if (band != null) return band.worldIndex;
+    if (RegExp(r'^(?:u|pu|po)[1-3]$').hasMatch(resource.id)) return 0;
+    if (RegExp(r'^(?:n|he|e|f)[1-3]$').hasMatch(resource.id)) return 1;
+    if (RegExp(r'^(?:h|o)[1-3]$').hasMatch(resource.id)) return 2;
+    return MrMineProgression.worldAtDepth(
+      ResourceCatalog.firstMineDepthMeters(resource.id),
+    );
+  }
+
+  static MrMineBigNumber sellFraction(GameState state, double fraction) {
+    if (fraction <= 0 || fraction > 1) return MrMineBigNumber.zero;
+    var total = MrMineBigNumber.zero;
     for (final id in state.inventory.keys.toList()) {
       final resource = ResourceCatalog.byId[id];
       if (resource == null ||
@@ -1971,28 +2530,42 @@ abstract final class GameEngine {
         continue;
       }
       final available = _unreserved(state, id);
-      if (available <= 0 || state.lockedResources.contains(id)) continue;
+      if (available <= 0) continue;
       final quantity = (available * fraction)
           .round()
           .clamp(1, available)
           .toInt();
-      total += sellResource(state, id, requested: quantity);
+      total = total.add(sellResource(state, id, requested: quantity));
     }
     return total;
   }
 
   static void toggleReserve(GameState state, String resourceId) {
-    final old = state.reserve(resourceId);
-    state.reserves[resourceId] = old > 0
-        ? 0
-        : min(10, state.amount(resourceId));
+    toggleResourceLock(state, resourceId);
   }
 
   static void toggleResourceLock(GameState state, String resourceId) {
     if (!ResourceCatalog.byId.containsKey(resourceId)) return;
-    if (!state.lockedResources.add(resourceId)) {
-      state.lockedResources.remove(resourceId);
+    final heldAmount = state.reserve(resourceId);
+    state.reserves[resourceId] = heldAmount >= state.amount(resourceId)
+        ? 0
+        : state.amount(resourceId);
+    state.lockedResources.remove(resourceId);
+  }
+
+  static void setResourceReserve(
+    GameState state,
+    String resourceId,
+    int amount,
+  ) {
+    if (!ResourceCatalog.byId.containsKey(resourceId)) return;
+    final reserve = amount.clamp(0, state.amount(resourceId)).toInt();
+    if (reserve == 0) {
+      state.reserves.remove(resourceId);
+    } else {
+      state.reserves[resourceId] = reserve;
     }
+    state.lockedResources.remove(resourceId);
   }
 
   static void setAutoSellThreshold(GameState state, double threshold) {
@@ -2002,33 +2575,6 @@ abstract final class GameEngine {
           ? choice
           : closest,
     );
-  }
-
-  static int _autoSellToThreshold(GameState state) {
-    if (!state.autoSellEnabled ||
-        state.cargoUsed <=
-            state.effectiveCargoCapacity * state.autoSellThreshold) {
-      return 0;
-    }
-    final target = state.effectiveCargoCapacity * state.autoSellThreshold;
-    final candidates = [
-      ...ResourceCatalog.minerals,
-      ...ResourceCatalog.isotopes,
-    ]..sort((a, b) => a.baseValue.compareTo(b.baseValue));
-    var total = 0;
-    for (final resource in candidates) {
-      if (state.cargoUsed <= target) break;
-      if (state.lockedResources.contains(resource.id)) continue;
-      final available = _unreserved(state, resource.id);
-      if (available <= 0) continue;
-      final weight = resource.weight < 1 ? 1 : resource.weight;
-      final unitsNeeded = ((state.cargoUsed - target) / weight)
-          .ceil()
-          .clamp(1, available)
-          .toInt();
-      total += sellResource(state, resource.id, requested: unitsNeeded);
-    }
-    return total;
   }
 
   static int openChest(GameState state) => openChestTier(state, 'basic');
@@ -2041,14 +2587,7 @@ abstract final class GameEngine {
       _ => 0,
     };
     if (count <= 0) return 0;
-    final ore = ResourceCatalog.mineableAtDepth(state.depthMeters);
-    final freeUnits = ore == null ? 0 : _availableUnits(state, ore);
-    final unitsRequired = tier == 'deep'
-        ? 6
-        : tier == 'gold'
-        ? 4
-        : 1;
-    if (ore != null && freeUnits < unitsRequired) return 0;
+    final ore = MineBiome.dominantMineral(state.depthMeters);
     final tierSeed = switch (tier) {
       'gold' => 0x601d,
       'deep' => 0xdee9,
@@ -2060,9 +2599,7 @@ abstract final class GameEngine {
       'deep' => 12,
       _ => 2,
     };
-    final oreAmount = ore == null
-        ? 0
-        : min(oreBase + random.nextInt(4), freeUnits);
+    final oreAmount = ore == null ? 0 : oreBase + random.nextInt(4);
     switch (tier) {
       case 'basic':
         state.chestsFound--;
@@ -2081,7 +2618,13 @@ abstract final class GameEngine {
       'deep' => 1500 + random.nextInt(1500) + state.chestsOpened * 20,
       _ => 90 + random.nextInt(240) + state.chestsOpened * 8,
     };
-    state.coins += reward;
+    state.addCoins(reward);
+    if (tier == 'gold') {
+      final blueprintId = _rollDiscoveredBlueprint(state, random);
+      if (blueprintId != null) {
+        state.discoveredEncounters.add('Montaj şeması #$blueprintId keşfedildi');
+      }
+    }
     if (ore != null && oreAmount > 0) _addResource(state, ore, oreAmount);
     if (random.nextInt(
           tier == 'deep'
@@ -2120,13 +2663,37 @@ abstract final class GameEngine {
     return reward;
   }
 
+  static const List<String> availableRelicIds = [
+    'relic_1',
+    'relic_2',
+    'relic_3',
+    'relic_4',
+    'relic_5',
+    'relic_6',
+    'relic_7',
+    'relic_8',
+    'relic_9',
+    'relic_10',
+    'relic_11',
+    'relic_12',
+    'relic_150',
+    'relic_153',
+  ];
+
+  static List<String> _relicIdsAvailableAtDepth(GameState state) => [
+    ...availableRelicIds.where(
+      (id) => id != 'relic_153' || state.depthMeters >= 303,
+    ),
+  ];
+
   static void _awardRandomRelic(GameState state, Random random) {
-    final relicId = 'relic_${random.nextInt(12) + 1}';
+    final available = _relicIdsAvailableAtDepth(state);
+    final relicId = available[random.nextInt(available.length)];
     recordRelicFound(state, relicId);
   }
 
   static void recordRelicFound(GameState state, String relicId) {
-    if (!RegExp(r'^relic_(?:[1-9]|1[0-2])$').hasMatch(relicId)) return;
+    if (!GameState.isValidRelicId(relicId)) return;
     state.relicsFound++;
     if (state.unlockedRelics.add(relicId)) {
       state.relicLevels.putIfAbsent(relicId, () => 1);
@@ -2136,10 +2703,17 @@ abstract final class GameEngine {
     }
   }
 
-  static int relicUpgradeCost(GameState state, String relicId) =>
-      state.unlockedRelics.contains(relicId) && state.relicLevel(relicId) < 5
-      ? state.relicLevel(relicId) * 3
-      : 0;
+  static int relicUpgradeCost(GameState state, String relicId) {
+    final maxLevel = switch (relicId) {
+      'relic_150' || 'relic_153' => 3,
+      'relic_151' || 'relic_152' || 'relic_154' || 'relic_155' => 1,
+      _ => 5,
+    };
+    return state.unlockedRelics.contains(relicId) &&
+            state.relicLevel(relicId) < maxLevel
+        ? state.relicLevel(relicId) * 3
+        : 0;
+  }
 
   static bool dismantleRelicDuplicate(GameState state, String relicId) {
     final duplicateCount = state.relicDuplicates[relicId] ?? 0;
@@ -2175,8 +2749,8 @@ abstract final class GameEngine {
       return false;
     }
     final cost = chestCollectorUpgradeCost(state);
-    if (state.coins < cost) return false;
-    state.coins -= cost;
+    if (!state.canAfford(cost)) return false;
+    state.spendCoins(cost);
     state.chestCollectorLevel++;
     return true;
   }
@@ -2213,8 +2787,8 @@ abstract final class GameEngine {
       return false;
     }
     final cost = chestCompressorUpgradeCost(state);
-    if (state.coins < cost) return false;
-    state.coins -= cost;
+    if (!state.canAfford(cost)) return false;
+    state.spendCoins(cost);
     state.chestCompressionLevel++;
     return true;
   }
@@ -2409,7 +2983,7 @@ abstract final class GameEngine {
         (1 + (state.caveDroneCount - 1) * .35 + state.expeditionLevel * .025);
     switch (nodeId) {
       case 'mineral':
-        final ore = ResourceCatalog.mineableAtDepth(state.depthMeters);
+        final ore = MineBiome.dominantMineral(state.depthMeters);
         if (ore == null) {
           addLoot('cave_coins', max(1, (120 * routeMultiplier).round()));
         } else {
@@ -2441,7 +3015,10 @@ abstract final class GameEngine {
         if (random.nextInt(4) == 0) {
           state.coreShards++;
         } else {
-          addLoot('relic_${random.nextInt(12) + 1}', 1);
+          addLoot(
+            availableRelicIds[random.nextInt(availableRelicIds.length)],
+            1,
+          );
         }
         break;
       case 'health':
@@ -2540,13 +3117,19 @@ abstract final class GameEngine {
       if (definition != null) {
         _addResource(state, definition, entry.value);
       } else if (entry.key == 'cave_coins') {
-        state.coins += entry.value;
+        state.addCoins(entry.value);
       } else if (entry.key == 'cave_chest') {
         for (var count = 0; count < entry.value; count++) {
           _addWorldChest(state);
         }
       } else if (entry.key == 'cave_scientist') {
-        if (!addScientist(state)) state.coins += entry.value * 450;
+        if (!addScientist(state)) {
+          state.addCoins(
+            MrMineBigNumber.fromNum(entry.value).multiply(
+              const MrMineBigNumber.raw(4.5, 2),
+            ),
+          );
+        }
       } else if (entry.key == 'cave_buff') {
         final until = now.add(const Duration(seconds: 90));
         if (state.resonanceBuffUntil == null ||
@@ -2554,11 +3137,17 @@ abstract final class GameEngine {
           state.resonanceBuffUntil = until;
         }
       } else if (entry.key.startsWith('relic_') &&
-          RegExp(r'^relic_(?:[1-9]|1[0-2])$').hasMatch(entry.key)) {
+          GameState.isValidRelicId(entry.key)) {
         recordRelicFound(state, entry.key);
       }
     }
-    state.coins += 80 + state.expeditionLevel * 25;
+    state.addCoins(
+      MrMineBigNumber.fromNum(80).add(
+        MrMineBigNumber.fromNum(state.expeditionLevel).multiply(
+          const MrMineBigNumber.raw(2.5, 1),
+        ),
+      ),
+    );
     state.cavesCompleted++;
     state.pendingCaveLoot.clear();
     state.caveNodeMap.clear();
@@ -2593,10 +3182,11 @@ abstract final class GameEngine {
     }
     state.excavationReadyAt = null;
     state.excavationCompletedPending = false;
-    final relicId = 'relic_${(state.relicsFound % 12) + 1}';
+    final available = _relicIdsAvailableAtDepth(state);
+    final relicId = available[state.relicsFound % available.length];
     recordRelicFound(state, relicId);
     state.drillParts += 1;
-    state.coins += 360;
+    state.addCoins(360);
     return true;
   }
 
@@ -2651,7 +3241,7 @@ abstract final class GameEngine {
       state.defeatedBossIds.add(boss.id);
       state.bossesDefeated++;
       state.bossDamage = 0;
-      state.coins += boss.reward;
+      state.addCoins(boss.reward);
       state.drillParts += 3 + boss.id;
       switch (bossWorldIndex(boss)) {
         case 0:
@@ -2674,8 +3264,8 @@ abstract final class GameEngine {
     if (state.amount('building_material') > 0) {
       state.inventory['building_material'] =
           state.amount('building_material') - 1;
-    } else if (state.coins >= 90) {
-      state.coins -= 90;
+    } else if (state.canAfford(90)) {
+      state.spendCoins(90);
     } else {
       return false;
     }
@@ -2701,6 +3291,15 @@ abstract final class GameEngine {
 
   static bool acceptMerchantDeal(GameState state) {
     final offer = merchantOffer(state);
+    if (offer.blueprintId != null && offer.blueprintCashCost != null) {
+      if (!state.canAfford(offer.blueprintCashCost!) ||
+          !state.knownBlueprintIds.add(offer.blueprintId!)) {
+        return false;
+      }
+      state.spendCoins(offer.blueprintCashCost!);
+      state.merchantReadyAt = DateTime.now().add(const Duration(minutes: 2));
+      return true;
+    }
     if (state.amount(offer.giveId) < offer.giveAmount ||
         state.reserve(offer.giveId) >
             state.amount(offer.giveId) - offer.giveAmount) {
@@ -2726,6 +3325,26 @@ abstract final class GameEngine {
   }
 
   static TradeOffer merchantOffer(GameState state) {
+    final candidates = _tradableBlueprints(state);
+    final offerSeed =
+        (state.merchantReadyAt?.millisecondsSinceEpoch ?? 0) ^
+        state.prestigeCount * 0x27d4eb2d ^
+        state.activeWorldIndex * 0x45d9f3b;
+    final offerRandom = Random(offerSeed);
+    if (candidates.isNotEmpty && offerRandom.nextDouble() < (0.1 / 2.1)) {
+      final blueprintId = candidates[offerRandom.nextInt(candidates.length)];
+      final price = blueprintCashPrice(blueprintId);
+      if (price > 0) {
+        return TradeOffer(
+          giveId: '',
+          giveAmount: 0,
+          getId: '',
+          getAmount: 0,
+          blueprintId: blueprintId,
+          blueprintCashCost: MrMineBigNumber.fromNum(price),
+        );
+      }
+    }
     final eligible = MrMineProgression.minerals
         .where((band) => band.worldIndex == state.activeWorldIndex)
         .where((band) => band.firstDepthMeters <= state.depthMeters)
@@ -2770,13 +3389,14 @@ abstract final class GameEngine {
   }
 
   static bool scanResonance(GameState state) {
-    if (state.upgradeLevel('scanner') <= 0 && state.coins < 80) return false;
-    if (state.upgradeLevel('scanner') <= 0) state.coins -= 80;
-    final available = ResourceCatalog.minerals
-        .where(
-          (resource) => resource.minDepthMeters <= state.depthMeters + 1200,
-        )
+    if (state.upgradeLevel('scanner') <= 0 && !state.canAfford(80)) {
+      return false;
+    }
+    final available = ResourceCatalog.unlockedAt(state.depthMeters)
+        .where((resource) => resource.kind == ResourceKind.mineral)
         .toList();
+    if (available.isEmpty) return false;
+    if (state.upgradeLevel('scanner') <= 0) state.spendCoins(80);
     final random = Random(
       state.seed ^ state.totalMined ^ state.resonanceChains,
     );
@@ -2815,7 +3435,7 @@ abstract final class GameEngine {
         : nextBuffUntil;
     final random = Random(state.seed ^ state.resonanceChains);
     state.seed = random.nextInt(0x7fffffff);
-    state.coins += 50 + random.nextInt(60);
+    state.addCoins(50 + random.nextInt(60));
     return true;
   }
 
@@ -2829,7 +3449,7 @@ abstract final class GameEngine {
     state.depthMeters = 0;
     state.deepestMeters = 0;
     state.activeWorldIndex = 0;
-    state.coins = 240 + state.coreShards * 45;
+    state.coins = MrMineBigNumber(240 + state.coreShards * 45);
     state.energy = 0;
     state.cargoUsed = 0;
     state.managerLevel = 0;
@@ -2838,6 +3458,11 @@ abstract final class GameEngine {
     state.drillBitLevel = 1;
     state.drillFanLevel = 1;
     state.drillEngineLevel = 1;
+    state.cargoLevel = 1;
+    state.cargoCapacity = CargoEquipmentCatalog.all.first.capacity;
+    state.knownBlueprintIds
+      ..clear()
+      ..addAll(List<int>.generate(16, (index) => index));
     state.reactorShutdown = false;
     state.reactorComponents
       ..clear()
@@ -2903,6 +3528,12 @@ abstract final class GameEngine {
     state.chestCompressionReadyAt = null;
     state.bossDamage = 0;
     state.defeatedBossIds.clear();
+    state.discoveredEncounters.removeWhere(
+      (encounter) =>
+          encounter.startsWith('blueprint_encounter_') ||
+          encounter.contains('• montaj planları') ||
+          encounter.startsWith('Montaj şeması #'),
+    );
     state.unlockedBuildings
       ..clear()
       ..addAll({
@@ -2918,43 +3549,32 @@ abstract final class GameEngine {
   static int _addResource(
     GameState state,
     ResourceDefinition resource,
-    int quantity,
-  ) {
+    int quantity, {
+    bool capacityLimited = false,
+  }) {
     if (quantity <= 0) return 0;
-    final carriesWeight =
-        resource.kind == ResourceKind.mineral ||
-        resource.kind == ResourceKind.isotope;
-    final added = carriesWeight
+    final carriesWeight = resource.countsTowardsCapacityAndValue;
+    final added = capacityLimited && carriesWeight
         ? min(quantity, _availableUnits(state, resource))
         : quantity;
     if (added <= 0) return 0;
     state.inventory[resource.id] = state.amount(resource.id) + added;
-    if (carriesWeight) state.cargoUsed += added * resource.weight;
+    if (carriesWeight) state.cargoUsed += added * max(1, resource.weight);
     return added;
   }
 
   static int _availableUnits(GameState state, ResourceDefinition resource) {
+    if (!resource.countsTowardsCapacityAndValue) return 0x7fffffff;
     final weight = max(1, resource.weight);
     final remaining = state.effectiveCargoCapacity - state.cargoUsed;
     if (remaining < weight) return 0;
     return (remaining / weight).floor();
   }
 
-  static bool _fitsLoot(GameState state, Map<String, int> loot) {
-    var incomingWeight = 0.0;
-    for (final entry in loot.entries) {
-      final resource = ResourceCatalog.byId[entry.key];
-      if (resource == null || entry.value <= 0) continue;
-      if (resource.kind == ResourceKind.mineral ||
-          resource.kind == ResourceKind.isotope) {
-        incomingWeight += entry.value * resource.weight;
-      }
-    }
-    return state.cargoUsed + incomingWeight <= state.effectiveCargoCapacity;
-  }
+  static bool _fitsLoot(GameState state, Map<String, int> loot) => true;
 
   static void _generateCaveLoot(GameState state, Random random) {
-    final ore = ResourceCatalog.mineableAtDepth(state.depthMeters);
+    final ore = MineBiome.dominantMineral(state.depthMeters);
     final route = CaveRouteCatalog.byId[state.caveRoute]!;
     final caveBonus =
         1 +
@@ -2979,12 +3599,23 @@ abstract final class GameEngine {
       state.pendingCaveLoot['ticket'] = 1;
     }
     if (random.nextInt(route.relicChance) == 0) {
-      final relicId = 'relic_${random.nextInt(12) + 1}';
+      final relicId =
+          availableRelicIds[random.nextInt(availableRelicIds.length)];
       state.pendingCaveLoot[relicId] = 1;
     }
   }
 
   static void _unlockMilestones(GameState state, List<String> events) {
+    if (state.deepestMeters >= 1032000) {
+      state.knownBlueprintIds.addAll(
+        List<int>.generate(9, (index) => 61 + index),
+      );
+    }
+    if (state.deepestMeters >= 1814000) {
+      state.knownBlueprintIds.addAll(
+        List<int>.generate(13, (index) => 107 + index),
+      );
+    }
     if (state.deepestMeters >= 1000 &&
         state.discoveredEncounters.add('first_depth_chest')) {
       state.chestsFound++;
@@ -2995,7 +3626,7 @@ abstract final class GameEngine {
       if (state.deepestMeters >= depth &&
           state.unlockedBuildings.add(entry.value)) {
         events.add(_milestoneMessage(entry.value));
-        state.coins += 100 + (depth / 1000).floor();
+        state.addCoins(100 + (depth / 1000).floor());
         if (entry.value == 'scientists' && state.scientistRoster.isEmpty) {
           addScientist(state);
         }
@@ -3009,7 +3640,7 @@ abstract final class GameEngine {
       final depth = double.parse(entry.key);
       if (state.deepestMeters >= depth &&
           state.discoveredEncounters.add(entry.value.$1)) {
-        state.coins += entry.value.$2;
+        state.addCoins(entry.value.$2);
         state.drillParts += entry.value.$3;
         state.chestsFound++;
         events.add(
@@ -3055,11 +3686,8 @@ abstract final class GameEngine {
     final oil = ResourceCatalog.byId['oil'];
     if (oil == null) return;
 
-    final earthInventory = state.currentWorldIndex == 0
-        ? state.inventory
-        : state.worldInventories.putIfAbsent('0', () => <String, int>{});
     final capacity = oilPumpStorageCapacity(state);
-    final currentOil = earthInventory['oil'] ?? 0;
+    final currentOil = state.amount('oil');
     if (currentOil >= capacity) {
       state.oilPumpProgress = 0;
       return;
@@ -3072,10 +3700,9 @@ abstract final class GameEngine {
     if (due <= 0) return;
 
     final quantity = min(due, capacity - currentOil);
-    // Oil is a city material with no cargo weight. Keep the pump's stock in
-    // Earth's saved inventory even while the player is mining another world.
+    // Oil is a city material with no cargo weight in the shared warehouse.
     final added = min(quantity, max(0, capacity - currentOil));
-    earthInventory['oil'] = currentOil + added;
+    state.inventory['oil'] = currentOil + added;
     state.oilPumpProgress -= added;
     if (state.amount('oil') >= capacity || added < quantity) {
       state.oilPumpProgress = 0;
@@ -3149,10 +3776,14 @@ class TradeOffer {
     required this.giveAmount,
     required this.getId,
     required this.getAmount,
+    this.blueprintId,
+    this.blueprintCashCost,
   });
 
   final String giveId;
   final int giveAmount;
   final String getId;
   final int getAmount;
+  final int? blueprintId;
+  final MrMineBigNumber? blueprintCashCost;
 }

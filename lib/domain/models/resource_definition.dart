@@ -1,4 +1,5 @@
 import 'mr_mine_progression.dart';
+import 'mr_mine_level_table.dart';
 
 enum ResourceKind { mineral, isotope, material, currency, relic }
 
@@ -17,11 +18,27 @@ class ResourceDefinition {
   final String id;
   final String name;
   final ResourceKind kind;
-  final int baseValue;
+  final double baseValue;
   final double minDepthMeters;
   final int colorHex;
   final int iconIndex;
   final int weight;
+
+  /// Mr. Mine counts normal minerals and only tier-one isotopes against cargo.
+  bool get countsTowardsCapacityAndValue {
+    if (kind == ResourceKind.mineral) return true;
+    if (kind != ResourceKind.isotope) return false;
+    final tieredIsotope = RegExp(r'^(?:u|pu|po|n|he|h|o|e|f)([1-3])$')
+        .firstMatch(id);
+    return tieredIsotope == null || tieredIsotope.group(1) == '1';
+  }
+
+  /// Returns the isotope tier (1, 2, or 3) for tiered isotopes, or 0 otherwise.
+  int get isotopeTier {
+    if (kind != ResourceKind.isotope) return 0;
+    final match = RegExp(r'^(?:u|pu|po|n|he|h|o|e|f)([1-3])$').firstMatch(id);
+    return match == null ? 0 : int.parse(match.group(1)!);
+  }
 }
 
 abstract final class ResourceCatalog {
@@ -30,7 +47,7 @@ abstract final class ResourceCatalog {
       id: 'coal',
       name: 'Kömür',
       kind: ResourceKind.mineral,
-      baseValue: 2,
+      baseValue: 1,
       minDepthMeters: 0,
       colorHex: 0xFF39363A,
       iconIndex: 0,
@@ -39,7 +56,7 @@ abstract final class ResourceCatalog {
       id: 'copper',
       name: 'Bakır',
       kind: ResourceKind.mineral,
-      baseValue: 4,
+      baseValue: 2,
       minDepthMeters: 4000,
       colorHex: 0xFFCD743A,
       iconIndex: 1,
@@ -57,7 +74,7 @@ abstract final class ResourceCatalog {
       id: 'gold',
       name: 'Altın',
       kind: ResourceKind.mineral,
-      baseValue: 32,
+      baseValue: 16,
       minDepthMeters: 17000,
       colorHex: 0xFFF6C84A,
       iconIndex: 3,
@@ -102,7 +119,7 @@ abstract final class ResourceCatalog {
       id: 'silver',
       name: 'Gümüş',
       kind: ResourceKind.mineral,
-      baseValue: 8,
+      baseValue: 4,
       minDepthMeters: 13000,
       colorHex: 0xFFCED7DF,
       iconIndex: 2,
@@ -138,7 +155,7 @@ abstract final class ResourceCatalog {
       id: 'platinum',
       name: 'Platin',
       kind: ResourceKind.mineral,
-      baseValue: 64,
+      baseValue: 32,
       minDepthMeters: 21000,
       colorHex: 0xFFB8D2DB,
       iconIndex: 2,
@@ -147,7 +164,7 @@ abstract final class ResourceCatalog {
       id: 'diamond',
       name: 'Elmas Cevheri',
       kind: ResourceKind.mineral,
-      baseValue: 128,
+      baseValue: 64,
       minDepthMeters: 30000,
       colorHex: 0xFF94E8F3,
       iconIndex: 5,
@@ -174,7 +191,7 @@ abstract final class ResourceCatalog {
       id: 'coltan',
       name: 'Koltan',
       kind: ResourceKind.mineral,
-      baseValue: 1000,
+      baseValue: 500,
       minDepthMeters: 45000,
       colorHex: 0xFF707B84,
       iconIndex: 2,
@@ -192,7 +209,7 @@ abstract final class ResourceCatalog {
       id: 'painite',
       name: 'Painit',
       kind: ResourceKind.mineral,
-      baseValue: 145,
+      baseValue: 1000,
       minDepthMeters: 60000,
       colorHex: 0xFFD36E55,
       iconIndex: 6,
@@ -210,7 +227,7 @@ abstract final class ResourceCatalog {
       id: 'black_opal',
       name: 'Siyah Opal',
       kind: ResourceKind.mineral,
-      baseValue: 4000,
+      baseValue: 2000,
       minDepthMeters: 79000,
       colorHex: 0xFF5E4B70,
       iconIndex: 6,
@@ -228,7 +245,7 @@ abstract final class ResourceCatalog {
       id: 'red_diamond',
       name: 'Kızıl Elmas',
       kind: ResourceKind.mineral,
-      baseValue: 20000,
+      baseValue: 10000,
       minDepthMeters: 80000,
       colorHex: 0xFFE94D63,
       iconIndex: 6,
@@ -246,7 +263,7 @@ abstract final class ResourceCatalog {
       id: 'blue_obsidian',
       name: 'Mavi Obsidyen',
       kind: ResourceKind.mineral,
-      baseValue: 40000,
+      baseValue: 20000,
       minDepthMeters: 93000,
       colorHex: 0xFF526BC4,
       iconIndex: 6,
@@ -273,7 +290,7 @@ abstract final class ResourceCatalog {
       id: 'californium',
       name: 'Kaliforniyum',
       kind: ResourceKind.mineral,
-      baseValue: 200000,
+      baseValue: 100000,
       minDepthMeters: 305000,
       colorHex: 0xFF84E96D,
       iconIndex: 7,
@@ -336,7 +353,7 @@ abstract final class ResourceCatalog {
       id: 'carbon',
       name: 'Karbon',
       kind: ResourceKind.mineral,
-      baseValue: 500,
+      baseValue: 500000,
       minDepthMeters: 1032000,
       colorHex: 0xFF647582,
       iconIndex: 9,
@@ -345,7 +362,7 @@ abstract final class ResourceCatalog {
       id: 'moon_iron',
       name: 'Ay Demiri',
       kind: ResourceKind.mineral,
-      baseValue: 1000,
+      baseValue: 1000000,
       minDepthMeters: 1041000,
       colorHex: 0xFFADB4B8,
       iconIndex: 2,
@@ -354,7 +371,7 @@ abstract final class ResourceCatalog {
       id: 'aluminum',
       name: 'Alüminyum',
       kind: ResourceKind.mineral,
-      baseValue: 2000,
+      baseValue: 2000000,
       minDepthMeters: 1042000,
       colorHex: 0xFFC5D0DC,
       iconIndex: 2,
@@ -363,7 +380,7 @@ abstract final class ResourceCatalog {
       id: 'magnesium',
       name: 'Magnezyum',
       kind: ResourceKind.mineral,
-      baseValue: 5000,
+      baseValue: 5000000,
       minDepthMeters: 1125000,
       colorHex: 0xFF80D1A2,
       iconIndex: 4,
@@ -372,7 +389,7 @@ abstract final class ResourceCatalog {
       id: 'lunar_titanium',
       name: 'Ay Titanyumu',
       kind: ResourceKind.mineral,
-      baseValue: 750000,
+      baseValue: 750000000,
       minDepthMeters: 1211000,
       colorHex: 0xFFA8AFB5,
       iconIndex: 8,
@@ -381,7 +398,7 @@ abstract final class ResourceCatalog {
       id: 'silicon',
       name: 'Silisyum',
       kind: ResourceKind.mineral,
-      baseValue: 100000,
+      baseValue: 100000000,
       minDepthMeters: 1333000,
       colorHex: 0xFF9AC2D8,
       iconIndex: 5,
@@ -390,7 +407,7 @@ abstract final class ResourceCatalog {
       id: 'promethium',
       name: 'Prometyum',
       kind: ResourceKind.mineral,
-      baseValue: 1400000,
+      baseValue: 1400000000,
       minDepthMeters: 1462000,
       colorHex: 0xFF9BE76B,
       iconIndex: 7,
@@ -399,7 +416,7 @@ abstract final class ResourceCatalog {
       id: 'neodymium',
       name: 'Neodimyum',
       kind: ResourceKind.mineral,
-      baseValue: 10000000,
+      baseValue: 10000000000,
       minDepthMeters: 1562000,
       colorHex: 0xFF8A76D8,
       iconIndex: 6,
@@ -408,7 +425,7 @@ abstract final class ResourceCatalog {
       id: 'ytterbium',
       name: 'İterbiyum',
       kind: ResourceKind.mineral,
-      baseValue: 50000000,
+      baseValue: 50000000000,
       minDepthMeters: 1605000,
       colorHex: 0xFF9ED2D6,
       iconIndex: 5,
@@ -453,7 +470,7 @@ abstract final class ResourceCatalog {
       id: 'lithium',
       name: 'Lityum',
       kind: ResourceKind.mineral,
-      baseValue: 10000000000,
+      baseValue: 10000000000000.0,
       minDepthMeters: 1878000,
       colorHex: 0xFFD7A3C7,
       iconIndex: 4,
@@ -462,7 +479,7 @@ abstract final class ResourceCatalog {
       id: 'tin',
       name: 'Kalay',
       kind: ResourceKind.mineral,
-      baseValue: 500000000,
+      baseValue: 500000000000.0,
       minDepthMeters: 1814000,
       colorHex: 0xFFB7C1C7,
       iconIndex: 2,
@@ -480,7 +497,7 @@ abstract final class ResourceCatalog {
       id: 'sulfur',
       name: 'Kükürt',
       kind: ResourceKind.mineral,
-      baseValue: 2500000000,
+      baseValue: 2500000000000.0,
       minDepthMeters: 1854000,
       colorHex: 0xFFE9D953,
       iconIndex: 3,
@@ -489,7 +506,7 @@ abstract final class ResourceCatalog {
       id: 'manganese',
       name: 'Manganez',
       kind: ResourceKind.mineral,
-      baseValue: 750000000000,
+      baseValue: 750000000000000.0,
       minDepthMeters: 2015000,
       colorHex: 0xFF8E78A8,
       iconIndex: 2,
@@ -498,7 +515,7 @@ abstract final class ResourceCatalog {
       id: 'mercury',
       name: 'Cıva',
       kind: ResourceKind.mineral,
-      baseValue: 7500000000000,
+      baseValue: 7500000000000000.0,
       minDepthMeters: 2142000,
       colorHex: 0xFFCAD4D8,
       iconIndex: 2,
@@ -507,7 +524,7 @@ abstract final class ResourceCatalog {
       id: 'nickel',
       name: 'Nikel',
       kind: ResourceKind.mineral,
-      baseValue: 75000000000000,
+      baseValue: 75000000000000000.0,
       minDepthMeters: 2242000,
       colorHex: 0xFF91A994,
       iconIndex: 2,
@@ -516,7 +533,7 @@ abstract final class ResourceCatalog {
       id: 'alexandrite',
       name: 'Aleksandrit',
       kind: ResourceKind.mineral,
-      baseValue: 1200000000000000,
+      baseValue: 1.25e18,
       minDepthMeters: 2317000,
       colorHex: 0xFF55B8A5,
       iconIndex: 4,
@@ -525,7 +542,7 @@ abstract final class ResourceCatalog {
       id: 'benitoite',
       name: 'Benitoit',
       kind: ResourceKind.mineral,
-      baseValue: 12500000000000000,
+      baseValue: 1.25e19,
       minDepthMeters: 2414000,
       colorHex: 0xFF4C8AE8,
       iconIndex: 5,
@@ -534,7 +551,7 @@ abstract final class ResourceCatalog {
       id: 'titan_cobalt',
       name: 'Titan Kobaltı',
       kind: ResourceKind.mineral,
-      baseValue: 60000000000000000,
+      baseValue: 6e19,
       minDepthMeters: 2500000,
       colorHex: 0xFF388DDA,
       iconIndex: 5,
@@ -789,7 +806,7 @@ abstract final class ResourceCatalog {
       id: 'u1',
       name: 'Uranyum I',
       kind: ResourceKind.isotope,
-      baseValue: 200,
+      baseValue: 100,
       minDepthMeters: 24000,
       colorHex: 0xFF8EE83E,
       iconIndex: 7,
@@ -798,7 +815,7 @@ abstract final class ResourceCatalog {
       id: 'u2',
       name: 'Uranyum II',
       kind: ResourceKind.isotope,
-      baseValue: 4000,
+      baseValue: 2000,
       minDepthMeters: 24000,
       colorHex: 0xFFA0E957,
       iconIndex: 7,
@@ -807,7 +824,7 @@ abstract final class ResourceCatalog {
       id: 'u3',
       name: 'Uranyum III',
       kind: ResourceKind.isotope,
-      baseValue: 100000,
+      baseValue: 50000,
       minDepthMeters: 24000,
       colorHex: 0xFFC3F26A,
       iconIndex: 7,
@@ -816,7 +833,7 @@ abstract final class ResourceCatalog {
       id: 'pu1',
       name: 'Plütonyum I',
       kind: ResourceKind.isotope,
-      baseValue: 2000,
+      baseValue: 1000,
       minDepthMeters: 34000,
       colorHex: 0xFFD7E56B,
       iconIndex: 7,
@@ -825,7 +842,7 @@ abstract final class ResourceCatalog {
       id: 'pu2',
       name: 'Plütonyum II',
       kind: ResourceKind.isotope,
-      baseValue: 40000,
+      baseValue: 20000,
       minDepthMeters: 34000,
       colorHex: 0xFFE3D86A,
       iconIndex: 7,
@@ -834,7 +851,7 @@ abstract final class ResourceCatalog {
       id: 'pu3',
       name: 'Plütonyum III',
       kind: ResourceKind.isotope,
-      baseValue: 1000000,
+      baseValue: 500000,
       minDepthMeters: 34000,
       colorHex: 0xFFE7C85F,
       iconIndex: 7,
@@ -843,7 +860,7 @@ abstract final class ResourceCatalog {
       id: 'po1',
       name: 'Polonyum I',
       kind: ResourceKind.isotope,
-      baseValue: 10000,
+      baseValue: 5000,
       minDepthMeters: 54000,
       colorHex: 0xFFFF8271,
       iconIndex: 7,
@@ -852,7 +869,7 @@ abstract final class ResourceCatalog {
       id: 'po2',
       name: 'Polonyum II',
       kind: ResourceKind.isotope,
-      baseValue: 500000,
+      baseValue: 250000,
       minDepthMeters: 54000,
       colorHex: 0xFFF58D7F,
       iconIndex: 7,
@@ -861,7 +878,7 @@ abstract final class ResourceCatalog {
       id: 'po3',
       name: 'Polonyum III',
       kind: ResourceKind.isotope,
-      baseValue: 100000000,
+      baseValue: 50000000,
       minDepthMeters: 54000,
       colorHex: 0xFFE7758C,
       iconIndex: 7,
@@ -870,7 +887,7 @@ abstract final class ResourceCatalog {
       id: 'n1',
       name: 'Azot I',
       kind: ResourceKind.isotope,
-      baseValue: 50,
+      baseValue: 50000000,
       minDepthMeters: 1067000,
       colorHex: 0xFF8DB9D7,
       iconIndex: 7,
@@ -879,7 +896,7 @@ abstract final class ResourceCatalog {
       id: 'n2',
       name: 'Azot II',
       kind: ResourceKind.isotope,
-      baseValue: 150,
+      baseValue: 150000000,
       minDepthMeters: 1067000,
       colorHex: 0xFF9DCBE5,
       iconIndex: 7,
@@ -888,7 +905,7 @@ abstract final class ResourceCatalog {
       id: 'n3',
       name: 'Azot III',
       kind: ResourceKind.isotope,
-      baseValue: 300,
+      baseValue: 300000000,
       minDepthMeters: 1067000,
       colorHex: 0xFFB1DDF3,
       iconIndex: 7,
@@ -897,7 +914,7 @@ abstract final class ResourceCatalog {
       id: 'he1',
       name: 'Helyum I',
       kind: ResourceKind.isotope,
-      baseValue: 500,
+      baseValue: 500000000,
       minDepthMeters: 1132000,
       colorHex: 0xFFFFC887,
       iconIndex: 7,
@@ -906,7 +923,7 @@ abstract final class ResourceCatalog {
       id: 'he2',
       name: 'Helyum II',
       kind: ResourceKind.isotope,
-      baseValue: 5000,
+      baseValue: 5000000000,
       minDepthMeters: 1132000,
       colorHex: 0xFFFFD79B,
       iconIndex: 7,
@@ -915,7 +932,7 @@ abstract final class ResourceCatalog {
       id: 'he3',
       name: 'Helyum III',
       kind: ResourceKind.isotope,
-      baseValue: 500000,
+      baseValue: 500000000000,
       minDepthMeters: 1132000,
       colorHex: 0xFFFFE6B0,
       iconIndex: 7,
@@ -1078,17 +1095,24 @@ abstract final class ResourceCatalog {
     for (final resource in all) resource.id: resource,
   };
 
+  /// Uses the live Mr. Mine shaft table for source resources and keeps the
+  /// authored fallback only for resources unique to this project.
+  static double firstMineDepthMeters(String resourceId) =>
+      MrMineLevelTable.firstDepthMetersByResource[resourceId]?.toDouble() ??
+      byId[resourceId]?.minDepthMeters ??
+      0;
+
   static ResourceDefinition? mineableAtDepth(double depthMeters) {
-    final worldIndex = MrMineProgression.worldAtDepth(depthMeters);
-    if (worldIndex == null) return null;
-    for (final band in MrMineProgression.minerals.reversed) {
-      if (band.worldIndex == worldIndex &&
-          band.firstDepthMeters <= depthMeters) {
-        final resource = byId[band.resourceId];
-        if (resource != null) return resource;
-      }
-    }
-    return null;
+    if (MrMineProgression.worldAtDepth(depthMeters) == null) return null;
+    final floor = (depthMeters / 1000).floor();
+    if (floor < 0 || floor >= MrMineLevelTable.rows.length) return null;
+    final resources =
+        MrMineLevelTable.rows[floor].entries
+            .map((entry) => (byId[entry.key], entry.value))
+            .where((entry) => entry.$1?.kind == ResourceKind.mineral)
+            .toList(growable: false)
+          ..sort((a, b) => b.$2.compareTo(a.$2));
+    return resources.isEmpty ? null : resources.first.$1;
   }
 
   /// Fallback for legacy callers that always need a displayable mineral.
@@ -1100,22 +1124,32 @@ abstract final class ResourceCatalog {
   static Iterable<ResourceDefinition> unlockedAt(double depthMeters) sync* {
     final worldIndex = MrMineProgression.worldAtDepth(depthMeters);
     if (worldIndex == null) return;
-    for (final band in MrMineProgression.minerals) {
-      if (band.worldIndex != worldIndex ||
-          band.firstDepthMeters > depthMeters) {
-        continue;
+    final startDepth = switch (worldIndex) {
+      0 => 0,
+      1 => MrMineProgression.moonStartMeters,
+      2 => MrMineProgression.titanStartMeters,
+      _ => 0,
+    };
+    final firstFloor = (startDepth / 1000).floor();
+    final finalFloor = (depthMeters / 1000).floor();
+    final found = <String>{};
+    for (var floor = firstFloor; floor <= finalFloor; floor++) {
+      if (floor < 0 || floor >= MrMineLevelTable.rows.length) continue;
+      for (final id in MrMineLevelTable.rows[floor].keys) {
+        if (!found.add(id)) continue;
+        final resource = byId[id];
+        if (resource != null) yield resource;
       }
-      final resource = byId[band.resourceId];
-      if (resource != null) yield resource;
     }
-    for (final resource in isotopes) {
-      if (MrMineProgression.isotopeAvailableAtDepth(
-        resource.id,
-        worldIndex,
-        depthMeters,
-      )) {
-        yield resource;
-      }
-    }
+  }
+
+  static int isotopeTier(String id) => byId[id]?.isotopeTier ?? 0;
+
+  static ResourceDefinition? decayedIsotope(String id) {
+    final match = RegExp(r'^(u|pu|po|n|he|h|o|e|f)([1-2])$').firstMatch(id);
+    if (match == null) return null;
+    final prefix = match.group(1)!;
+    final nextTier = int.parse(match.group(2)!) + 1;
+    return byId['$prefix$nextTier'];
   }
 }

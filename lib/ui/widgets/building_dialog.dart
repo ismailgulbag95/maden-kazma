@@ -10,6 +10,7 @@ import '../../domain/models/cave_exploration_definition.dart';
 import '../../domain/models/daily_challenge_definition.dart';
 import '../../domain/models/gem_definition.dart';
 import '../../domain/models/game_state.dart';
+import '../../domain/models/mr_mine_level_table.dart';
 import '../../domain/models/quest_definition.dart';
 import '../../domain/models/resource_definition.dart';
 import '../../domain/models/mine_event_definition.dart';
@@ -21,6 +22,15 @@ import '../../domain/models/buff_lab_definition.dart';
 import '../../domain/simulation/game_engine.dart';
 import 'atlas_sprite.dart';
 import 'game_primitives.dart';
+import 'warehouse_panel.dart';
+
+String _compactCash(num value) {
+  if (value >= 1e12) return '${(value / 1e12).toStringAsFixed(2)}T';
+  if (value >= 1e9) return '${(value / 1e9).toStringAsFixed(2)}B';
+  if (value >= 1e6) return '${(value / 1e6).toStringAsFixed(2)}M';
+  if (value >= 1e3) return '${(value / 1e3).toStringAsFixed(2)}K';
+  return value.toStringAsFixed(0);
+}
 
 class BuildingDialog extends StatelessWidget {
   const BuildingDialog({
@@ -104,6 +114,9 @@ class BuildingDialog extends StatelessWidget {
 
   Widget _contents(BuildContext context) {
     final state = controller.state;
+    if (buildingId == 'warehouse') {
+      return WarehousePanel(controller: controller);
+    }
     switch (buildingId) {
       case 'workshop':
         return Column(
@@ -117,17 +130,34 @@ class BuildingDialog extends StatelessWidget {
               icon: Icons.engineering_rounded,
               title: 'Madenci işe al',
               description:
-                  'Ekip: ${state.crewCount} • Sonraki madenci kuyuyu ve cevher üretimini hızlandırır.',
-              buttonLabel: '${GameEngine.minerCost(state)} kasa',
+                  'Bu dünyada ${state.activeMinerCount}/10 madenci var. İşçiler tüm açık katlarda cevher arar.',
+              buttonLabel: state.activeMinerCount >= 10
+                  ? 'EKİP TAMAM'
+                  : '${_compactCash(GameEngine.minerCost(state))} kasa',
               enabled:
-                  state.coins >= GameEngine.minerCost(state) &&
-                  (state.crewCount > 0 || state.totalSold > 0) &&
-                  state.crewCount < 80,
+                  state.canAfford(GameEngine.minerCost(state)) &&
+                  state.activeMinerCount < 10,
               onPressed: controller.hireMiner,
               accent: MinePalette.amber,
             ),
+            ActionTile(
+              icon: Icons.model_training_rounded,
+              title: 'Madenci eğitimi • Lv ${state.activeWorkerLevel}/10',
+              description: state.activeMinerCount < 10
+                  ? 'Bu dünyanın 10 işçisi tamamlanınca eğitim açılır.'
+                  : 'Eğitim, her kattaki cevher bulma olasılığını artırır. Sonraki seviye ${_compactCash(GameEngine.workerLevelCost(state))} kasa.',
+              buttonLabel: state.activeWorkerLevel >= 10
+                  ? 'MAKSİMUM'
+                  : '${_compactCash(GameEngine.workerLevelCost(state))} kasa',
+              enabled:
+                  state.activeMinerCount >= 10 &&
+                  state.activeWorkerLevel < 10 &&
+                  state.canAfford(GameEngine.workerLevelCost(state)),
+              onPressed: controller.upgradeWorkerLevel,
+              accent: MinePalette.cyan,
+            ),
             _workerAssignmentsSection(state),
-            for (final track in ['drill', 'workers', 'foundry', 'weapon'])
+            for (final track in ['drill', 'foundry', 'weapon'])
               UpgradeRow(controller: controller, track: track),
             _drillAssemblySection(state),
             if (state.unlockedBuildings.contains('reactor'))
@@ -272,7 +302,8 @@ class BuildingDialog extends StatelessWidget {
                   : '90 KASA',
               enabled:
                   state.pressure >= 25 &&
-                  (state.amount('building_material') > 0 || state.coins >= 90),
+                  (state.amount('building_material') > 0 ||
+                      state.canAfford(90)),
               onPressed: controller.ventPressure,
               accent: MinePalette.cyan,
             ),
@@ -428,9 +459,39 @@ class BuildingDialog extends StatelessWidget {
         );
       case 'trade':
         final offer = GameEngine.merchantOffer(state);
+        final wait = GameEngine.merchantSecondsLeft(state, DateTime.now());
+        if (offer.blueprintId != null && offer.blueprintCashCost != null) {
+          final blueprintId = offer.blueprintId!;
+          final cashCost = offer.blueprintCashCost!;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _sectionIntro(
+                'TİCARET NOKTASI',
+                'Gezgin tüccar bazen montaj planlarını kasa karşılığında sunar. Her teklif süre bitene kadar değişmez.',
+              ),
+              ActionTile(
+                icon: Icons.description_rounded,
+                title: 'Montaj şeması • ${GameEngine.blueprintName(blueprintId)}',
+                description: wait > 0
+                    ? 'Tüccar yeni yük hazırlıyor. ${_duration(wait)} sonra dönecek.'
+                    : 'Bu planı ${_compactCash(cashCost.toDouble())} kasa karşılığında arşive ekle.',
+                buttonLabel: wait > 0
+                    ? 'BEKLE'
+                    : '${_compactCash(cashCost.toDouble())} KASA • AL',
+                enabled: wait == 0 && state.canAfford(cashCost),
+                onPressed: controller.acceptTrade,
+                accent: MinePalette.amber,
+              ),
+              _statTile(
+                'Bilinen montaj şeması',
+                '${state.knownBlueprintIds.length}',
+              ),
+            ],
+          );
+        }
         final give = ResourceCatalog.byId[offer.giveId]!;
         final get = ResourceCatalog.byId[offer.getId]!;
-        final wait = GameEngine.merchantSecondsLeft(state, DateTime.now());
         final canTrade =
             wait == 0 &&
             state.amount(offer.giveId) - state.reserve(offer.giveId) >=
@@ -471,11 +532,9 @@ class BuildingDialog extends StatelessWidget {
                 ActionTile(
                   icon: icon,
                   title: '$title • $count',
-                  description: state.cargoFull
-                      ? 'Kargo dolu. Ganimet açmadan önce ambarında yer aç.'
-                      : 'Kasa, derinlik cevheri ve sondaj parçası içerir; nadir sandıklar kalıntı bulma şansını artırır.',
+                  description: 'Kasa, derinlik cevheri ve sondaj parçası içerir; ganimet kargo kapasitesini aşabilir.',
                   buttonLabel: 'SANDIĞI AÇ',
-                  enabled: !state.cargoFull,
+                  enabled: true,
                   onPressed: () => controller.openChest(tier: tier),
                   accent: tier == 'deep'
                       ? MinePalette.violet
@@ -506,7 +565,9 @@ class BuildingDialog extends StatelessWidget {
                     : '${GameEngine.chestCollectorUpgradeCost(state)} KASA',
                 enabled:
                     state.chestCollectorLevel < 10 &&
-                    state.coins >= GameEngine.chestCollectorUpgradeCost(state),
+                    state.canAfford(
+                      GameEngine.chestCollectorUpgradeCost(state).toDouble(),
+                    ),
                 onPressed: controller.upgradeChestCollector,
                 accent: MinePalette.cyan,
               ),
@@ -554,12 +615,17 @@ class BuildingDialog extends StatelessWidget {
                     : '${GameEngine.chestCompressorUpgradeCost(state)} KASA',
                 enabled:
                     state.chestCompressionLevel < 9 &&
-                    state.coins >= GameEngine.chestCompressorUpgradeCost(state),
+                    state.canAfford(
+                      GameEngine.chestCompressorUpgradeCost(state).toDouble(),
+                    ),
                 onPressed: controller.upgradeChestCompressor,
                 accent: MinePalette.violet,
               ),
             ],
-            _statTile('Toplam satış', '${state.totalSold.floor()} kasa değeri'),
+            _statTile(
+              'Toplam satış',
+              '${state.totalSold.exponent >= 15 ? state.totalSold.toScientificString() : state.totalSold} kasa değeri',
+            ),
             _statTile(
               'Sandık koleksiyonu',
               '${state.chestsOpened} açıldı • ${state.chestsFound} bekliyor',
@@ -628,7 +694,7 @@ class BuildingDialog extends StatelessWidget {
           buttonLabel: atMaximum
               ? 'EN YÜKSEK KADEME'
               : '$upgradeCost KASA • GELİŞTİR',
-          enabled: !atMaximum && state.coins >= upgradeCost,
+          enabled: !atMaximum && state.canAfford(upgradeCost.toDouble()),
           onPressed: controller.upgradeOilPump,
           accent: MinePalette.amber,
         ),
@@ -652,11 +718,24 @@ class BuildingDialog extends StatelessWidget {
       _subheading('SONDAJ MONTAJI'),
       _sectionIntro(
         'UÇ • FAN • MOTOR',
-        'Toplam güç: (fan + uç + motor taban gücü) × motor çarpanı. Şemalar para ve maden ister; üst parçalar kendi dünya ve derinlik eşiklerinde açılır.',
+        'Toplam güç, üç parçanın watt değerleri ve çarpanlarıyla hesaplanır. Kazı süresi bulunduğun derinliğin zorluğuna göre değişir; şemalar kasa ve maden ister.',
       ),
+      for (final encounter in GameEngine.blueprintEncounters.entries)
+        if (GameEngine.canClaimBlueprintEncounter(state, encounter.key))
+          ActionTile(
+            icon: Icons.description_rounded,
+            title: '${encounter.value.$1} montaj şemaları',
+            description:
+                '${encounter.value.$2 ~/ 1000} km derinlikte bulunan donanım planlarını arşive ekle.',
+            buttonLabel: 'ŞEMALARI AL',
+            enabled: true,
+            onPressed: () => controller.claimBlueprintEncounter(encounter.key),
+            accent: MinePalette.cyan,
+          ),
+      _statTile('Bilinen montaj şeması', '${state.knownBlueprintIds.length}'),
       _statTile(
         'Toplam montaj gücü',
-        '${DrillAssemblyCatalog.power(bitLevel: state.drillBitLevel, fanLevel: state.drillFanLevel, engineLevel: state.drillEngineLevel).toStringAsFixed(0)} W • ×${DrillAssemblyCatalog.speedMultiplier(bitLevel: state.drillBitLevel, fanLevel: state.drillFanLevel, engineLevel: state.drillEngineLevel).toStringAsFixed(2)} sondaj etkisi',
+        '${DrillAssemblyCatalog.power(bitLevel: state.drillBitLevel, fanLevel: state.drillFanLevel, engineLevel: state.drillEngineLevel).toStringAsFixed(0)} W • derinliğe göre hesaplanır',
       ),
       for (final component in DrillAssemblyCatalog.all)
         _drillAssemblyUpgradeTile(state, component),
@@ -685,6 +764,12 @@ class BuildingDialog extends StatelessWidget {
     final requiredBuilding = DrillAssemblyCatalog.requiredBuildingFor(
       nextLevel,
     );
+    final blueprintId = DrillAssemblyCatalog.blueprintIdFor(
+      component.id,
+      nextLevel,
+    );
+    final blueprintLocked =
+        blueprintId != null && !state.knownBlueprintIds.contains(blueprintId);
     final buildingLocked =
         requiredBuilding != null &&
         !state.unlockedBuildings.contains(requiredBuilding);
@@ -703,6 +788,13 @@ class BuildingDialog extends StatelessWidget {
     final nextWatts = level >= DrillAssemblyCatalog.maxLevel
         ? currentWatts
         : component.wattsAt(nextLevel);
+    final currentMultiplier = DrillAssemblyCatalog.wattMultiplierAt(
+      component.id,
+      level,
+    );
+    final nextMultiplier = level >= DrillAssemblyCatalog.maxLevel
+        ? currentMultiplier
+        : DrillAssemblyCatalog.wattMultiplierAt(component.id, nextLevel);
     return ActionTile(
       icon: switch (component.id) {
         'bit' => Icons.hardware_rounded,
@@ -712,26 +804,31 @@ class BuildingDialog extends StatelessWidget {
       title: '${component.name} • Lv $level/${DrillAssemblyCatalog.maxLevel}',
       description: level >= DrillAssemblyCatalog.maxLevel
           ? 'Son şema tamamlandı • ${currentWatts.toStringAsFixed(0)} W.'
+          : blueprintLocked
+          ? 'Bu seviyenin montaj şeması henüz arşivde yok.'
           : depthLocked
           ? 'Sonraki şema ${requiredDepth ~/ 1000} km derinlikte açılır.'
           : buildingLocked
           ? 'Bu şema için $requiredBuildingName bulunmalı.'
-          : '${currentWatts.toStringAsFixed(0)} → ${nextWatts.toStringAsFixed(0)} W${recipeText.isEmpty ? '' : ' • Tarif: $recipeText'}.',
+          : '${currentWatts.toStringAsFixed(0)} W ×${_compactCash(currentMultiplier)} → ${nextWatts.toStringAsFixed(0)} W ×${_compactCash(nextMultiplier)}${recipeText.isEmpty ? '' : ' • Tarif: $recipeText'}.',
       buttonLabel: level >= DrillAssemblyCatalog.maxLevel
           ? 'MAKSİMUM'
+          : blueprintLocked
+          ? 'ŞEMA GEREKİYOR'
           : depthLocked
           ? '${requiredDepth ~/ 1000} KM'
           : buildingLocked
           ? requiredBuildingName.toUpperCase()
           : cost == 0
           ? 'TARİFİ ÜRET'
-          : '$cost KASA',
+          : '${_compactCash(cost)} KASA',
       enabled:
           level < DrillAssemblyCatalog.maxLevel &&
+          !blueprintLocked &&
           !depthLocked &&
           !buildingLocked &&
           state.crewCount > 0 &&
-          state.coins >= cost &&
+          state.canAfford(cost.toDouble()) &&
           deficits.isEmpty,
       onPressed: () => controller.upgradeDrillAssembly(component.id),
       accent: component.id == 'engine' ? MinePalette.amber : MinePalette.cyan,
@@ -1040,10 +1137,7 @@ class BuildingDialog extends StatelessWidget {
                 buttonLabel: depthReady
                     ? '${recipe.energyCost} ENERJİ ÜRET'
                     : '${(recipe.minimumDepthMeters / 1000).round()} KM',
-                enabled:
-                    depthReady &&
-                    state.energy >= recipe.energyCost &&
-                    !state.cargoFull,
+                enabled: depthReady && state.energy >= recipe.energyCost,
                 onPressed: () => controller.synthesizeReactorIsotope(recipe.id),
                 accent: MinePalette.cyan,
               );
@@ -1172,8 +1266,19 @@ class BuildingDialog extends StatelessWidget {
       'relic_10': 'Titan Dişi',
       'relic_11': 'Saat Taşı',
       'relic_12': 'Çekirdek Mührü',
+      'relic_150': 'Atom Kargısı',
+      'relic_151': 'Atom Kargısı+',
+      'relic_152': 'Atom Kargısı++',
+      'relic_153': 'Tüy Parçası',
+      'relic_154': 'Nükleer Kargı+',
+      'relic_155': 'Nükleer Kargı++',
     };
-    final relics = state.unlockedRelics.toList()..sort();
+    final relics = state.unlockedRelics.toList()
+      ..sort((a, b) {
+        final aNum = int.tryParse(a.replaceAll(RegExp(r'\D'), '')) ?? 0;
+        final bNum = int.tryParse(b.replaceAll(RegExp(r'\D'), '')) ?? 0;
+        return aNum.compareTo(bNum);
+      });
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1189,7 +1294,7 @@ class BuildingDialog extends StatelessWidget {
           buttonLabel: state.upgradeLevel('scanner') > 0
               ? 'DİZİYİ TARA'
               : '80 KASA',
-          enabled: state.upgradeLevel('scanner') > 0 || state.coins >= 80,
+          enabled: state.upgradeLevel('scanner') > 0 || state.canAfford(80),
           onPressed: controller.scanResonance,
           accent: MinePalette.cyan,
         ),
@@ -1206,7 +1311,7 @@ class BuildingDialog extends StatelessWidget {
           enabled:
               state.deepestMeters >= 50000 &&
               state.scientists < 8 &&
-              state.coins >= 420,
+              state.canAfford(420),
           onPressed: controller.hireScientist,
           accent: MinePalette.teal,
         ),
@@ -1310,7 +1415,7 @@ class BuildingDialog extends StatelessWidget {
           for (final discovery in state.discoveredEncounters)
             _statTile(discovery, 'ARŞİVE KAYDEDİLDİ'),
         const SizedBox(height: 5),
-        _subheading('KALINTI ARŞİVİ • ${relics.length} / 12'),
+        _subheading('KALINTI ARŞİVİ • ${relics.length} / ${relicNames.length}'),
         _statTile('Yazıt hurdası', '${state.relicScrap} adet'),
         const SizedBox(height: 5),
         if (relics.isEmpty)
@@ -1319,7 +1424,11 @@ class BuildingDialog extends StatelessWidget {
           ),
         for (final relic in relics)
           _RelicRow(
-            name: relicNames[relic] ?? 'Bilinmeyen yazıt',
+            name: _relicDisplayName(
+              relic,
+              state.relicLevel(relic),
+              relicNames[relic] ?? 'Bilinmeyen yazıt',
+            ),
             id: relic,
             level: state.relicLevel(relic),
             equipped: state.equippedRelics.contains(relic),
@@ -1581,7 +1690,7 @@ class BuildingDialog extends StatelessWidget {
           enabled:
               state.unlockedBuildings.contains('caves') &&
               state.drones < 12 &&
-              state.coins >= 260 + state.drones * 240,
+              state.canAfford((260 + state.drones * 240).toDouble()),
           onPressed: controller.buyDrone,
           accent: MinePalette.cyan,
         ),
@@ -1774,7 +1883,7 @@ class BuildingDialog extends StatelessWidget {
           buttonLabel: '${380 + state.expeditionLevel * 520} KASA',
           enabled:
               state.expeditionLevel < 15 &&
-              state.coins >= 380 + state.expeditionLevel * 520,
+              state.canAfford((380 + state.expeditionLevel * 520).toDouble()),
           onPressed: controller.upgradeExpedition,
           accent: MinePalette.amber,
         ),
@@ -2301,7 +2410,6 @@ class BuildingDialog extends StatelessWidget {
     if (event == null) {
       return const _EmptyHint('Şu anda kuyuda bekleyen bir maden olayı yok.');
     }
-    final needsCargoSpace = event.id == 'rich_vein' && state.cargoFull;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -2309,11 +2417,9 @@ class BuildingDialog extends StatelessWidget {
         ActionTile(
           icon: Icons.auto_awesome_rounded,
           title: event.title,
-          description: needsCargoSpace
-              ? '${event.rewardDescription} Önce ambarda yer aç.'
-              : event.rewardDescription,
-          buttonLabel: needsCargoSpace ? 'AMBAR DOLU' : 'ÖDÜLÜ AL',
-          enabled: !needsCargoSpace,
+          description: event.rewardDescription,
+          buttonLabel: 'ÖDÜLÜ AL',
+          enabled: true,
           onPressed: controller.resolveMineEvent,
           accent: MinePalette.amber,
         ),
@@ -2345,11 +2451,13 @@ class BuildingDialog extends StatelessWidget {
 
   List<ResourceDefinition> _visibleInventory() {
     final state = controller.state;
-    final minerals = ResourceCatalog.minerals.where(
-      (resource) =>
-          resource.minDepthMeters <= state.deepestMeters + 1200 &&
-          (state.amount(resource.id) > 0 || resource.minDepthMeters == 0),
-    );
+    final minerals = ResourceCatalog.minerals.where((resource) {
+      final firstDepth =
+          MrMineLevelTable.firstDepthMetersByResource[resource.id] ??
+          resource.minDepthMeters.toInt();
+      return firstDepth <= state.deepestMeters + 1200 &&
+          (state.amount(resource.id) > 0 || firstDepth == 0);
+    });
     final carriedSpecials = ResourceCatalog.all.where(
       (resource) =>
           resource.kind != ResourceKind.mineral &&
@@ -2377,7 +2485,8 @@ class BuildingDialog extends StatelessWidget {
                 ? 'KADRO DOLU'
                 : '$cost KASA',
             enabled:
-                state.specialWorkerRoster.length < 12 && state.coins >= cost,
+                state.specialWorkerRoster.length < 12 &&
+                state.canAfford(cost.toDouble()),
             onPressed: controller.hireSpecialWorker,
             accent: MinePalette.violet,
           ),
@@ -2408,6 +2517,16 @@ class BuildingDialog extends StatelessWidget {
   Widget _specialWorkerCard(SpecialWorkerState worker, GameState state) {
     const worldNames = ['Dünya', 'Ay', 'Titan'];
     final ability = SpecialWorkerAbilityCatalog.byId[worker.abilityId]!;
+    final isSeller = worker.abilityId == 'auto_seller';
+    final sellableResources = ResourceCatalog.unlockedAt(state.deepestMeters)
+        .where((resource) => resource.kind == ResourceKind.mineral)
+        .toList(growable: false);
+    final selectedResourceId =
+        sellableResources.any(
+          (resource) => resource.id == worker.selectedResourceId,
+        )
+        ? worker.selectedResourceId!
+        : sellableResources.first.id;
     final openWorlds = [
       for (var world = 0; world < worldNames.length; world++)
         if (state.deepestMeters >= GameState.worldEntryDepths[world]) world,
@@ -2468,108 +2587,142 @@ class BuildingDialog extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Text(
-              '${ability.name} • ${ability.description}',
+              isSeller
+                  ? '${ability.name} • Her saniye ${worker.rarity.sellerUnitsPerLevel * worker.level} adet seçilen madeni satar.'
+                  : '${ability.name} • ${ability.description}',
               style: const TextStyle(color: MinePalette.muted, fontSize: 8),
             ),
           ),
-          Row(
-            children: [
-              Expanded(
-                child: DropdownButton<int>(
-                  isExpanded: true,
-                  value: selectedWorld,
-                  underline: const SizedBox.shrink(),
-                  style: const TextStyle(color: MinePalette.cream, fontSize: 9),
-                  dropdownColor: MinePalette.panel,
-                  items: [
-                    for (final world in openWorlds)
-                      DropdownMenuItem(
-                        value: world,
-                        child: Text(worldNames[world]),
-                      ),
-                  ],
-                  onChanged: (world) {
-                    if (world == null) return;
-                    final targetFloors = _workerFloors(state, world);
-                    controller.moveSpecialWorker(
-                      worker.id,
-                      world,
-                      targetFloors.first,
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: DropdownButton<int>(
-                  isExpanded: true,
-                  value: selectedFloor,
-                  underline: const SizedBox.shrink(),
-                  style: const TextStyle(color: MinePalette.cream, fontSize: 9),
-                  dropdownColor: MinePalette.panel,
-                  items: [
-                    for (final floor in floors)
-                      DropdownMenuItem(
-                        value: floor,
-                        child: Text('$floor. kat'),
-                      ),
-                  ],
-                  onChanged: (floor) {
-                    if (floor != null) {
+          if (isSeller)
+            DropdownButton<String>(
+              isExpanded: true,
+              value: selectedResourceId,
+              underline: const SizedBox.shrink(),
+              style: const TextStyle(color: MinePalette.cream, fontSize: 9),
+              dropdownColor: MinePalette.panel,
+              hint: const Text('Satılacak maden'),
+              items: [
+                for (final resource in sellableResources)
+                  DropdownMenuItem(
+                    value: resource.id,
+                    child: Text(resource.name),
+                  ),
+              ],
+              onChanged: (resourceId) {
+                if (resourceId != null) {
+                  controller.setSpecialWorkerResource(worker.id, resourceId);
+                }
+              },
+            ),
+          if (!isSeller)
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButton<int>(
+                    isExpanded: true,
+                    value: selectedWorld,
+                    underline: const SizedBox.shrink(),
+                    style: const TextStyle(
+                      color: MinePalette.cream,
+                      fontSize: 9,
+                    ),
+                    dropdownColor: MinePalette.panel,
+                    items: [
+                      for (final world in openWorlds)
+                        DropdownMenuItem(
+                          value: world,
+                          child: Text(worldNames[world]),
+                        ),
+                    ],
+                    onChanged: (world) {
+                      if (world == null) return;
+                      final targetFloors = _workerFloors(state, world);
                       controller.moveSpecialWorker(
                         worker.id,
-                        selectedWorld,
-                        floor,
+                        world,
+                        targetFloors.first,
                       );
-                    }
-                  },
+                    },
+                  ),
                 ),
-              ),
-            ],
-          ),
-          Row(
-            children: [
-              Expanded(
-                child: Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        '5 dk’da kat değiştir',
-                        style: TextStyle(color: MinePalette.muted, fontSize: 8),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: DropdownButton<int>(
+                    isExpanded: true,
+                    value: selectedFloor,
+                    underline: const SizedBox.shrink(),
+                    style: const TextStyle(
+                      color: MinePalette.cream,
+                      fontSize: 9,
+                    ),
+                    dropdownColor: MinePalette.panel,
+                    items: [
+                      for (final floor in floors)
+                        DropdownMenuItem(
+                          value: floor,
+                          child: Text('$floor. kat'),
+                        ),
+                    ],
+                    onChanged: (floor) {
+                      if (floor != null) {
+                        controller.moveSpecialWorker(
+                          worker.id,
+                          selectedWorld,
+                          floor,
+                        );
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+          if (!isSeller)
+            Row(
+              children: [
+                Expanded(
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          '5 dk’da kat değiştir',
+                          style: TextStyle(
+                            color: MinePalette.muted,
+                            fontSize: 8,
+                          ),
+                        ),
                       ),
-                    ),
-                    Switch(
-                      value: worker.autoMove,
-                      onChanged: (value) =>
-                          controller.setSpecialWorkerAutoMove(worker.id, value),
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      activeThumbColor: MinePalette.teal,
-                    ),
-                  ],
+                      Switch(
+                        value: worker.autoMove,
+                        onChanged: (value) => controller
+                            .setSpecialWorkerAutoMove(worker.id, value),
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        activeThumbColor: MinePalette.teal,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              TextButton.icon(
-                onPressed: upgradeCost > 0 && state.workerScrap >= upgradeCost
-                    ? () => controller.upgradeSpecialWorker(worker.id)
-                    : null,
-                icon: const Icon(Icons.arrow_upward_rounded, size: 13),
-                label: Text(
-                  upgradeCost == 0 ? 'MAX' : 'Lv +1 • $upgradeCost',
-                  style: const TextStyle(fontSize: 8),
+                TextButton.icon(
+                  onPressed: upgradeCost > 0 && state.workerScrap >= upgradeCost
+                      ? () => controller.upgradeSpecialWorker(worker.id)
+                      : null,
+                  icon: const Icon(Icons.arrow_upward_rounded, size: 13),
+                  label: Text(
+                    upgradeCost == 0 ? 'MAX' : 'Lv +1 • $upgradeCost',
+                    style: const TextStyle(fontSize: 8),
+                  ),
                 ),
-              ),
-              IconButton(
-                tooltip: 'Hurdaya ayır: +${worker.rarity.scrapValue} hurda',
-                onPressed: () => controller.dismantleSpecialWorker(worker.id),
-                icon: const Icon(
-                  Icons.delete_sweep_rounded,
-                  color: MinePalette.muted,
-                  size: 17,
+                IconButton(
+                  tooltip: 'Hurdaya ayır: +${worker.rarity.scrapValue} hurda',
+                  onPressed: () => controller.dismantleSpecialWorker(worker.id),
+                  icon: const Icon(
+                    Icons.delete_sweep_rounded,
+                    color: MinePalette.muted,
+                    size: 17,
+                  ),
+                  visualDensity: VisualDensity.compact,
                 ),
-                visualDensity: VisualDensity.compact,
-              ),
-            ],
-          ),
+              ],
+            ),
         ],
       ),
     );
@@ -2589,7 +2742,7 @@ class BuildingDialog extends StatelessWidget {
       title: '$name • $level / 3',
       description: description,
       buttonLabel: level >= 3 ? 'TAM KADRO' : '$cost KASA',
-      enabled: level < 3 && state.coins >= cost,
+      enabled: level < 3 && state.canAfford(cost.toDouble()),
       onPressed: () => controller.hireSpecialist(role),
       accent: MinePalette.cyan,
     );
@@ -3847,16 +4000,43 @@ String _relicEffect(String id, int level) {
     'relic_10' => 'Muhafız hasarı +%${20 + (levelScale - 1) * 10}',
     'relic_11' => 'Reaktör güç darbesi +${30 * levelScale} saniye',
     'relic_12' => 'Çekirdek sıfırlamasında +$levelScale parça',
+    'relic_150' =>
+      'İzotop T1->T2 bozunma şansı +%${switch (levelScale) { 1 => '1', 2 => '1,5', _ => '2' }} (Azami %10)',
+    'relic_151' => 'İzotop T1->T2 bozunma şansı +%1,5 (Azami %10)',
+    'relic_152' => 'İzotop T1->T2 bozunma şansı +%2 (Azami %10)',
+    'relic_153' => switch (levelScale) {
+      1 => 'Gözle görülür bir etkisi yok (Tüy Parçası)',
+      2 => 'İzotop T2->T3 bozunma şansı +%0,5 (Azami %5)',
+      _ => 'İzotop T2->T3 bozunma şansı +%1 (Azami %5)',
+    },
+    'relic_154' => 'İzotop T2->T3 bozunma şansı +%0,5 (Azami %5)',
+    'relic_155' => 'İzotop T2->T3 bozunma şansı +%1 (Azami %5)',
     _ => 'Bilinmeyen kalıcı etki',
   };
 }
+
+String _relicDisplayName(String id, int level, String fallback) => switch (id) {
+  'relic_150' => switch (level) {
+    1 => 'Atom Kargısı',
+    2 => 'Atom Kargısı+',
+    _ => 'Atom Kargısı++',
+  },
+  'relic_153' => switch (level) {
+    1 => 'Tüy Parçası',
+    2 => 'Nükleer Kargı+',
+    _ => 'Nükleer Kargı++',
+  },
+  _ => fallback,
+};
 
 int _achievementProgress(AchievementDefinition achievement, GameState state) =>
     switch (achievement.kind) {
       'mine' => state.totalMined,
       'depth' || 'world' => state.deepestMeters.floor(),
       'crew' => state.crewCount,
-      'sale' => state.totalSold.floor(),
+      'sale' => state.totalSold.exponent >= 9
+          ? 1000000000
+          : state.totalSold.toDouble().clamp(0, 1000000000).floor(),
       'chest' => state.chestsOpened,
       'cave' => state.cavesCompleted,
       'relic' => state.relicsFound,

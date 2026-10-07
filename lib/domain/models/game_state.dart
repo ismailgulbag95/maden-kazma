@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'mr_mine_big_number.dart';
 import 'quest_definition.dart';
 import 'resource_definition.dart';
 import 'gem_definition.dart';
@@ -13,24 +14,44 @@ import 'special_worker_definition.dart';
 import 'ore_deposit.dart';
 import 'reactor_definition.dart';
 import 'drill_assembly_definition.dart';
+import 'mr_mine_drill_difficulty.dart';
 import 'buff_lab_definition.dart';
 
 class GameState {
-  static const int currentSchemaVersion = 19;
+  static const int currentSchemaVersion = 21;
   static const List<double> worldEntryDepths = [0, 1032000, 1814000];
   static const List<double> autoSellThresholdChoices = [.6, .75, .85, .95];
+  static const List<double> cargoCapacities = [
+    1500,
+    7500,
+    15000,
+    50000,
+    150000,
+    500000,
+    1000000,
+    2000000,
+    3500000,
+    5000000,
+    10000000,
+    25000000,
+    100000000,
+    200000000,
+    500000000,
+    1000000000,
+  ];
 
   GameState({
-    this.coins = 240,
+    Object? coins,
     this.depthMeters = 0,
     this.deepestMeters = 0,
     this.pressure = 14,
     this.energy = 0,
-    this.cargoCapacity = 24,
+    this.cargoCapacity = 1500,
+    this.cargoLevel = 1,
     this.cargoUsed = 0,
     this.crewCount = 1,
     this.totalMined = 0,
-    this.totalSold = 0,
+    Object? totalSold,
     this.chestsFound = 0,
     this.goldChests = 0,
     this.deepChests = 0,
@@ -78,6 +99,12 @@ class GameState {
     this.activeWorldIndex = 0,
     this.autoSellEnabled = false,
     this.autoSellThreshold = .85,
+    this.musicEnabled = true,
+    this.soundEffectsEnabled = true,
+    this.visualEffectsEnabled = true,
+    this.notificationsEnabled = true,
+    this.debugModeEnabled = false,
+    this.debugUnlimitedMoney = false,
     this.managerLevel = 0,
     this.oilPumpLevel = 1,
     this.oilPumpProgress = 0,
@@ -95,7 +122,11 @@ class GameState {
     Map<String, double>? worldCargoUsed,
     Map<String, Map<String, int>>? worldInventories,
     Map<String, Map<String, int>>? worldReserves,
+    Map<String, int>? worldMinerCounts,
+    Map<String, int>? worldWorkerLevels,
+    Map<String, double>? productionRemainders,
     Set<int>? claimedQuestIds,
+    Set<int>? knownBlueprintIds,
     Set<String>? unlockedRelics,
     Set<String>? equippedRelics,
     Set<String>? equippedGems,
@@ -148,6 +179,9 @@ class GameState {
            },
        reactorComponents = reactorComponents ?? ReactorCatalog.starterLayout(),
        claimedQuestIds = claimedQuestIds ?? <int>{},
+       knownBlueprintIds = knownBlueprintIds ?? <int>{
+         for (var id = 0; id <= 15; id++) id,
+       },
        unlockedRelics = unlockedRelics ?? <String>{},
        equippedRelics = equippedRelics ?? <String>{},
        equippedGems = equippedGems ?? <String>{},
@@ -210,20 +244,46 @@ class GameState {
        worldCargoUsed = worldCargoUsed ?? {},
        worldInventories = worldInventories ?? {},
        worldReserves = worldReserves ?? {},
+       worldMinerCounts = worldMinerCounts ?? {},
+       worldWorkerLevels = worldWorkerLevels ?? {},
+       productionRemainders = productionRemainders ?? {},
        specialists =
            specialists ??
-           {'geologist': 0, 'engineer': 0, 'scout': 0, 'guardian': 0};
+           {'geologist': 0, 'engineer': 0, 'scout': 0, 'guardian': 0},
+       _coins = _coerceBigNumber(coins, const MrMineBigNumber.raw(2.4, 2)),
+       _totalSold = _coerceBigNumber(totalSold, MrMineBigNumber.zero);
 
-  double coins;
+  static MrMineBigNumber _coerceBigNumber(Object? val, MrMineBigNumber fallback) {
+    if (val == null) return fallback;
+    if (val is MrMineBigNumber) return val;
+    if (val is num) return MrMineBigNumber.fromNum(val);
+    if (val is String) {
+      final parsed = MrMineBigNumber.tryParse(val);
+      if (parsed != null) return parsed;
+    }
+    return fallback;
+  }
+
+  MrMineBigNumber _coins;
+  MrMineBigNumber get coins => _coins;
+  set coins(Object value) {
+    _coins = _coerceBigNumber(value, _coins);
+  }
+
+  MrMineBigNumber _totalSold;
+  MrMineBigNumber get totalSold => _totalSold;
+  set totalSold(Object value) {
+    _totalSold = _coerceBigNumber(value, _totalSold);
+  }
   double depthMeters;
   double deepestMeters;
   double pressure;
   double energy;
   double cargoCapacity;
+  int cargoLevel;
   double cargoUsed;
   int crewCount;
   int totalMined;
-  double totalSold;
   int chestsFound;
   int goldChests;
   int deepChests;
@@ -271,6 +331,12 @@ class GameState {
   int activeWorldIndex;
   bool autoSellEnabled;
   double autoSellThreshold;
+  bool musicEnabled;
+  bool soundEffectsEnabled;
+  bool visualEffectsEnabled;
+  bool notificationsEnabled;
+  bool debugModeEnabled;
+  bool debugUnlimitedMoney;
   int managerLevel;
   int oilPumpLevel;
   double oilPumpProgress;
@@ -284,6 +350,7 @@ class GameState {
   final Map<String, int> upgrades;
   final Map<String, String> reactorComponents;
   final Set<int> claimedQuestIds;
+  final Set<int> knownBlueprintIds;
   final Set<String> unlockedRelics;
   final Set<String> equippedRelics;
   final Set<String> equippedGems;
@@ -325,6 +392,9 @@ class GameState {
   final Map<String, double> worldCargoUsed;
   final Map<String, Map<String, int>> worldInventories;
   final Map<String, Map<String, int>> worldReserves;
+  final Map<String, int> worldMinerCounts;
+  final Map<String, int> worldWorkerLevels;
+  final Map<String, double> productionRemainders;
   final Map<String, int> specialists;
   int seed = 91827;
 
@@ -332,10 +402,15 @@ class GameState {
   /// `GameState()` remains useful for tests and restored legacy data.
   factory GameState.newGame({DateTime? lastSavedAt, int? seed}) {
     final state = GameState(
-      coins: 0,
+      coins: MrMineBigNumber.zero,
+      totalSold: MrMineBigNumber.zero,
       crewCount: 0,
+      cargoCapacity: cargoCapacities.first,
+      cargoLevel: 1,
       lastSavedAt: lastSavedAt,
       inventory: {'coal': 0, 'copper': 0},
+      worldMinerCounts: {'0': 0, '1': 1, '2': 1},
+      worldWorkerLevels: {'0': 0, '1': 0, '2': 0},
     );
     state.seed = seed ?? Random.secure().nextInt(0x7fffffff);
     return state;
@@ -355,14 +430,24 @@ class GameState {
 
   int get activeDepthFloor => (depthMeters / 100000).floor();
 
-  double activeSpecialWorkerPower(String abilityId) => specialWorkerRoster
+  double specialWorkerPowerAt(
+    String abilityId, {
+    required int worldIndex,
+    required int depthBand,
+  }) => specialWorkerRoster
       .where(
         (worker) =>
             worker.abilityId == abilityId &&
-            worker.assignedWorld == activeWorldIndex &&
-            worker.assignedFloor == activeDepthFloor,
+            worker.assignedWorld == worldIndex &&
+            worker.assignedFloor == depthBand,
       )
       .fold(0, (total, worker) => total + worker.power);
+
+  double activeSpecialWorkerPower(String abilityId) => specialWorkerPowerAt(
+    abilityId,
+    worldIndex: activeWorldIndex,
+    depthBand: activeDepthFloor,
+  );
 
   ScientistState? scientistById(String? id) {
     if (id == null) return null;
@@ -372,8 +457,53 @@ class GameState {
     return null;
   }
 
-  int relicLevel(String relicId) =>
-      (relicLevels[relicId] ?? 1).clamp(1, 5).toInt();
+  static bool isValidRelicId(String id) =>
+      RegExp(r'^relic_(?:[1-9]|1[0-2]|15[0-5])$').hasMatch(id);
+
+  int relicLevel(String relicId) {
+    final level = relicLevels[relicId] ??
+        relicLevels[relicId.startsWith('relic_') ? relicId.substring(6) : 'relic_$relicId'] ??
+        1;
+    return level.clamp(1, 5).toInt();
+  }
+
+  /// Chance for Tier 1 isotope to decay to Tier 2 (Mr. Mine Stat 37, capped at 10% / 0.10).
+  double get isotopeOneDecayChance {
+    var chance = 0.0;
+    if (equippedRelics.contains('relic_150') || equippedRelics.contains('150')) {
+      chance += switch (relicLevel('relic_150')) {
+        1 => 0.01,
+        2 => 0.015,
+        _ => 0.02,
+      };
+    }
+    if (equippedRelics.contains('relic_151') || equippedRelics.contains('151')) {
+      chance += 0.015;
+    }
+    if (equippedRelics.contains('relic_152') || equippedRelics.contains('152')) {
+      chance += 0.02;
+    }
+    return min(0.10, chance);
+  }
+
+  /// Chance for Tier 2 isotope to decay to Tier 3 (Mr. Mine Stat 38, capped at 5% / 0.05).
+  double get isotopeTwoDecayChance {
+    var chance = 0.0;
+    if (equippedRelics.contains('relic_153') || equippedRelics.contains('153')) {
+      chance += switch (relicLevel('relic_153')) {
+        1 => 0.0,
+        2 => 0.005,
+        _ => 0.01,
+      };
+    }
+    if (equippedRelics.contains('relic_154') || equippedRelics.contains('154')) {
+      chance += 0.005;
+    }
+    if (equippedRelics.contains('relic_155') || equippedRelics.contains('155')) {
+      chance += 0.01;
+    }
+    return min(0.05, chance);
+  }
 
   int get currentWorldIndex => activeWorldIndex;
 
@@ -388,6 +518,47 @@ class GameState {
           ? 1 + .05 * relicLevel('relic_4')
           : 1) *
       (equippedGems.contains('sapphire') ? 1.1 : 1);
+
+  bool get debugMoneyEnabled => debugModeEnabled && debugUnlimitedMoney;
+
+  /// Checks if player can afford [cost], accepting [MrMineBigNumber] or [num].
+  bool canAfford(Object cost) {
+    if (debugMoneyEnabled) return true;
+    final price = cost is MrMineBigNumber
+        ? cost
+        : (cost is num ? MrMineBigNumber.fromNum(cost) : MrMineBigNumber.zero);
+    return coins.greaterThanOrEqualTo(price);
+  }
+
+  /// Adds [amount] to [coins], accepting [MrMineBigNumber] or [num].
+  void addCoins(Object amount) {
+    final value = amount is MrMineBigNumber
+        ? amount
+        : (amount is num ? MrMineBigNumber.fromNum(amount) : MrMineBigNumber.zero);
+    if (value.isNegative) return;
+    coins = coins.add(value);
+  }
+
+  /// Spends [cost] from [coins], accepting [MrMineBigNumber] or [num].
+  /// Returns `true` if successful or debug money enabled.
+  bool spendCoins(Object cost) {
+    if (debugMoneyEnabled) return true;
+    final price = cost is MrMineBigNumber
+        ? cost
+        : (cost is num ? MrMineBigNumber.fromNum(cost) : MrMineBigNumber.zero);
+    if (coins.lessThan(price)) return false;
+    coins = coins.subtract(price);
+    if (coins.isNegative) coins = MrMineBigNumber.zero;
+    return true;
+  }
+
+  int get cargoCapacityLevel => cargoLevel.clamp(1, 16).toInt();
+
+  int get activeMinerCount =>
+      worldMinerCounts[activeWorldIndex.toString()] ?? crewCount;
+
+  int get activeWorkerLevel =>
+      worldWorkerLevels[activeWorldIndex.toString()] ?? upgradeLevel('workers');
 
   int get transportWorkers => workerAssignments['transport'] ?? 0;
   int get scannerWorkers => workerAssignments['scanner'] ?? 0;
@@ -412,7 +583,6 @@ class GameState {
   double get drillRateMetersPerSecond {
     final drill = upgrades['drill'] ?? 1;
     final scanner = upgrades['scanner'] ?? 0;
-    final resonanceBonus = resonanceActive ? 1.25 : 1.0;
     final relicBonus =
         (equippedRelics.contains('relic_1')
             ? 0.12 * relicLevel('relic_1')
@@ -420,33 +590,35 @@ class GameState {
         (equippedRelics.contains('relic_7') ? 0.05 * relicLevel('relic_7') : 0);
     final engineerBonus = (specialists['engineer'] ?? 0) * 0.08;
     final specialDrillBonus = activeSpecialWorkerPower('drill_booster') * .06;
-    final repairRobotBonus = unlockedBuildings.contains('repair_robot')
-        ? 1.1
-        : 1.0;
-    final gemDrillBonus = equippedGems.contains('emerald') ? 1.08 : 1.0;
     final pressurePenalty = pressure >= 88
         ? 0.68
         : pressure >= 70
         ? 0.86
         : 1.0;
-    final achievementMultiplier = 1 + unlockedAchievements.length * 0.005;
-    final assemblyMultiplier = DrillAssemblyCatalog.speedMultiplier(
+    final assemblyWatts = DrillAssemblyCatalog.power(
       bitLevel: drillBitLevel,
       fanLevel: drillFanLevel,
       engineLevel: drillEngineLevel,
     );
-    final buffMultiplier = activeBuffIds.contains('buff_overdrive')
-        ? BuffLabCatalog.overdriveMultiplier
-        : 1.0;
-    return (1.8 + drill * 0.75 + scanner * 0.12) *
-        assemblyMultiplier *
-        buffMultiplier *
-        (1 + relicBonus + engineerBonus) *
-        (1 + specialDrillBonus) *
-        resonanceBonus *
-        repairRobotBonus *
-        gemDrillBonus *
-        achievementMultiplier *
+    final depthDifficulty = MrMineDrillDifficulty.atDepthMeters(depthMeters);
+    final drillSpeedMultiplier =
+        1 +
+        relicBonus +
+        engineerBonus +
+        specialDrillBonus +
+        (resonanceActive ? .25 : 0) +
+        (unlockedBuildings.contains('repair_robot') ? .1 : 0) +
+        (equippedGems.contains('emerald') ? .08 : 0) +
+        unlockedAchievements.length * .005 +
+        max(0, drill - 1) * .08 +
+        scanner * .012 +
+        (activeBuffIds.contains('buff_overdrive')
+            ? BuffLabCatalog.overdriveMultiplier - 1
+            : 0);
+    return 1000 *
+        assemblyWatts /
+        depthDifficulty *
+        drillSpeedMultiplier *
         pressurePenalty;
   }
 
@@ -460,7 +632,9 @@ class GameState {
     QuestKind.mine => totalMined,
     QuestKind.depth => deepestMeters.floor(),
     QuestKind.hire => crewCount - 1,
-    QuestKind.sell => totalSold.floor(),
+    QuestKind.sell => totalSold.exponent >= 9
+        ? 1000000000
+        : totalSold.toDouble().clamp(0, 1000000000).floor(),
     QuestKind.upgrade => upgrades.values.fold(0, (sum, level) => sum + level),
     QuestKind.chest => chestsOpened,
     QuestKind.cave => cavesCompleted,
@@ -473,25 +647,25 @@ class GameState {
     final key = activeWorldIndex.toString();
     worldDepths[key] = depthMeters;
     worldPressures[key] = pressure;
-    worldCargoUsed[key] = cargoUsed;
-    worldInventories[key] = Map<String, int>.from(inventory);
-    worldReserves[key] = Map<String, int>.from(reserves);
+    worldMinerCounts[key] = crewCount;
+    worldWorkerLevels[key] = upgradeLevel('workers');
   }
 
   Map<String, Object?> toJson() {
     storeActiveWorldSnapshot();
     return {
       'schema': currentSchemaVersion,
-      'coins': coins,
+      'coins': coins.toJson(),
       'depthMeters': depthMeters,
       'deepestMeters': deepestMeters,
       'pressure': pressure,
       'energy': energy,
       'cargoCapacity': cargoCapacity,
+      'cargoLevel': cargoLevel,
       'cargoUsed': cargoUsed,
       'crewCount': crewCount,
       'totalMined': totalMined,
-      'totalSold': totalSold,
+      'totalSold': totalSold.toJson(),
       'chestsFound': chestsFound,
       'goldChests': goldChests,
       'deepChests': deepChests,
@@ -564,6 +738,12 @@ class GameState {
       'activeWorldIndex': activeWorldIndex,
       'autoSellEnabled': autoSellEnabled,
       'autoSellThreshold': autoSellThreshold,
+      'musicEnabled': musicEnabled,
+      'soundEffectsEnabled': soundEffectsEnabled,
+      'visualEffectsEnabled': visualEffectsEnabled,
+      'notificationsEnabled': notificationsEnabled,
+      'debugModeEnabled': debugModeEnabled,
+      'debugUnlimitedMoney': debugUnlimitedMoney,
       'managerLevel': managerLevel,
       'oilPumpLevel': oilPumpLevel,
       'oilPumpProgress': oilPumpProgress,
@@ -578,10 +758,14 @@ class GameState {
       'worldCargoUsed': worldCargoUsed,
       'worldInventories': worldInventories,
       'worldReserves': worldReserves,
+      'worldMinerCounts': worldMinerCounts,
+      'worldWorkerLevels': worldWorkerLevels,
+      'productionRemainders': productionRemainders,
       'inventory': inventory,
       'reserves': reserves,
       'upgrades': upgrades,
       'claimedQuestIds': claimedQuestIds.toList(),
+      'knownBlueprintIds': knownBlueprintIds.toList()..sort(),
       'unlockedRelics': unlockedRelics.toList(),
       'equippedRelics': equippedRelics.toList(),
       'equippedGems': equippedGems.toList(),
@@ -692,17 +876,28 @@ class GameState {
             )
             .toList();
 
+    MrMineBigNumber readCoins(String key, [MrMineBigNumber? fallback]) {
+      final raw = json[key];
+      if (raw == null) return fallback ?? const MrMineBigNumber.raw(2.4, 2);
+      try {
+        return MrMineBigNumber.fromJson(raw);
+      } catch (_) {
+        return fallback ?? const MrMineBigNumber.raw(2.4, 2);
+      }
+    }
+
     final state = GameState(
-      coins: readDouble('coins', 240),
+      coins: readCoins('coins'),
       depthMeters: readDouble('depthMeters'),
       deepestMeters: readDouble('deepestMeters'),
       pressure: readDouble('pressure', 14),
       energy: readDouble('energy'),
-      cargoCapacity: readDouble('cargoCapacity', 24),
+      cargoCapacity: readDouble('cargoCapacity', 1500),
+      cargoLevel: readInt('cargoLevel', 1),
       cargoUsed: readDouble('cargoUsed'),
       crewCount: readInt('crewCount', 1),
       totalMined: readInt('totalMined'),
-      totalSold: readDouble('totalSold'),
+      totalSold: readCoins('totalSold', MrMineBigNumber.zero),
       chestsFound: readInt('chestsFound'),
       goldChests: readInt('goldChests'),
       deepChests: readInt('deepChests'),
@@ -776,6 +971,12 @@ class GameState {
       activeWorldIndex: readInt('activeWorldIndex', -1),
       autoSellEnabled: json['autoSellEnabled'] as bool? ?? false,
       autoSellThreshold: readDouble('autoSellThreshold', .85),
+      musicEnabled: json['musicEnabled'] as bool? ?? true,
+      soundEffectsEnabled: json['soundEffectsEnabled'] as bool? ?? true,
+      visualEffectsEnabled: json['visualEffectsEnabled'] as bool? ?? true,
+      notificationsEnabled: json['notificationsEnabled'] as bool? ?? true,
+      debugModeEnabled: json['debugModeEnabled'] as bool? ?? false,
+      debugUnlimitedMoney: json['debugUnlimitedMoney'] as bool? ?? false,
       managerLevel: readInt('managerLevel'),
       oilPumpLevel: readInt('oilPumpLevel', 1),
       oilPumpProgress: readDouble('oilPumpProgress'),
@@ -795,7 +996,13 @@ class GameState {
       worldCargoUsed: readDoubleMap('worldCargoUsed'),
       worldInventories: readNestedIntMap('worldInventories'),
       worldReserves: readNestedIntMap('worldReserves'),
+      worldMinerCounts: readIntMap('worldMinerCounts'),
+      worldWorkerLevels: readIntMap('worldWorkerLevels'),
+      productionRemainders: readDoubleMap('productionRemainders'),
       claimedQuestIds: readIntSet('claimedQuestIds'),
+      knownBlueprintIds: json.containsKey('knownBlueprintIds')
+          ? readIntSet('knownBlueprintIds')
+          : null,
       unlockedRelics: readStringSet('unlockedRelics'),
       equippedRelics: readStringSet('equippedRelics'),
       equippedGems: readStringSet('equippedGems'),
@@ -818,6 +1025,21 @@ class GameState {
       oreDeposits: readOreDeposits(),
       workerRolePriority: readStringList('workerRolePriority'),
     );
+    if (!json.containsKey('knownBlueprintIds')) {
+      final legacyLevels = <String, int>{
+        'engine': state.drillEngineLevel,
+        'bit': state.drillBitLevel,
+        'fan': state.drillFanLevel,
+        'cargo': state.cargoLevel,
+      };
+      for (final entry in legacyLevels.entries) {
+        final slot = DrillAssemblyCatalog.blueprintSlots[entry.key]!;
+        for (var level = 2; level <= entry.value; level++) {
+          final blueprintId = (level - 2) * 4 + slot;
+          if (blueprintId <= 158) state.knownBlueprintIds.add(blueprintId);
+        }
+      }
+    }
     state.resonanceProgress = readInt('resonanceProgress');
     state.seed = readInt('seed', 91827);
     state.relicScrap = state.relicScrap.clamp(0, 1000000000).toInt();
@@ -831,7 +1053,7 @@ class GameState {
         'scanner': 0,
       });
     }
-    state.coins = state.coins.clamp(0, 1e18).toDouble();
+    if (state.coins.isNegative) state.coins = MrMineBigNumber.zero;
     if (!state.autoSellThreshold.isFinite) state.autoSellThreshold = .85;
     state.autoSellThreshold = GameState.autoSellThresholdChoices.reduce(
       (closest, choice) =>
@@ -1063,7 +1285,7 @@ class GameState {
       state.chestCompressionReadyAt = null;
     }
     state.totalMined = state.totalMined.clamp(0, 1e12).toInt();
-    state.totalSold = state.totalSold.clamp(0, 1e18).toDouble();
+    if (state.totalSold.isNegative) state.totalSold = MrMineBigNumber.zero;
     state.energy = state.energy.clamp(0, 1e9).toDouble();
     state.pressure = state.pressure.clamp(0, 100).toDouble();
     for (final entry in state.inventory.entries.toList()) {
@@ -1171,7 +1393,7 @@ class GameState {
       state.equippedGems.remove(state.equippedGems.first);
     }
     state.unlockedRelics.removeWhere(
-      (id) => !RegExp(r'^relic_(?:[1-9]|1[0-2])$').hasMatch(id),
+      (id) => !isValidRelicId(id),
     );
     state.equippedRelics.removeWhere(
       (id) => !state.unlockedRelics.contains(id),
@@ -1206,27 +1428,6 @@ class GameState {
         .clamp(state.depthMeters, 1e12)
         .toDouble();
 
-    var reconstructedCargo = 0.0;
-    for (final entry in state.inventory.entries.toList()) {
-      final resource = ResourceCatalog.byId[entry.key];
-      if (resource == null ||
-          (resource.kind != ResourceKind.mineral &&
-              resource.kind != ResourceKind.isotope)) {
-        continue;
-      }
-      final weight = resource.weight < 1 ? 1 : resource.weight;
-      final remainingUnits =
-          ((state.effectiveCargoCapacity - reconstructedCargo) / weight)
-              .floor()
-              .clamp(0, entry.value)
-              .toInt();
-      state.inventory[entry.key] = remainingUnits;
-      reconstructedCargo += remainingUnits * weight;
-    }
-    state.cargoUsed = reconstructedCargo;
-
-    final hasWorldSnapshots =
-        state.worldDepths.isNotEmpty || state.worldInventories.isNotEmpty;
     if (state.activeWorldIndex < 0 || state.activeWorldIndex > 2) {
       state.activeWorldIndex = state.depthMeters >= worldEntryDepths[2]
           ? 2
@@ -1234,6 +1435,59 @@ class GameState {
           ? 1
           : 0;
     }
+    final activeKey = state.activeWorldIndex.toString();
+    final hasDepthSnapshots = state.worldDepths.isNotEmpty;
+    if (schema < currentSchemaVersion) {
+      final combinedInventory = Map<String, int>.from(state.inventory);
+      final combinedReserves = Map<String, int>.from(state.reserves);
+      for (var world = 0; world < worldEntryDepths.length; world++) {
+        if (world == state.activeWorldIndex) continue;
+        for (final entry
+            in (state.worldInventories[world.toString()] ?? {}).entries) {
+          combinedInventory[entry.key] =
+              (combinedInventory[entry.key] ?? 0) + max(0, entry.value);
+        }
+        for (final entry
+            in (state.worldReserves[world.toString()] ?? {}).entries) {
+          combinedReserves[entry.key] =
+              (combinedReserves[entry.key] ?? 0) + max(0, entry.value);
+        }
+      }
+      state.inventory
+        ..clear()
+        ..addAll(combinedInventory);
+      state.reserves
+        ..clear()
+        ..addAll(combinedReserves);
+
+      for (final resourceId in state.lockedResources) {
+        state.reserves[resourceId] = state.amount(resourceId);
+      }
+      state.lockedResources.clear();
+
+      final oldCapacity = state.cargoCapacity;
+      var migratedCargoLevel = 1;
+      for (var index = 0; index < cargoCapacities.length; index++) {
+        if (oldCapacity >= cargoCapacities[index]) {
+          migratedCargoLevel = index + 1;
+        }
+      }
+      state.cargoLevel = migratedCargoLevel;
+      state.cargoCapacity = cargoCapacities[migratedCargoLevel - 1];
+
+      state.worldMinerCounts
+        ..clear()
+        ..addAll({'0': 0, '1': 1, '2': 1});
+      state.worldMinerCounts[activeKey] = state.crewCount.clamp(0, 10).toInt();
+      state.worldWorkerLevels
+        ..clear()
+        ..addAll({'0': 0, '1': 0, '2': 0});
+      state.worldWorkerLevels[activeKey] = state
+          .upgradeLevel('workers')
+          .clamp(0, 10)
+          .toInt();
+    }
+
     state.worldDepths
       ..removeWhere(
         (key, value) =>
@@ -1257,92 +1511,82 @@ class GameState {
       ..putIfAbsent('0', () => 14)
       ..putIfAbsent('1', () => 14)
       ..putIfAbsent('2', () => 14);
-    state.worldCargoUsed.removeWhere(
-      (key, value) =>
+    state.worldMinerCounts.removeWhere(
+      (key, count) =>
           int.tryParse(key) == null ||
           int.parse(key) < 0 ||
           int.parse(key) > 2 ||
-          !value.isFinite ||
-          value < 0,
+          count < 0,
     );
-    state.worldInventories.removeWhere(
-      (key, _) =>
-          int.tryParse(key) == null || int.parse(key) < 0 || int.parse(key) > 2,
+    state.worldWorkerLevels.removeWhere(
+      (key, level) =>
+          int.tryParse(key) == null ||
+          int.parse(key) < 0 ||
+          int.parse(key) > 2 ||
+          level < 0,
     );
-    state.worldReserves.removeWhere(
-      (key, _) =>
-          int.tryParse(key) == null || int.parse(key) < 0 || int.parse(key) > 2,
-    );
-
     for (var world = 0; world < worldEntryDepths.length; world++) {
       final key = world.toString();
-      final worldInventory = state.worldInventories.putIfAbsent(
-        key,
-        () => world == state.activeWorldIndex
-            ? Map<String, int>.from(state.inventory)
-            : {'coal': 0, 'copper': 0},
-      );
-      worldInventory.removeWhere((_, amount) => amount < 0);
-      var used = 0.0;
-      for (final entry in worldInventory.entries.toList()) {
-        final resource = ResourceCatalog.byId[entry.key];
-        if (resource == null ||
-            (resource.kind != ResourceKind.mineral &&
-                resource.kind != ResourceKind.isotope)) {
-          continue;
-        }
-        final weight = resource.weight < 1 ? 1 : resource.weight;
-        final remaining = ((state.effectiveCargoCapacity - used) / weight)
-            .floor()
-            .clamp(0, entry.value)
-            .toInt();
-        worldInventory[entry.key] = remaining;
-        used += remaining * weight;
-      }
-      state.worldCargoUsed[key] = used;
       state.worldDepths[key] = state.worldDepths[key]!
           .clamp(worldEntryDepths[world], 1e12)
           .toDouble();
-      final worldReserves = state.worldReserves.putIfAbsent(
-        key,
-        () => world == state.activeWorldIndex
-            ? Map<String, int>.from(state.reserves)
-            : <String, int>{},
-      );
-      worldReserves.removeWhere((_, amount) => amount < 0);
-      for (final entry in worldReserves.entries.toList()) {
-        worldReserves[entry.key] = entry.value
-            .clamp(0, worldInventory[entry.key] ?? 0)
-            .toInt();
-      }
       state.worldPressures[key] = state.worldPressures[key]!
           .clamp(0, 100)
           .toDouble();
+      state.worldMinerCounts.putIfAbsent(key, () => 0);
+      state.worldWorkerLevels.putIfAbsent(key, () => 0);
+      state.worldMinerCounts[key] = state.worldMinerCounts[key]!
+          .clamp(0, 10)
+          .toInt();
+      state.worldWorkerLevels[key] = state.worldWorkerLevels[key]!
+          .clamp(0, 10)
+          .toInt();
     }
+    state.cargoLevel = state.cargoLevel
+        .clamp(1, cargoCapacities.length)
+        .toInt();
+    state.cargoCapacity = cargoCapacities[state.cargoLevel - 1];
+    state.productionRemainders.removeWhere(
+      (id, remainder) =>
+          !ResourceCatalog.byId.containsKey(id) ||
+          !remainder.isFinite ||
+          remainder < 0 ||
+          remainder >= 1,
+    );
 
-    final activeKey = state.activeWorldIndex.toString();
-    if (hasWorldSnapshots) {
+    if (hasDepthSnapshots) {
       state.depthMeters = state.worldDepths[activeKey]!
           .clamp(worldEntryDepths[state.activeWorldIndex], 1e12)
           .toDouble();
       state.pressure = state.worldPressures[activeKey]!;
-      state.inventory
-        ..clear()
-        ..addAll(state.worldInventories[activeKey]!);
-      state.reserves
-        ..clear()
-        ..addAll(state.worldReserves[activeKey]!);
-      state.cargoUsed = state.worldCargoUsed[activeKey]!;
       state.deepestMeters = state.deepestMeters.clamp(state.depthMeters, 1e12);
     } else {
       state.worldDepths[activeKey] = state.depthMeters;
       state.worldPressures[activeKey] = state.pressure;
-      state.worldCargoUsed[activeKey] = state.cargoUsed;
-      state.worldInventories[activeKey] = Map<String, int>.from(
-        state.inventory,
-      );
-      state.worldReserves[activeKey] = Map<String, int>.from(state.reserves);
     }
+    state.crewCount = state.worldMinerCounts[activeKey]!.clamp(0, 10).toInt();
+    state.upgrades['workers'] = state.worldWorkerLevels[activeKey]!
+        .clamp(0, 10)
+        .toInt();
+    state.inventory.removeWhere((_, amount) => amount < 0);
+    state.reserves.removeWhere(
+      (id, amount) => amount < 0 || !ResourceCatalog.byId.containsKey(id),
+    );
+    for (final entry in state.reserves.entries.toList()) {
+      state.reserves[entry.key] = entry.value
+          .clamp(0, state.amount(entry.key))
+          .toInt();
+    }
+    state.worldCargoUsed.clear();
+    state.worldInventories.clear();
+    state.worldReserves.clear();
+    state.cargoUsed = state.inventory.entries.fold<double>(0, (total, entry) {
+      final resource = ResourceCatalog.byId[entry.key];
+      if (resource == null || !resource.countsTowardsCapacityAndValue) {
+        return total;
+      }
+      return total + entry.value * max(1, resource.weight);
+    });
     return state;
   }
 }

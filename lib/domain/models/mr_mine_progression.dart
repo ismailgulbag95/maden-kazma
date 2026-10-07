@@ -1,5 +1,6 @@
-/// Mineral depth gates transcribed from the Mr. Mine wiki's v0.45 tables.
-/// Values are in meters. The Earth/Moon/Titan artwork itself is project-made.
+/// Mineral discovery and rich-depth gates adapted from Mr. Mine's materials
+/// tables. The active shaft rarity table is copied separately from the live
+/// browser source. Values are in meters; artwork remains project-made.
 class MrMineMineralBand {
   const MrMineMineralBand({
     required this.resourceId,
@@ -24,7 +25,7 @@ abstract final class MrMineProgression {
   static const moonStartMeters = 1032000;
   static const moonEndMeters = 1782000;
   static const titanStartMeters = 1814000;
-  static const titanEndMeters = 2566000;
+  static const titanEndMeters = 2567000;
 
   /// Wiki-listed shafts that produce helium-3 on the Moon.
   static const Set<int> moonHelium3DepthKm = {
@@ -84,7 +85,6 @@ abstract final class MrMineProgression {
   };
 
   /// Wiki `Materials` table, with world-absolute depths converted to meters.
-  /// Sale values in this game are intentionally economy-scaled in the catalog.
   static const List<MrMineMineralBand> minerals = [
     MrMineMineralBand(
       resourceId: 'coal',

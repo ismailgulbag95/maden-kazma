@@ -4,6 +4,7 @@ import '../../app/game_controller.dart';
 import '../../core/design/palette.dart';
 import '../../domain/models/upgrade_definition.dart';
 import '../../domain/models/resource_definition.dart';
+import '../../domain/models/mr_mine_big_number.dart';
 import '../../domain/simulation/game_engine.dart';
 
 class GamePanel extends StatelessWidget {
@@ -87,7 +88,10 @@ class UpgradeRow extends StatelessWidget {
         ? 5
         : UpgradeCatalog.byId[track]?.maxLevel ?? 100;
     final cost = GameEngine.upgradeCost(state, track);
-    final missing = (cost - state.coins).ceil().clamp(0, cost);
+    final costBig = MrMineBigNumber.fromNum(cost);
+    final missing = state.debugMoneyEnabled || state.canAfford(cost)
+        ? MrMineBigNumber.zero
+        : costBig.subtract(state.coins);
     final materialRequirements = GameEngine.upgradeMaterialRequirements(
       state,
       track,
@@ -104,7 +108,7 @@ class UpgradeRow extends StatelessWidget {
     final canBuy =
         level < maxLevel &&
         cost > 0 &&
-        state.coins >= cost &&
+        state.canAfford(cost) &&
         materialDeficits.isEmpty &&
         (track != 'drill' || state.crewCount > 0) &&
         (track != 'reactor' || state.unlockedBuildings.contains('reactor'));
@@ -192,7 +196,8 @@ class UpgradeRow extends StatelessWidget {
                               'Önce ilk madenciyi işe al',
                             if (materialText.isNotEmpty)
                               'Cevher: $materialText',
-                            if (missing > 0) 'Eksik kasa: $missing',
+                            if (missing.greaterThan(MrMineBigNumber.zero))
+                              'Eksik kasa: $missing',
                             if (materialDeficits.isNotEmpty)
                               'Cevher eksiği: ${materialDeficits.entries.map((entry) => '${entry.value} ${ResourceCatalog.byId[entry.key]?.name ?? entry.key}').join(', ')}',
                           ].join(' • '),

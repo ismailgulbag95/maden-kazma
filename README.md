@@ -37,7 +37,7 @@ Değişiklikleri doğrulamak için `flutter analyze` ve `flutter test` çalışt
 - Yüzeydeki altı yapı tıklanabilir: asansör, atölye, ambar, ticaret, araştırma ve sefer garajı.
 - Cevher düğümlerine dokunup kırılma çubuğunu ilerlet veya büyük **KAZI** düğmesini kullan; madenciler kuyuyu otomatik ilerletir.
 - Atölyede madencileri kazı, taşıma, tarama ve ayıklama işlerine dağıt. Sekiz yükseltme ailesi 100'er seviye içerir.
-- Ambar kapasitesi dolunca kazı durur. Kaynakları seçerek ya da kısmen sat; kilitle, rezerv tut veya kargo eşiğinde otomatik satışı aç.
+- Tüm dünyaların cevheri ortak kargoya girer. Kargo dolunca pasif cevher üretimi bekler; sondaj derinliği ilerlemeye devam eder. Kaynakları seçerek, bölgeye göre ya da kısmen sat; kilitlenen miktar satışta korunur.
 - Derinlik ilerledikçe 50 mineral, 42 doğal izotop, reaktörle sentezlenen altı ileri izotop, yeni biyomlar, mağara dronları ve rota seçimi, bilim insanları, kalıntılar, Ay ve Titan katmanları açılır.
 - Mağaralarda kaya, çamur, radyasyon ve 300 km sonrasında lav tehlikeleri; 300 km'de ise geliştirilebilir petrol pompası, petrol satışı ve yapı malzemesi işleme açılır.
 - Atölyede sondaj ucu, soğutma fanı ve motor ayrı ayrı geliştirilir; geç Ay safhasında Robot Mk II son üç şemayı açar. Reaktör yuvalarında yakıt/soğutma dengesi kurulur.
@@ -49,7 +49,7 @@ Değişiklikleri doğrulamak için `flutter analyze` ve `flutter test` çalışt
 
 ## Uygulama yapısı
 
-- `lib/domain/models/`: kayıt edilebilir oyun durumu, mineral ve görev kataloğu.
+- `lib/domain/models/`: kayıt edilebilir oyun durumu, mineral ve görev kataloğu. `mine_biome.dart` ile `mr_mine_level_table.dart` bütün katlardaki cevher uygunluğunu belirler.
 - `lib/domain/simulation/game_engine.dart`: zamandan bağımsız üretim, kazı, ekonomi, sefer, boss ve kilometre taşı kuralları.
 - `lib/app/game_controller.dart`: çevrimdışı ilerleme, otomatik kayıt ve arayüz eylemleri.
 - `lib/data/`: yerel JSON ve web kayıt adaptörleri.

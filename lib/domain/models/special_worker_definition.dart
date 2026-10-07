@@ -5,6 +5,7 @@ class SpecialWorkerRarityDefinition {
     required this.id,
     required this.name,
     required this.power,
+    required this.sellerUnitsPerLevel,
     required this.scrapValue,
     required this.colorHex,
   });
@@ -12,6 +13,7 @@ class SpecialWorkerRarityDefinition {
   final String id;
   final String name;
   final double power;
+  final int sellerUnitsPerLevel;
   final int scrapValue;
   final int colorHex;
 }
@@ -22,6 +24,7 @@ abstract final class SpecialWorkerRarityCatalog {
       id: 'common',
       name: 'Yaygın',
       power: 1,
+      sellerUnitsPerLevel: 10,
       scrapValue: 1,
       colorHex: 0xFFB9C7C6,
     ),
@@ -29,6 +32,7 @@ abstract final class SpecialWorkerRarityCatalog {
       id: 'uncommon',
       name: 'Az bulunan',
       power: 1.15,
+      sellerUnitsPerLevel: 13,
       scrapValue: 2,
       colorHex: 0xFF63D4A4,
     ),
@@ -36,6 +40,7 @@ abstract final class SpecialWorkerRarityCatalog {
       id: 'rare',
       name: 'Nadir',
       power: 1.35,
+      sellerUnitsPerLevel: 18,
       scrapValue: 4,
       colorHex: 0xFF68AFFF,
     ),
@@ -43,6 +48,7 @@ abstract final class SpecialWorkerRarityCatalog {
       id: 'legendary',
       name: 'Efsanevi',
       power: 1.7,
+      sellerUnitsPerLevel: 25,
       scrapValue: 7,
       colorHex: 0xFFCA8DFF,
     ),
@@ -50,6 +56,7 @@ abstract final class SpecialWorkerRarityCatalog {
       id: 'mythic',
       name: 'Mitik',
       power: 2.1,
+      sellerUnitsPerLevel: 25,
       scrapValue: 12,
       colorHex: 0xFFFFCE67,
     ),
@@ -77,7 +84,7 @@ abstract final class SpecialWorkerAbilityCatalog {
     SpecialWorkerAbilityDefinition(
       id: 'auto_seller',
       name: 'Otomatik Satıcı',
-      description: 'Bulunduğu katta dakikada bir cevherin bir kısmını satar.',
+      description: 'Seçilen madeni her saniye satar; satış kilitlerine uyar.',
     ),
     SpecialWorkerAbilityDefinition(
       id: 'miner_booster',
@@ -132,6 +139,7 @@ class SpecialWorkerState {
     this.assignedWorld = 0,
     this.assignedFloor = 0,
     this.autoMove = true,
+    this.selectedResourceId,
   });
 
   final String id;
@@ -143,6 +151,7 @@ class SpecialWorkerState {
   int assignedWorld;
   int assignedFloor;
   bool autoMove;
+  String? selectedResourceId;
 
   SpecialWorkerRarityDefinition get rarity =>
       SpecialWorkerRarityCatalog.byId[rarityId] ??
@@ -160,6 +169,7 @@ class SpecialWorkerState {
     'assignedWorld': assignedWorld,
     'assignedFloor': assignedFloor,
     'autoMove': autoMove,
+    'selectedResourceId': selectedResourceId,
   };
 
   factory SpecialWorkerState.fromJson(Map<String, Object?> json) =>
@@ -173,6 +183,9 @@ class SpecialWorkerState {
         assignedWorld: (json['assignedWorld'] as num?)?.toInt() ?? 0,
         assignedFloor: (json['assignedFloor'] as num?)?.toInt() ?? 0,
         autoMove: json['autoMove'] as bool? ?? true,
+        selectedResourceId:
+            json['selectedResourceId'] as String? ??
+            ((json['abilityId'] as String?) == 'auto_seller' ? 'coal' : null),
       );
 
   static SpecialWorkerState create(int serial, Random random) {
@@ -203,6 +216,7 @@ class SpecialWorkerState {
       name: names[(serial + random.nextInt(names.length)) % names.length],
       rarityId: rarityId,
       abilityId: ability.id,
+      selectedResourceId: ability.id == 'auto_seller' ? 'coal' : null,
     );
   }
 }

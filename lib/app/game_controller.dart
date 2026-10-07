@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import '../data/save_store.dart';
 import '../domain/models/game_state.dart';
+import '../domain/models/mr_mine_big_number.dart';
 import '../domain/models/quest_definition.dart';
 import '../domain/models/resource_definition.dart';
 import '../domain/models/gem_definition.dart';
@@ -14,9 +15,30 @@ import '../domain/models/daily_challenge_definition.dart';
 import '../domain/models/mine_event_definition.dart';
 import '../domain/models/scientist_definition.dart';
 import '../domain/models/reactor_definition.dart';
+import '../domain/models/drill_assembly_definition.dart';
 import '../domain/models/buff_lab_definition.dart';
 import '../domain/simulation/game_engine.dart';
 import '../services/sound_service.dart';
+
+String _saleCashLabel(Object value) {
+  final big = value is MrMineBigNumber
+      ? value
+      : (value is num ? MrMineBigNumber.fromNum(value) : MrMineBigNumber.zero);
+  if (big.exponent >= 18) {
+    if (big.exponent >= 21) {
+      return big.toScientificString();
+    }
+    final d = big.toDouble();
+    return '${(d / 1e18).toStringAsFixed(2)}Qi';
+  }
+  if (big.exponent >= 15) return '${(big.toDouble() / 1e15).toStringAsFixed(2)}Qa';
+  if (big.exponent >= 12) return '${(big.toDouble() / 1e12).toStringAsFixed(2)}T';
+  if (big.exponent >= 9) return '${(big.toDouble() / 1e9).toStringAsFixed(2)}B';
+  if (big.exponent >= 6) return '${(big.toDouble() / 1e6).toStringAsFixed(2)}M';
+  if (big.exponent >= 3) return '${(big.toDouble() / 1e3).toStringAsFixed(2)}K';
+  final d = big.toDouble();
+  return d.toStringAsFixed(d.truncateToDouble() == d ? 0 : 2);
+}
 
 class GameController extends ChangeNotifier {
   GameController({SaveStore? saveStore})
@@ -62,7 +84,7 @@ class GameController extends ChangeNotifier {
   List<String> takeNotices() {
     final result = List<String>.of(_notices);
     _notices.clear();
-    return result;
+    return state.notificationsEnabled ? result : const [];
   }
 
   Future<void> initialize() async {
@@ -121,6 +143,10 @@ class GameController extends ChangeNotifier {
     }
     GameEngine.prepareChallengeWindows(state, now);
     GameEngine.ensureOpenMineDeposits(state);
+    await SoundService.instance.setMusicEnabled(state.musicEnabled);
+    await SoundService.instance.setSoundEffectsEnabled(
+      state.soundEffectsEnabled,
+    );
     for (final achievement in GameEngine.checkAchievements(state)) {
       _notices.add(
         '${achievement.title} başarımı açıldı: +${achievement.reward} kasa.',
@@ -203,11 +229,7 @@ class GameController extends ChangeNotifier {
     final previousResonanceChains = state.resonanceChains;
     final success = GameEngine.tapOre(state, resourceId);
     if (!success) {
-      _notices.add(
-        state.cargoFull
-            ? 'Kargo dolu. Satış yap veya ambarı büyüt.'
-            : 'Bu maden damarı bu katta görünmüyor.',
-      );
+      _notices.add('Bu maden damarı bu katta görünmüyor.');
       notifyListeners();
       return false;
     }
@@ -220,28 +242,9 @@ class GameController extends ChangeNotifier {
   }
 
   bool mineDeposit(String depositId) {
-    final deposit = state.oreDeposits[depositId];
-    final nextYield = deposit == null
-        ? 0
-        : GameEngine.nextMineDepositYield(state, deposit);
     final success = GameEngine.tapMineDeposit(state, depositId);
     if (!success) {
-      final resource = deposit == null
-          ? null
-          : ResourceCatalog.byId[deposit.resourceId];
-      final needsYieldSpace =
-          deposit != null &&
-          resource != null &&
-          ((state.effectiveCargoCapacity - state.cargoUsed) / resource.weight)
-                  .floor() <
-              nextYield;
-      _notices.add(
-        state.cargoFull
-            ? 'Kargo dolu. Satış yapıp kazmaya devam et.'
-            : needsYieldSpace
-            ? 'Bu vuruşun cevheri ambara sığmıyor. Önce cevher sat veya ambarı büyüt.'
-            : 'Bu damar henüz kazılabilir durumda değil.',
-      );
+      _notices.add('Bu damar henüz kazılabilir durumda değil.');
       notifyListeners();
       return false;
     }
@@ -252,7 +255,11 @@ class GameController extends ChangeNotifier {
 
   bool dig() {
     if (!GameEngine.manualDig(state)) {
-      _notices.add('Kargo dolu. Önce ambarı boşalt.');
+      _notices.add(
+        state.activeWorldIndex < GameState.worldEntryDepths.length - 1
+            ? 'Bu kuyunun sonuna ulaştın. Sefer ekranından sonraki dünyaya geç.'
+            : 'Son katmana ulaştın.',
+      );
       notifyListeners();
       return false;
     }
@@ -273,7 +280,7 @@ class GameController extends ChangeNotifier {
       return false;
     }
     _notices.add(
-      '${state.currentWorldName} vardiyasına geçildi. Bu dünyanın derinliği ve ambarı ayrı kaydedilir; yükseltmeler ortaktır.',
+      '${state.currentWorldName} vardiyasına geçildi. Derinlik ve ekip bu dünya için kaydedilir; ambar ortaktır.',
     );
     _refreshState();
     return true;
@@ -319,9 +326,16 @@ class GameController extends ChangeNotifier {
     final currentLevel = GameEngine.drillAssemblyLevel(state, componentId);
     final cost = GameEngine.drillAssemblyUpgradeCost(state, componentId);
     if (!GameEngine.upgradeDrillAssembly(state, componentId)) {
+      final blueprintId = DrillAssemblyCatalog.blueprintIdFor(
+        componentId,
+        currentLevel + 1,
+      );
       if (currentLevel + 1 >= 24 &&
           !state.unlockedBuildings.contains('robot_mk2')) {
         _notices.add('Sondaj Robotu Mk II şemaları 1.257 km’de açılır.');
+      } else if (blueprintId != null &&
+          !state.knownBlueprintIds.contains(blueprintId)) {
+        _notices.add('Bu seviye için montaj şeması henüz keşfedilmedi.');
       } else {
         final deficits = GameEngine.drillAssemblyMaterialDeficits(
           state,
@@ -337,8 +351,10 @@ class GameController extends ChangeNotifier {
           _notices.add('Şema için eksik kaynak: $missing.');
         } else if (state.crewCount <= 0) {
           _notices.add('Sondaj takımını geliştirmek için önce bir madenci al.');
-        } else if (cost > state.coins) {
-          _notices.add('Bu sondaj parçası için $cost kasa gerekir.');
+        } else if (!state.canAfford(cost.toDouble())) {
+          _notices.add(
+            'Bu sondaj parçası için ${_saleCashLabel(cost)} kasa gerekir.',
+          );
         }
       }
       notifyListeners();
@@ -351,6 +367,14 @@ class GameController extends ChangeNotifier {
       _ => 'Sondaj parçası',
     };
     _notices.add('$name şeması ${currentLevel + 1}. seviyeye yükseltildi.');
+    _refreshState();
+    return true;
+  }
+
+  bool claimBlueprintEncounter(String id) {
+    if (!GameEngine.claimBlueprintEncounter(state, id)) return false;
+    final name = GameEngine.blueprintEncounters[id]?.$1 ?? 'Keşif';
+    _notices.add('$name bulundu; yeni montaj şemaları arşive eklendi.');
     _refreshState();
     return true;
   }
@@ -387,9 +411,9 @@ class GameController extends ChangeNotifier {
   bool hireMiner() {
     if (!GameEngine.hireMiner(state)) {
       _notices.add(
-        state.crewCount == 0 && state.totalSold <= 0
-            ? 'İlk madenciden önce cevherini ambar ekranında sat.'
-            : 'Madenci ücreti için kasada daha fazla kaynak gerekiyor.',
+        state.activeMinerCount >= 10
+            ? 'Bu dünyanın madenci ekibi 10 kişiye ulaştı.'
+            : 'Madenci işe almak için ${GameEngine.minerCost(state).round()} kasa gerekir; kömürünü ambar ekranında sat.',
       );
       notifyListeners();
       return false;
@@ -499,6 +523,12 @@ class GameController extends ChangeNotifier {
 
   bool setSpecialWorkerAutoMove(String id, bool autoMove) {
     final success = GameEngine.setSpecialWorkerAutoMove(state, id, autoMove);
+    if (success) _refreshState();
+    return success;
+  }
+
+  bool setSpecialWorkerResource(String id, String resourceId) {
+    final success = GameEngine.setSpecialWorkerResource(state, id, resourceId);
     if (success) _refreshState();
     return success;
   }
@@ -617,28 +647,36 @@ class GameController extends ChangeNotifier {
     return success;
   }
 
-  int sell(String resourceId, {int? quantity}) {
+  MrMineBigNumber sell(String resourceId, {int? quantity}) {
     final value = GameEngine.sellResource(
       state,
       resourceId,
       requested: quantity,
     );
-    if (value > 0) _notices.add('Satış tamamlandı: +$value kasa.');
+    if (value.greaterThan(MrMineBigNumber.zero)) {
+      _notices.add('Satış tamamlandı: +${_saleCashLabel(value)} kasa.');
+    }
     _refreshState();
     return value;
   }
 
-  int sellAll() {
-    final value = GameEngine.sellAll(state);
-    if (value > 0) _notices.add('Ambar satışından +$value kasa geldi.');
+  MrMineBigNumber sellAll({int? worldIndex, bool? isotopesOnly}) {
+    final value = GameEngine.sellAll(
+      state,
+      worldIndex: worldIndex,
+      isotopesOnly: isotopesOnly,
+    );
+    if (value.greaterThan(MrMineBigNumber.zero)) {
+      _notices.add('Ambar satışından +${_saleCashLabel(value)} kasa geldi.');
+    }
     _refreshState();
     return value;
   }
 
-  int sellFraction(double fraction) {
+  MrMineBigNumber sellFraction(double fraction) {
     final value = GameEngine.sellFraction(state, fraction);
-    if (value > 0) {
-      _notices.add('Kısmi satış tamamlandı: +$value kasa.');
+    if (value.greaterThan(MrMineBigNumber.zero)) {
+      _notices.add('Kısmi satış tamamlandı: +${_saleCashLabel(value)} kasa.');
     }
     _refreshState();
     return value;
@@ -675,7 +713,7 @@ class GameController extends ChangeNotifier {
         '${event?.title ?? 'Maden olayı'} tamamlandı; ödül ambara alındı.',
       );
     } else {
-      _notices.add('Cevher damarını almak için ambarda yer aç.');
+      _notices.add('Maden olayı şu anda tamamlanamıyor.');
     }
     _refreshState();
     return success;
@@ -683,6 +721,87 @@ class GameController extends ChangeNotifier {
 
   void toggleReserve(String resourceId) {
     GameEngine.toggleReserve(state, resourceId);
+    _refreshState();
+  }
+
+  void setResourceReserve(String resourceId, int amount) {
+    GameEngine.setResourceReserve(state, resourceId, amount);
+    _refreshState();
+  }
+
+  bool upgradeCargo() {
+    if (!GameEngine.upgradeCargo(state)) {
+      final deficits = GameEngine.cargoUpgradeDeficits(state);
+      if (deficits.isNotEmpty) {
+        final missing = deficits.entries
+            .map(
+              (entry) =>
+                  '${entry.value} ${ResourceCatalog.byId[entry.key]?.name ?? entry.key}',
+            )
+            .join(', ');
+        _notices.add('Kargo şeması için eksik malzeme: $missing.');
+      } else {
+        _notices.add('Kargo yükseltmesi için yeterli kasa yok.');
+      }
+      notifyListeners();
+      return false;
+    }
+    _notices.add('Kargo donanımı ${state.cargoLevel}. seviyeye yükseltildi.');
+    _refreshState();
+    return true;
+  }
+
+  bool upgradeWorkerLevel() {
+    if (!GameEngine.upgradeWorkerLevel(state)) {
+      _notices.add(
+        state.activeMinerCount < 10
+            ? 'Eğitim için bu dünyada 10 madenci gerekir.'
+            : 'Madenci eğitimi için ${GameEngine.workerLevelCost(state).round()} kasa gerekir.',
+      );
+      notifyListeners();
+      return false;
+    }
+    _notices.add('Bu dünyanın madencileri Lv ${state.activeWorkerLevel} oldu.');
+    _refreshState();
+    return true;
+  }
+
+  void setMusicEnabled(bool enabled) {
+    state.musicEnabled = enabled;
+    unawaited(SoundService.instance.setMusicEnabled(enabled));
+    _refreshState();
+  }
+
+  void setSoundEffectsEnabled(bool enabled) {
+    state.soundEffectsEnabled = enabled;
+    unawaited(SoundService.instance.setSoundEffectsEnabled(enabled));
+    _refreshState();
+  }
+
+  void setVisualEffectsEnabled(bool enabled) {
+    state.visualEffectsEnabled = enabled;
+    _refreshState();
+  }
+
+  void setNotificationsEnabled(bool enabled) {
+    state.notificationsEnabled = enabled;
+    _refreshState();
+  }
+
+  void setDebugModeEnabled(bool enabled) {
+    state.debugModeEnabled = enabled;
+    if (!enabled) state.debugUnlimitedMoney = false;
+    _refreshState();
+  }
+
+  void setDebugUnlimitedMoney(bool enabled) {
+    state.debugUnlimitedMoney = enabled && state.debugModeEnabled;
+    _refreshState();
+  }
+
+  void debugJumpToEnd() {
+    GameEngine.debugJumpToEnd(state);
+    _notices.add('Oyunun son derinliğine geçildi.');
     _refreshState();
   }
 
@@ -996,7 +1115,7 @@ class GameController extends ChangeNotifier {
   bool buyDrone() {
     final cost = 260 + state.drones * 240;
     if (!state.unlockedBuildings.contains('caves') ||
-        state.coins < cost ||
+        !state.canAfford(cost) ||
         state.drones >= 12) {
       _notices.add(
         'Dron alımı için mağara kilometre taşı ve $cost kasa gerekir.',
@@ -1004,7 +1123,7 @@ class GameController extends ChangeNotifier {
       notifyListeners();
       return false;
     }
-    state.coins -= cost;
+    state.spendCoins(cost);
     state.drones++;
     _refreshState();
     return true;
@@ -1012,21 +1131,28 @@ class GameController extends ChangeNotifier {
 
   bool upgradeExpedition() {
     final cost = 380 + state.expeditionLevel * 520;
-    if (state.coins < cost || state.expeditionLevel >= 15) {
+    if (!state.canAfford(cost) || state.expeditionLevel >= 15) {
       _notices.add('Sefer yükseltmesi için $cost kasa gerekir.');
       notifyListeners();
       return false;
     }
-    state.coins -= cost;
+    state.spendCoins(cost);
     state.expeditionLevel++;
     _refreshState();
     return true;
   }
 
   bool acceptTrade() {
+    final offer = GameEngine.merchantOffer(state);
     final success = GameEngine.acceptMerchantDeal(state);
     if (!success) {
-      _notices.add('Takas için gereken cevher yok veya rezerve edilmiş.');
+      _notices.add(offer.blueprintId != null
+          ? 'Montaj şemasını almak için yeterli kasa yok.'
+          : 'Takas için gereken cevher yok veya rezerve edilmiş.');
+    } else if (offer.blueprintId != null) {
+      _notices.add(
+        '${GameEngine.blueprintName(offer.blueprintId!)} planı arşive eklendi.',
+      );
     }
     _refreshState();
     return success;
@@ -1148,7 +1274,7 @@ class GameController extends ChangeNotifier {
                     ? 1 + .1 * state.relicLevel('relic_8')
                     : 1))
             .round();
-    state.coins += reward;
+    state.addCoins(reward);
     if ((quest.id + 1) % 5 == 0) {
       state.inventory['ticket'] = state.amount('ticket') + 1;
       state.relicScrap++;
@@ -1193,12 +1319,12 @@ class GameController extends ChangeNotifier {
   bool craftWeapon() {
     if ((state.upgrades['weapon'] ?? 0) >= 20 ||
         state.drillParts < 2 ||
-        state.coins < 400) {
+        !state.canAfford(400)) {
       _notices.add('Silah üretimi için 2 sondaj parçası ve 400 kasa gerekir.');
       notifyListeners();
       return false;
     }
-    state.coins -= 400;
+    state.spendCoins(400);
     state.drillParts -= 2;
     state.upgrades['weapon'] = state.upgradeLevel('weapon') + 1;
     _notices.add('Derinlik silahı üretildi. Boss vuruşların güçlendi.');
@@ -1222,7 +1348,12 @@ class GameController extends ChangeNotifier {
   }
 
   void startNewGame() {
+    _notices.clear();
     state = GameState.newGame(lastSavedAt: DateTime.now());
+    unawaited(SoundService.instance.setMusicEnabled(state.musicEnabled));
+    unawaited(
+      SoundService.instance.setSoundEffectsEnabled(state.soundEffectsEnabled),
+    );
     _lastTickAt = DateTime.now();
     _tickRemainder = Duration.zero;
     offlineSeconds = 0;
@@ -1243,7 +1374,7 @@ class GameController extends ChangeNotifier {
   }
 
   void showNotice(String message) {
-    _notices.add(message);
+    if (state.notificationsEnabled) _notices.add(message);
     notifyListeners();
   }
 

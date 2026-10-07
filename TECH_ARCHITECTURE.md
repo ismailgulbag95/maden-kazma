@@ -18,19 +18,21 @@ UI olayı `GameController` üzerinden tek oyun eylemine dönüşür. `GameEngine
 ## Kaydetme ve çevrimdışı ilerleme
 
 - JSON state şema numarası içerir; yeni alanlar varsayılan değerle okunur, eski sürümler migrasyon noktasından geçirilir.
-- Şema 17; dünya kayıtları, sondaj ucu/fan/motor seviyeleri, vardiya yöneticisi kademesi, reaktör yuva modülleri, Buff Lab etkileri ve güvenlik kapanma durumu dahil tüm oynanış state'ini saklar. Eksik yeni alanlar eski kayıtlarda varsayılanla başlar; önceki dünya, ekip, görev ve sefer alanları korunur. Şema 0–2 kayıtları eski derinliklerinden etkin dünyayı çıkarıp diğer dünyaları başlangıç derinliklerinde kurar.
-- Dünya geçişi ortak yükseltme, ekip, kasa ve kalıntıları korur. Üretim yalnızca etkin dünyada işler; dünya değiştirildiğinde eski dünyanın kaynak durumu kaydedilir.
-- Otomatik satış eşiği kayıtlı ayardır; satış kilidi ve kaynak rezervi hem elle toplu satışta hem otomatik satışta uygulanır. Sandık sıkıştırması tarih damgası ve kalan kuyrukla çevrimdışıyken ilerler.
+- Şema 20; dünya kayıtları, dünya başına madenci sayısı/eğitimi, ortak kargo seviyesi, sondaj ucu/fan/motor, vardiya yöneticisi, reaktör, Buff Lab, ayarlar ve geliştirici seçenekleri dahil oynanış durumunu saklar. Eski dünya ambarları ortak envantere taşınır.
+- Dünya geçişi ortak yükseltme, kasa, kargo ve kalıntıları korur; derinlik ve madenci kadrosu dünya başına saklanır. Açık kuyuların tümü pasif cevher üretimine katılır.
+- Kaynak rezervi hem elle hem özel madencinin otomatik satışında korunur. Genel otomatik satış eşiği eski kayıt uyumluluğu için okunur, oyunun aktif satış döngüsünde kullanılmaz. Sandık sıkıştırması tarih damgası ve kalan kuyrukla çevrimdışıyken ilerler.
 - Üç günlük hedef yerel tarih değişiminde yenilenir. Haftalık kilometre taşı, alınan günlük ödül sayısını izler. Rastgele maden olayları yalnızca oyun açıkken doğar, kayda yazılır ve oyuncu ödülü alana kadar bekler.
 - Sekiz yükseltme ailesi `UpgradeCatalog` içinde 100'er ayrı seviye kaydı taşır. Maden işçileri kazı, taşıma, tarama ve ayıklama görevlerine atanabilir; her görev oyun ekonomisinde ayrı etki üretir.
 - Dosya kaydı önce geçici dosyayı tamamlar, önceki geçerli kaydı `.bak` dosyasında korur ve yeni kaydı devreye alır. İşlem yarıda kesilirse açılışta geçerli yedek denenir.
 - Bozuk birincil kayıt yedeğe düşer. Yedek okunamazsa varsayılan state ile güvenli açılış ve kullanıcı bildirimi yapılır.
 - Son aktif zaman kaydedilir; yöneticisiz üretim olmaz. Yönetici kademeleri çevrimdışı simülasyonu %25/%50/%100 hızla 12/24/48 saat uygular. Reaktör enerjisi ve süreli faaliyetler bu simülasyonda ilerler.
-- Görev/sefer/sandık ödülü tekrar uygulanmaz. Negatif kaynak ve kapasite üstü üretim engellenir.
+- Görev/sefer/sandık ödülü tekrar uygulanmaz. Pasif üretim ortak kargo sınırında durur; doğrudan ödüller kargoyu aşabilir.
 
 ## Veri ve kurallar
 
 Oynanış metin ve dengesi widget içinde tanımlanmaz. Kaynaklar, yükseltme maliyetleri, görevler, kilometre taşları, boss'lar ve dünyalar tekil, doğrulanabilir kataloglarda tutulur. Denge verisi ayrık yapılandırma dosyalarına taşınırken çalışma anı katalogları yükleme tamamlanmadan oyunu başlatmamalıdır.
+
+Kilometre başına cevher dağılımı `MrMineLevelTable` verisinden okunur. `MineBiome` bu tabloyu tıklanabilir damar, ödül ve eski kayıt temizliği için ortak uygunluk kuralına dönüştürür. Kısa çevrimiçi adımlar 100 ms kaynak çekilişleri uygular; uzun çevrimdışı adımlar beklenen üretim ve küsurat devriyle hesaplanır.
 
 ## Performans
 

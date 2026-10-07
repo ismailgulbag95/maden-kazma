@@ -8,6 +8,7 @@ import '../app/game_controller.dart';
 import '../core/design/palette.dart';
 import '../domain/models/mine_event_definition.dart';
 import '../domain/models/game_state.dart';
+import '../domain/models/mr_mine_big_number.dart';
 import '../domain/models/resource_definition.dart';
 import '../domain/models/ore_deposit.dart';
 import '../domain/simulation/game_engine.dart';
@@ -16,6 +17,7 @@ import 'widgets/atlas_sprite.dart';
 import 'widgets/building_dialog.dart';
 import 'widgets/character_animation.dart';
 import 'widgets/game_primitives.dart';
+import 'widgets/settings_dialog.dart';
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key, required this.controller});
@@ -79,6 +81,13 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
+  void _openSettings() {
+    showDialog<void>(
+      context: context,
+      builder: (context) => SettingsDialog(controller: widget.controller),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!_offlineDialogShown && widget.controller.offlineSeconds >= 30) {
@@ -133,20 +142,28 @@ class _GameScreenState extends State<GameScreen> {
                       children: [
                         _HudBar(
                           state: widget.controller.state,
-                          onSave: widget.controller.saveNow,
+                          onSettings: _openSettings,
+                          onToggleSound: () =>
+                              widget.controller.setSoundEffectsEnabled(
+                                !widget.controller.state.soundEffectsEnabled,
+                              ),
                         ),
                         Expanded(
-                          child: compact
-                              ? _CompactGameLayout(
-                                  controller: widget.controller,
-                                  onBuilding: _openBuilding,
-                                  onUtility: _openUtilities,
-                                )
-                              : _WideGameLayout(
-                                  controller: widget.controller,
-                                  onBuilding: _openBuilding,
-                                  onUtility: _openUtilities,
-                                ),
+                          child: TickerMode(
+                            enabled:
+                                widget.controller.state.visualEffectsEnabled,
+                            child: compact
+                                ? _CompactGameLayout(
+                                    controller: widget.controller,
+                                    onBuilding: _openBuilding,
+                                    onUtility: _openUtilities,
+                                  )
+                                : _WideGameLayout(
+                                    controller: widget.controller,
+                                    onBuilding: _openBuilding,
+                                    onUtility: _openUtilities,
+                                  ),
+                          ),
                         ),
                       ],
                     ),
@@ -217,10 +234,15 @@ class _GameScreenState extends State<GameScreen> {
 }
 
 class _HudBar extends StatelessWidget {
-  const _HudBar({required this.state, required this.onSave});
+  const _HudBar({
+    required this.state,
+    required this.onSettings,
+    required this.onToggleSound,
+  });
 
   final GameState state;
-  final Future<void> Function() onSave;
+  final VoidCallback onSettings;
+  final VoidCallback onToggleSound;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -231,7 +253,7 @@ class _HudBar extends StatelessWidget {
         _HudChip(
           icon: Icons.currency_exchange_rounded,
           label: 'KASA',
-          value: _number(state.coins.round()),
+          value: state.debugMoneyEnabled ? '∞' : _formatCoins(state.coins),
           color: MinePalette.amber,
           compact: compact,
         ),
@@ -278,21 +300,25 @@ class _HudBar extends StatelessWidget {
                   children: [
                     Expanded(child: _GameTitle(compact: true)),
                     IconButton(
-                      tooltip: 'Ses ayarları',
+                      tooltip: state.soundEffectsEnabled
+                          ? 'Ses efektlerini kapat'
+                          : 'Ses efektlerini aç',
                       visualDensity: VisualDensity.compact,
-                      onPressed: () => _showAudioSettings(context),
-                      icon: const Icon(
-                        Icons.volume_up_outlined,
+                      onPressed: onToggleSound,
+                      icon: Icon(
+                        state.soundEffectsEnabled
+                            ? Icons.volume_up_outlined
+                            : Icons.volume_off_outlined,
                         color: MinePalette.muted,
                         size: 20,
                       ),
                     ),
                     IconButton(
-                      tooltip: 'Kaydı kaydet',
+                      tooltip: 'Ayarlar',
                       visualDensity: VisualDensity.compact,
-                      onPressed: onSave,
+                      onPressed: onSettings,
                       icon: const Icon(
-                        Icons.save_outlined,
+                        Icons.settings_outlined,
                         color: MinePalette.muted,
                         size: 20,
                       ),
@@ -333,25 +359,29 @@ class _HudBar extends StatelessWidget {
               ),
             ),
             IconButton(
-              tooltip: 'Ses ayarları',
+              tooltip: state.soundEffectsEnabled
+                  ? 'Ses efektlerini kapat'
+                  : 'Ses efektlerini aç',
               visualDensity: compact
                   ? VisualDensity.compact
                   : VisualDensity.standard,
-              onPressed: () => _showAudioSettings(context),
+              onPressed: onToggleSound,
               icon: Icon(
-                Icons.volume_up_outlined,
+                state.soundEffectsEnabled
+                    ? Icons.volume_up_outlined
+                    : Icons.volume_off_outlined,
                 color: MinePalette.muted,
                 size: compact ? 20 : 24,
               ),
             ),
             IconButton(
-              tooltip: 'Kaydı kaydet',
+              tooltip: 'Ayarlar',
               visualDensity: compact
                   ? VisualDensity.compact
                   : VisualDensity.standard,
-              onPressed: onSave,
+              onPressed: onSettings,
               icon: Icon(
-                Icons.save_outlined,
+                Icons.settings_outlined,
                 color: MinePalette.muted,
                 size: compact ? 20 : 24,
               ),
@@ -360,49 +390,6 @@ class _HudBar extends StatelessWidget {
         ),
       );
     },
-  );
-}
-
-void _showAudioSettings(BuildContext context) {
-  showDialog<void>(
-    context: context,
-    builder: (context) => StatefulBuilder(
-      builder: (context, setDialogState) => AlertDialog(
-        backgroundColor: MinePalette.panel,
-        title: const Text('Ses ayarları'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Efekt sesleri'),
-              value: SoundService.instance.sfxEnabled,
-              activeThumbColor: MinePalette.cyan,
-              onChanged: (_) {
-                SoundService.instance.toggleSfx();
-                setDialogState(() {});
-              },
-            ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Arka plan müziği'),
-              value: SoundService.instance.bgmEnabled,
-              activeThumbColor: MinePalette.cyan,
-              onChanged: (_) {
-                SoundService.instance.toggleBgm();
-                setDialogState(() {});
-              },
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('KAPAT'),
-          ),
-        ],
-      ),
-    ),
   );
 }
 
@@ -716,7 +703,7 @@ class _CompactActionBar extends StatelessWidget {
               width: digWidth,
               height: 56,
               child: ElevatedButton.icon(
-                onPressed: controller.state.cargoFull ? null : controller.dig,
+                onPressed: controller.dig,
                 icon: const Icon(Icons.bolt_rounded, size: 20),
                 label: const Text(
                   'KAZI',
@@ -1436,7 +1423,7 @@ class _UpgradeDock extends StatelessWidget {
     icon: Icons.handyman_rounded,
     child: Column(
       children: [
-        for (final track in ['drill', 'scanner', 'warehouse', 'lift'])
+        for (final track in ['drill', 'scanner', 'lift'])
           UpgradeRow(controller: controller, track: track, compact: true),
       ],
     ),
@@ -1696,7 +1683,7 @@ class _MineShaftViewState extends State<_MineShaftView> {
                       ),
                       SizedBox(width: 7),
                       Text(
-                        'Kargo dolu • Ambarı açıp kaynakları sat',
+                        'Kargo dolu • Üretim bekliyor, sondaj ilerliyor',
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w800,
@@ -1818,7 +1805,7 @@ class _MineWorld extends StatelessWidget {
     final workerGap = narrow ? 7.0 : 12.0;
     final shaftLeft = (width - shaftWidth) / 2;
     final workerSlots = _layoutMineWorkers(
-      crewCount: state.crewCount,
+      crewCount: state.activeMinerCount,
       width: width,
       height: height,
       narrow: narrow,
@@ -2120,7 +2107,7 @@ List<_MineWorkerPlacement> _layoutMineWorkers({
   for (var gallery = 0; gallery < galleryFloors.length; gallery++) {
     for (var crewIndex = 0; crewIndex < workerCount; crewIndex++) {
       final mirrored = crewIndex >= 4;
-      final sideIndex = crewIndex % 4;
+      final sideIndex = mirrored ? crewIndex - 4 : crewIndex;
       final sideCount = mirrored ? workerCount - 4 : math.min(workerCount, 4);
       final edgeInset = narrow ? 34.0 : 50.0;
       final firstLeft = mirrored ? edgeInset : width - edgeInset - workerWidth;
@@ -2488,7 +2475,7 @@ class _MineActionBar extends StatelessWidget {
               width: digWidth,
               height: 56,
               child: ElevatedButton.icon(
-                onPressed: controller.state.cargoFull ? null : controller.dig,
+                onPressed: controller.dig,
                 icon: Icon(Icons.bolt_rounded, size: compact ? 21 : 25),
                 label: Text(
                   'KAZI',
@@ -2797,6 +2784,19 @@ String _depthLabel(int meters) =>
 
 String _number(num value) {
   final raw = value.round().toString();
+  final result = StringBuffer();
+  for (var i = 0; i < raw.length; i++) {
+    if (i > 0 && (raw.length - i) % 3 == 0) result.write('.');
+    result.write(raw[i]);
+  }
+  return result.toString();
+}
+
+String _formatCoins(MrMineBigNumber coins) {
+  if (coins.exponent >= 15) {
+    return coins.toScientificString();
+  }
+  final raw = coins.toString();
   final result = StringBuffer();
   for (var i = 0; i < raw.length; i++) {
     if (i > 0 && (raw.length - i) % 3 == 0) result.write('.');

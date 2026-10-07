@@ -88,19 +88,27 @@ class SoundService {
   }
 
   void toggleSfx() {
-    sfxEnabled = !sfxEnabled;
-    if (!sfxEnabled) {
+    unawaited(setSoundEffectsEnabled(!sfxEnabled));
+  }
+
+  Future<void> setSoundEffectsEnabled(bool enabled) async {
+    sfxEnabled = enabled;
+    if (!enabled) {
       unawaited(stopReactorAlarm());
       unawaited(_effects.stop());
     }
   }
 
   void toggleBgm() {
-    bgmEnabled = !bgmEnabled;
-    if (bgmEnabled) {
-      unawaited(startBgm());
+    unawaited(setMusicEnabled(!bgmEnabled));
+  }
+
+  Future<void> setMusicEnabled(bool enabled) async {
+    bgmEnabled = enabled;
+    if (enabled) {
+      await startBgm();
     } else {
-      unawaited(stopBgm());
+      await stopBgm();
     }
   }
 

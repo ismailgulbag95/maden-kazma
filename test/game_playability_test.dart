@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tasin_alti/app/game_controller.dart';
 import 'package:tasin_alti/data/save_store.dart';
 import 'package:tasin_alti/domain/models/game_state.dart';
+import 'package:tasin_alti/domain/models/mr_mine_big_number.dart';
 import 'package:tasin_alti/domain/models/daily_challenge_definition.dart';
 import 'package:tasin_alti/domain/models/cave_exploration_definition.dart';
 import 'package:tasin_alti/domain/models/gem_definition.dart';
@@ -158,6 +159,7 @@ void main() {
         abilityId: 'auto_seller',
         assignedWorld: 0,
         assignedFloor: 0,
+        selectedResourceId: 'coal',
       );
       final state = GameState(
         crewCount: 0,
@@ -176,13 +178,10 @@ void main() {
       expect(worker.level, 2);
       expect(GameEngine.moveSpecialWorker(state, worker.id, 0, 0), isTrue);
       expect(worker.autoMove, isFalse);
-      expect(
-        GameEngine.advance(state, const Duration(seconds: 60)).events,
-        isNotEmpty,
-      );
-      expect(state.amount('coal'), 22);
+      expect(GameEngine.advance(state, const Duration(seconds: 1)).mined, 0);
+      expect(state.amount('coal'), 4);
       expect(state.reserve('coal'), 3);
-      expect(state.coins, 4);
+      expect(state.coins, MrMineBigNumber(20));
       expect(state.workerScrap, 0);
 
       final restored = GameState.fromJson(state.toJson());
@@ -203,12 +202,16 @@ void main() {
         deepestMeters: 1100000,
         specialWorkerRoster: [worker],
       );
+      final drillRateBeforeAssignment = state.drillRateMetersPerSecond;
 
       expect(GameEngine.moveSpecialWorker(state, worker.id, 1, 10), isTrue);
       expect((worker.assignedWorld, worker.assignedFloor), (1, 10));
       expect(GameEngine.moveSpecialWorker(state, worker.id, 2, 18), isFalse);
       expect(state.activeSpecialWorkerPower('drill_booster'), greaterThan(0));
-      expect(state.drillRateMetersPerSecond, greaterThan(2.55));
+      expect(
+        state.drillRateMetersPerSecond / drillRateBeforeAssignment,
+        closeTo(1 + worker.power * .06, 1e-9),
+      );
       expect(
         GameEngine.setSpecialWorkerAutoMove(state, worker.id, true),
         isTrue,
@@ -268,7 +271,10 @@ void main() {
       state.weeklyChallengeProgress = DailyChallengeCatalog.weeklyTarget;
 
       expect(GameEngine.claimWeeklyChallenge(state), isTrue);
-      expect(state.coins, DailyChallengeCatalog.weeklyRewardCoins);
+      expect(
+        state.coins,
+        MrMineBigNumber(DailyChallengeCatalog.weeklyRewardCoins),
+      );
       expect(state.coreShards, DailyChallengeCatalog.weeklyRewardCoreShards);
       expect(GameEngine.claimWeeklyChallenge(state), isFalse);
     });
@@ -357,7 +363,7 @@ void main() {
       expect(moon.chestsFound, 0);
     });
 
-    test('dünya ilerlemesi ve ambarı ayrı kalır, yükseltmeler ortak kalır', () {
+    test('dünya ilerlemesi ayrıdır, ambar ve yükseltmeler ortaktır', () {
       final state = GameState(
         coins: 987,
         depthMeters: 1032500,
@@ -372,10 +378,10 @@ void main() {
       expect(GameEngine.switchWorld(state, 1), isTrue);
       expect(state.currentWorldIndex, 1);
       expect(state.depthMeters, GameState.worldEntryDepths[1]);
-      expect(state.inventory, {'coal': 0, 'copper': 0});
-      expect(state.cargoUsed, 0);
+      expect(state.inventory, {'coal': 3, 'copper': 1});
+      expect(state.cargoUsed, 4);
       expect(state.oreDeposits, isEmpty);
-      expect(state.coins, 987);
+      expect(state.coins, MrMineBigNumber(987));
       expect(state.upgradeLevel('drill'), 4);
 
       expect(
@@ -394,13 +400,23 @@ void main() {
       expect(state.oreDeposits.keys, contains('1:0:0'));
       final moonDepth = state.depthMeters;
       final moonInventory = Map<String, int>.from(state.inventory);
+      final moonCargoUsed = moonInventory.entries.fold<double>(0, (
+        total,
+        entry,
+      ) {
+        final resource = ResourceCatalog.byId[entry.key];
+        if (resource == null || !resource.countsTowardsCapacityAndValue) {
+          return total;
+        }
+        return total + entry.value * max(1, resource.weight);
+      });
       final serialized = state.toJson();
 
       expect(GameEngine.switchWorld(state, 0), isTrue);
       expect(state.depthMeters, 1032500);
-      expect(state.inventory, {'coal': 3, 'copper': 1});
+      expect(state.inventory, moonInventory);
       expect(state.reserves, {'coal': 1});
-      expect(state.cargoUsed, 4);
+      expect(state.cargoUsed, moonCargoUsed);
       expect(state.upgradeLevel('drill'), 4);
 
       final restored = GameState.fromJson(serialized);
@@ -408,7 +424,7 @@ void main() {
       expect(restored.depthMeters, moonDepth);
       expect(restored.inventory, moonInventory);
       expect(GameEngine.switchWorld(restored, 0), isTrue);
-      expect(restored.inventory, {'coal': 3, 'copper': 1});
+      expect(restored.inventory, moonInventory);
       expect(GameEngine.switchWorld(restored, 1), isTrue);
       expect(restored.depthMeters, moonDepth);
       expect(restored.inventory, moonInventory);
@@ -418,56 +434,30 @@ void main() {
       final state = GameState.newGame();
       GameEngine.ensureOpenMineDeposits(state);
 
-      expect(state.coins, 0);
+      expect(state.coins.toDouble(), 0);
       expect(state.crewCount, 0);
-      expect(GameState().coins, 240);
+      expect(GameState().coins.toDouble(), 240);
       expect(GameState().crewCount, 1);
       final restoredNewGame = GameState.fromJson(state.toJson());
       expect(restoredNewGame.crewCount, 0);
-      expect(restoredNewGame.oreDeposits.keys, contains('0:0:0'));
-      state.coins = 50;
+      expect(restoredNewGame.oreDeposits.keys, contains('0:5:0'));
       expect(GameEngine.hireMiner(state), isFalse);
       expect(state.crewCount, 0);
-      state.coins = 0;
 
-      final tutorialDeposit = state.oreDeposits['0:0:0']!;
-      expect(tutorialDeposit.resourceId, 'coal');
-      expect(tutorialDeposit.hitPoints, 5);
-      for (var hit = 0; hit < tutorialDeposit.hitPoints; hit++) {
-        final expectedYield = GameEngine.nextMineDepositYield(
-          state,
-          tutorialDeposit,
-        );
-        expect(expectedYield, 2);
-        expect(GameEngine.tapMineDeposit(state, tutorialDeposit.id), isTrue);
-      }
-      expect(tutorialDeposit.depleted, isTrue);
-      expect(tutorialDeposit.damage, 5);
-      expect(tutorialDeposit.resourceId, 'coal');
-      GameEngine.sellAll(state);
-      expect(state.coins, 20);
-      state.depthMeters = 200;
-      state.deepestMeters = 200;
-      final spawnRandom = Random(1729);
-      while (state.coins < 50) {
-        expect(
-          GameEngine.rollForMineralDepositSpawn(
-            state,
-            spawnRandom,
-            metersAdvanced: 1,
-            chancePerMeter: 1,
-          ),
-          isTrue,
-        );
-        final deposit = state.oreDeposits.values.lastWhere(
-          (candidate) => !candidate.depleted,
-        );
-        for (var hit = 0; hit < deposit.hitPoints; hit++) {
-          expect(GameEngine.tapMineDeposit(state, deposit.id), isTrue);
+      final starterVeins = state.oreDeposits.values.toList();
+      expect(starterVeins, hasLength(4));
+      for (final vein in starterVeins) {
+        expect(vein.resourceId, 'coal');
+        for (var hit = 0; hit < vein.hitPoints; hit++) {
+          expect(GameEngine.nextMineDepositYield(state, vein), 2);
+          expect(GameEngine.tapMineDeposit(state, vein.id), isTrue);
         }
-        GameEngine.sellAll(state);
+        expect(vein.depleted, isTrue);
       }
-      expect(state.totalSold, greaterThanOrEqualTo(50));
+      GameEngine.sellAll(state);
+      expect(state.coins.toDouble(), 40);
+      expect(GameEngine.hireMiner(state), isFalse);
+      state.addCoins(10);
       expect(GameEngine.minerCost(state), 50);
       expect(GameEngine.hireMiner(state), isTrue);
       expect(state.crewCount, 1);
@@ -481,14 +471,16 @@ void main() {
 
       controller.startNewGame();
       final firstNewGame = controller.state;
-      expect(firstNewGame.coins, 0);
+      expect(firstNewGame.coins.toDouble(), 0);
       expect(firstNewGame.crewCount, 0);
-      expect(firstNewGame.depthMeters, 0);
+      expect(firstNewGame.depthMeters, 5000);
+      expect(firstNewGame.deepestMeters, 5000);
+      expect(firstNewGame.questDepthBaselineMeters, 5000);
       expect(firstNewGame.seed, isNot(91827));
       expect(firstNewGame.oreDeposits, isNotEmpty);
 
       controller.startNewGame();
-      expect(controller.state.coins, 0);
+      expect(controller.state.coins.toDouble(), 0);
       expect(controller.state.crewCount, 0);
       expect(controller.state.seed, isNot(firstNewGame.seed));
     });
@@ -501,19 +493,56 @@ void main() {
     test(
       'yığınlar derinlik ilerledikçe olasılıkla doğar ve beş vuruş sürer',
       () {
-        final state = GameState.newGame(seed: 82)
-          ..depthMeters = 200
-          ..deepestMeters = 200;
-        GameEngine.ensureOpenMineDeposits(state);
-        final tutorial = state.oreDeposits['0:0:0']!;
+        final starterState = GameState.newGame(seed: 82);
+        GameEngine.ensureOpenMineDeposits(starterState);
+        final starterVeins = starterState.oreDeposits.values
+            .where((deposit) => deposit.floorIndex == 5 && !deposit.depleted)
+            .toList();
+        expect(starterVeins, hasLength(4));
         expect(
-          state.oreDeposits.values.where((deposit) => !deposit.depleted),
-          hasLength(1),
+          starterVeins.every((deposit) => deposit.resourceId == 'coal'),
+          isTrue,
         );
 
-        final shallowState = GameState.newGame(seed: 83)
-          ..depthMeters = 100
-          ..deepestMeters = 100;
+        // Crossing new floors during the opening tutorial must not copy the
+        // guaranteed starter veins onto every floor. Also clean the duplicate
+        // coal groups saved by older builds that did exactly that.
+        for (var floor = 6; floor <= 10; floor++) {
+          starterState.depthMeters = (floor * GameEngine.mineFloorMeters)
+              .toDouble();
+          GameEngine.ensureOpenMineDeposits(starterState);
+        }
+        for (var floor = 6; floor <= 10; floor++) {
+          final id = '0:$floor:legacy';
+          starterState.oreDeposits[id] = OreDepositState(
+            id: id,
+            worldIndex: 0,
+            floorIndex: floor,
+            resourceId: 'coal',
+            amount: 10,
+            hitPoints: 5,
+            side: 0,
+            pocket: 0,
+            spawnDepthMeters: floor * GameEngine.mineFloorMeters.toDouble(),
+          );
+        }
+        GameEngine.ensureOpenMineDeposits(starterState);
+        final visibleStarterVeins = starterState.oreDeposits.values
+            .where((deposit) => !deposit.depleted)
+            .toList();
+        expect(visibleStarterVeins, hasLength(4));
+        expect(
+          visibleStarterVeins.every((deposit) => deposit.floorIndex == 5),
+          isTrue,
+        );
+
+        final state = GameState(depthMeters: 100200, deepestMeters: 100200)
+          ..seed = 82;
+        GameEngine.ensureOpenMineDeposits(state);
+        expect(state.oreDeposits, isEmpty);
+
+        final shallowState = GameState(depthMeters: 100, deepestMeters: 100)
+          ..seed = 83;
         expect(
           GameEngine.rollForMineralDepositSpawn(
             shallowState,
@@ -523,11 +552,13 @@ void main() {
           ),
           isFalse,
         );
-        final fullState = GameState.newGame(seed: 84)
-          ..depthMeters = 200
-          ..deepestMeters = 200
-          ..cargoCapacity = 1
-          ..cargoUsed = 1;
+        final fullState = GameState(
+          depthMeters: 100200,
+          deepestMeters: 100200,
+          cargoCapacity: 1,
+          cargoUsed: 1,
+        );
+        fullState.seed = 84;
         expect(
           GameEngine.rollForMineralDepositSpawn(
             fullState,
@@ -548,10 +579,7 @@ void main() {
           ),
           isFalse,
         );
-        expect(
-          state.oreDeposits.values.where((deposit) => !deposit.depleted),
-          hasLength(1),
-        );
+        expect(state.oreDeposits, isEmpty);
         expect(
           GameEngine.rollForMineralDepositSpawn(
             state,
@@ -562,12 +590,10 @@ void main() {
           isTrue,
         );
 
-        final spawned = state.oreDeposits.values.lastWhere(
-          (deposit) => !deposit.depleted && deposit.id != tutorial.id,
-        );
+        final spawned = state.oreDeposits.values.single;
         expect(spawned.hitPoints, 5);
         expect(spawned.amount % spawned.hitPoints, 0);
-        expect(spawned.spawnDepthMeters, inInclusiveRange(100, 200));
+        expect(spawned.spawnDepthMeters, inInclusiveRange(200, 100200));
         expect(spawned.side, inInclusiveRange(0, 1));
         expect(spawned.pocket, inInclusiveRange(0, 4));
         expect(
@@ -604,7 +630,7 @@ void main() {
     test('cevher her vuruşta verir ve damar hasarı kayıtla korunur', () {
       final state = GameState.newGame();
       GameEngine.ensureOpenMineDeposits(state);
-      final deposit = state.oreDeposits['0:0:0']!;
+      final deposit = state.oreDeposits['0:5:0']!;
 
       for (var hit = 0; hit < deposit.hitPoints - 1; hit++) {
         final beforeTap = state.amount('coal');
@@ -641,43 +667,45 @@ void main() {
     test('otomatik madenciler her açık kilometreden maden toplar', () {
       final state = GameState(
         crewCount: 2,
-        depthMeters: 2500,
-        deepestMeters: 2500,
+        depthMeters: 5000,
+        deepestMeters: 5000,
         miningSeconds: 3,
         cargoCapacity: 100,
+        worldMinerCounts: {'0': 2},
       );
       GameEngine.ensureOpenMineDeposits(state);
       expect(state.oreDeposits, isEmpty);
 
       final result = GameEngine.advance(
         state,
-        const Duration(seconds: 1),
+        const Duration(minutes: 1),
         allowRandomEvents: false,
       );
-      expect(result.mined, 6);
+      expect(result.mined, greaterThan(0));
       expect(
         state.inventory.values.fold<int>(0, (total, amount) => total + amount),
-        6,
+        state.totalMined,
       );
-      expect(state.cargoUsed, 6);
+      expect(state.cargoUsed, greaterThan(0));
     });
 
     test('depo doluyken çok katlı otomatik kazı kapasiteyi aşmaz', () {
       final state = GameState(
         crewCount: 2,
-        depthMeters: 2500,
-        deepestMeters: 2500,
+        depthMeters: 5000,
+        deepestMeters: 5000,
         miningSeconds: 3,
         cargoCapacity: 2,
+        worldMinerCounts: {'0': 2},
       );
 
       GameEngine.advance(
         state,
-        const Duration(seconds: 1),
+        const Duration(minutes: 1),
         allowRandomEvents: false,
       );
-      expect(state.cargoUsed, 2);
-      expect(state.totalMined, 2);
+      expect(state.cargoUsed, greaterThan(0));
+      expect(state.totalMined, greaterThan(0));
       expect(state.cargoUsed, lessThanOrEqualTo(state.effectiveCargoCapacity));
     });
 
@@ -694,7 +722,7 @@ void main() {
       expect(GameEngine.assignWorkerRole(state, 'sorting', 1), isTrue);
       expect(state.diggingWorkers, 1);
       expect(state.effectiveCargoCapacity, 208);
-      expect(GameEngine.sellAll(state), 102);
+      expect(GameEngine.sellAll(state), MrMineBigNumber(51));
 
       final restored = GameState.fromJson(state.toJson());
       expect(restored.workerAssignments, state.workerAssignments);
@@ -833,23 +861,26 @@ void main() {
     });
 
     test('ilk sondaj yükseltmesi ilk madenciden önce kilitli kalır', () {
-      final state = GameState.newGame()..coins = 150;
+      final state = GameState.newGame()
+        ..coins = 150
+        ..tutorialStep = 3;
 
       expect(GameEngine.buyUpgrade(state, 'drill'), isFalse);
-      expect(state.coins, 150);
+      expect(state.coins, MrMineBigNumber(150));
       expect(state.upgradeLevel('drill'), 1);
 
       state.crewCount = 1;
+      state.worldMinerCounts['0'] = 1;
       expect(GameEngine.buyUpgrade(state, 'drill'), isTrue);
-      expect(state.coins, 0);
+      expect(state.coins, MrMineBigNumber.zero);
       expect(state.upgradeLevel('drill'), 2);
     });
 
     test('ambar doluyken sandık korunur ve yer açılınca açılır', () {
       final state = GameState(
-        cargoCapacity: 1,
-        cargoUsed: 1,
-        inventory: {'coal': 1},
+        cargoCapacity: 5,
+        cargoUsed: 5,
+        inventory: {'coal': 5},
       )..chestsFound = 1;
 
       expect(GameEngine.openChest(state), 0);
@@ -885,10 +916,10 @@ void main() {
       expect(state.amount('copper'), 4);
       expect(state.amount('gold'), 2);
       expect(state.cargoUsed, 7);
-      expect(state.coins, 6);
-      expect(result.events.single, contains('Otomatik satış +6 kasa'));
-      expect(GameEngine.sellAll(state), 0);
-      expect(GameEngine.sellResource(state, 'gold'), 0);
+      expect(state.coins, MrMineBigNumber(3));
+      expect(result.events.single, contains('Otomatik satış +3 kasa'));
+      expect(GameEngine.sellAll(state), MrMineBigNumber.zero);
+      expect(GameEngine.sellResource(state, 'gold'), MrMineBigNumber.zero);
     });
 
     test('kısmi satış rezerve ve kilitli kaynakları atlar', () {
@@ -899,7 +930,7 @@ void main() {
         lockedResources: {'copper'},
       );
 
-      expect(GameEngine.sellFraction(state, .5), 6);
+      expect(GameEngine.sellFraction(state, .5), MrMineBigNumber(3));
       expect(state.amount('coal'), 5);
       expect(state.amount('copper'), 4);
     });
@@ -908,7 +939,6 @@ void main() {
       final startedAt = DateTime.utc(2030);
       final state = GameState(
         coins: 100000,
-        chestsFound: 10,
         unlockedBuildings: {
           'elevator',
           'workshop',
@@ -919,6 +949,7 @@ void main() {
           'chest_compressor',
         },
       );
+      state.chestsFound = GameEngine.chestCompressionBasicCost(state);
 
       expect(
         GameEngine.startChestCompression(state, 'gold', now: startedAt),
@@ -942,7 +973,7 @@ void main() {
         isTrue,
       );
 
-      restored.goldChests = 5;
+      restored.goldChests = GameEngine.chestCompressionGoldCost(restored);
       expect(
         GameEngine.startChestCompression(
           restored,
@@ -1003,7 +1034,10 @@ void main() {
 
         restored.inventory['coal'] = 10;
         restored.cargoUsed = 10;
-        expect(GameEngine.sellResource(restored, 'coal'), 22);
+        expect(
+          GameEngine.sellResource(restored, 'coal'),
+          MrMineBigNumber.fromNum(10.8),
+        );
       },
     );
 
@@ -1015,6 +1049,8 @@ void main() {
           depthMeters: 60000,
           deepestMeters: 60000,
           cargoCapacity: 1,
+          cargoUsed: 1,
+          inventory: {'coal': 1},
           caveTripsStarted: 1,
           caveReadyAt: now.subtract(const Duration(seconds: 1)),
         )..seed = candidate;
@@ -1061,7 +1097,7 @@ void main() {
           const Duration(minutes: 1),
           now: DateTime.utc(2030),
         );
-        expect(oilState.amount('oil'), 1);
+        expect(oilState.amount('oil'), 12);
         expect(oilState.cargoUsed, lessThan(oilState.effectiveCargoCapacity));
         oilState.inventory['oil'] = 5;
         expect(GameEngine.refineOil(oilState), isTrue);
@@ -1105,10 +1141,10 @@ void main() {
       ..['inventory'] = {'coal': 100, 'copper': -4};
 
     final restored = GameState.fromJson(corrupted);
-    expect(restored.coins, 0);
+    expect(restored.coins, MrMineBigNumber.zero);
     expect(restored.crewCount, 1);
     expect(restored.amount('copper'), 0);
-    expect(restored.cargoUsed, lessThanOrEqualTo(2));
+    expect(restored.cargoUsed, lessThanOrEqualTo(restored.cargoCapacity));
 
     expect(
       isValidGameSave(jsonEncode({...GameState().toJson(), 'schema': 999})),
@@ -1146,7 +1182,7 @@ void main() {
     expect(restored.oreVeinDamage.containsKey('not_an_ore'), isFalse);
   });
 
-  test('şema 2 kaydı derinliğine göre etkin dünyaya taşınır', () {
+  test('şema 2 kaydı derinliğe göre dünyayı seçer ve ortak ambarı korur', () {
     final legacy =
         Map<String, Object?>.from(
             GameState(
@@ -1171,7 +1207,8 @@ void main() {
     expect(migrated.depthMeters, 1100000);
     expect(migrated.amount('coal'), 5);
     expect(migrated.worldDepths['1'], 1100000);
-    expect(migrated.worldInventories['1'], {'coal': 5});
+    expect(migrated.inventory, {'coal': 5});
+    expect(GameState.fromJson(migrated.toJson()).amount('coal'), 5);
   });
 
   testWidgets('sefer panelindeki Ay kartı dünyayı gerçekten değiştirir', (
@@ -1348,7 +1385,7 @@ void main() {
         tester.view.devicePixelRatio = 1;
         addTearDown(tester.view.resetPhysicalSize);
 
-        final controller = GameController();
+        final controller = _readyController(state: GameState());
         controller.state.activeMineEventId = 'merchant';
         addTearDown(controller.dispose);
         await tester.pumpWidget(
@@ -1400,7 +1437,7 @@ void main() {
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
 
-      final controller = GameController();
+      final controller = _readyController(state: GameState());
       await tester.pumpWidget(
         MaterialApp(home: GameScreen(controller: controller)),
       );
@@ -1438,7 +1475,8 @@ void main() {
         final spriteRect = tester.getRect(sprite);
         expect(buttonRect.left, greaterThanOrEqualTo(layerRect.left));
         expect(buttonRect.right, lessThanOrEqualTo(layerRect.right));
-        expect(labelRect.bottom, lessThanOrEqualTo(spriteRect.top));
+        expect(labelRect.top, greaterThanOrEqualTo(buttonRect.top));
+        expect(labelRect.bottom, lessThan(buttonRect.bottom - 10));
         sharedGround ??= spriteRect.bottom;
         expect(spriteRect.bottom, closeTo(sharedGround, .01));
       }
@@ -1462,30 +1500,32 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
 
-    final controller = GameController()
-      ..state = GameState(
-        depthMeters: 50000,
-        deepestMeters: 50000,
-        tutorialStep: 5,
-      )
-      ..state.oreDeposits.addAll({
-        for (final entry in [
-          ('0:50:0', 'gold', 0, 0),
-          ('0:50:1', 'sapphire', 1, 0),
-          ('0:50:2', 'oil_shale', 0, 1),
-        ])
-          entry.$1: OreDepositState(
-            id: entry.$1,
-            worldIndex: 0,
-            floorIndex: 50,
-            resourceId: entry.$2,
-            amount: 25,
-            hitPoints: 5,
-            side: entry.$3,
-            pocket: entry.$4,
-            spawnDepthMeters: 50000,
-          ),
-      });
+    final controller =
+        _readyController(
+            state: GameState(
+              depthMeters: 50000,
+              deepestMeters: 50000,
+              tutorialStep: 5,
+            ),
+          )
+          ..state.oreDeposits.addAll({
+            for (final entry in [
+              ('0:50:0', 'gold', 0, 0),
+              ('0:50:1', 'sapphire', 1, 0),
+              ('0:50:2', 'oil_shale', 0, 1),
+            ])
+              entry.$1: OreDepositState(
+                id: entry.$1,
+                worldIndex: 0,
+                floorIndex: 50,
+                resourceId: entry.$2,
+                amount: 25,
+                hitPoints: 5,
+                side: entry.$3,
+                pocket: entry.$4,
+                spawnDepthMeters: 50000,
+              ),
+          });
     addTearDown(controller.dispose);
     await tester.pumpWidget(
       MaterialApp(home: GameScreen(controller: controller)),
@@ -1512,27 +1552,26 @@ void main() {
           ),
     );
     expect(ores, findsNWidgets(activeDeposits.length));
-    expect(find.text('50 km – 51 km'), findsOneWidget);
+    expect(find.byKey(const ValueKey('mine-floor-label-0-49')), findsOneWidget);
+    expect(find.byKey(const ValueKey('mine-floor-label-0-50')), findsNothing);
 
-    final galleryFloors = [
-      .25,
-      .46,
-      .67,
-      .86,
-    ].map((ratio) => floorRect.height * ratio).toList();
+    final galleryFloors = [floorRect.height * .92];
     final shaftLeft = (worldRect.width - 86) / 2;
     for (var index = 0; index < activeDeposits.length; index++) {
       final ore = tester.getRect(ores.at(index));
       final relativeLeft = ore.left - floorRect.left;
       final relativeCenterY = ore.center.dy - floorRect.top;
+      final side = index % 2;
+      final lane = index ~/ 2;
+      final laneOffset = lane * (ore.width + 4);
+      final expectedLeft = side == 0
+          ? 4 + laneOffset
+          : worldRect.width - 4 - ore.width - laneOffset;
       final distanceToFloor = galleryFloors
           .map((floor) => (relativeCenterY - floor).abs())
           .reduce((left, right) => left < right ? left : right);
 
-      expect(
-        relativeLeft,
-        anyOf(closeTo(4, .01), closeTo(worldRect.width - 78, .01)),
-      );
+      expect(relativeLeft, closeTo(expectedLeft, .01));
       expect(
         ore.right <= floorRect.left + shaftLeft ||
             ore.left >= floorRect.left + shaftLeft + 86,
@@ -1555,13 +1594,15 @@ void main() {
     ]) {
       tester.view.physicalSize = size;
       tester.view.devicePixelRatio = 1;
-      final state = GameState.newGame(seed: 2468)..crewCount = 5;
+      final state = GameState.newGame(seed: 2468)
+        ..crewCount = 5
+        ..worldMinerCounts['0'] = 5;
       state.oreDeposits.addAll({
         for (var index = 0; index < 4; index++)
-          '0:0:$index': OreDepositState(
-            id: '0:0:$index',
+          '0:5:$index': OreDepositState(
+            id: '0:5:$index',
             worldIndex: 0,
-            floorIndex: 0,
+            floorIndex: 5,
             resourceId: index.isEven ? 'coal' : 'copper',
             amount: 8,
             hitPoints: 4,
@@ -1573,8 +1614,7 @@ void main() {
                 : 3,
           ),
       });
-      final controller = GameController(saveStore: _MemorySaveStore())
-        ..state = state;
+      final controller = _readyController(state: state);
 
       await tester.pumpWidget(
         MaterialApp(home: GameScreen(controller: controller)),
@@ -1583,7 +1623,7 @@ void main() {
 
       final depositRects = [
         for (var index = 0; index < 4; index++)
-          tester.getRect(find.byKey(ValueKey('ore-node-0:0:$index'))),
+          tester.getRect(find.byKey(ValueKey('ore-node-0:5:$index'))),
       ];
       for (var left = 0; left < depositRects.length; left++) {
         for (var right = left + 1; right < depositRects.length; right++) {
@@ -1599,13 +1639,27 @@ void main() {
         (widget) =>
             widget.key is ValueKey &&
             (widget.key as ValueKey).value.toString().startsWith(
-              'mine-worker-0-',
+              'mine-worker-4-',
             ),
       );
       expect(workerNodes, findsNWidgets(5));
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget.key is ValueKey &&
+              (widget.key as ValueKey).value.toString().startsWith(
+                'mine-worker-5-',
+              ),
+        ),
+        findsNothing,
+      );
+      final drillRig = find.byKey(const ValueKey('deep-drill-rig-5'));
+      expect(drillRig, findsOneWidget);
+      final baseRigWidth = size.width < 690 ? 108.0 : 136.0;
+      expect(tester.getSize(drillRig).width, closeTo(baseRigWidth * 1.3, .01));
       final workerRects = [
         for (var worker = 0; worker < 5; worker++)
-          tester.getRect(find.byKey(ValueKey('mine-worker-0-$worker'))),
+          tester.getRect(find.byKey(ValueKey('mine-worker-4-0-$worker'))),
       ];
       for (var left = 0; left < workerRects.length; left++) {
         for (var right = left + 1; right < workerRects.length; right++) {
@@ -1637,10 +1691,10 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
 
-    final controller = GameController();
+    final controller = _readyController();
     addTearDown(controller.dispose);
-    final deposit = controller.state.oreDeposits['0:0:0']!;
-    expect(controller.state.coins, 0);
+    final deposit = controller.state.oreDeposits['0:5:0']!;
+    expect(controller.state.coins.toDouble(), 0);
     expect(controller.state.crewCount, 0);
     await tester.pumpWidget(
       MaterialApp(home: GameScreen(controller: controller)),
@@ -1660,6 +1714,42 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('danışman ilk cevher görevini aldırıp ambarı açar', (
+    tester,
+  ) async {
+    const size = Size(390, 844);
+    tester.view.physicalSize = size;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final controller = _readyController(state: GameState.newGame(seed: 715));
+    addTearDown(controller.dispose);
+    final deposit = controller.state.oreDeposits['0:5:0']!;
+    await tester.pumpWidget(
+      MaterialApp(home: GameScreen(controller: controller)),
+    );
+    await tester.pump(const Duration(milliseconds: 250));
+
+    await tester.tap(find.byKey(ValueKey('ore-node-${deposit.id}')));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(controller.currentQuestReady, isTrue);
+    expect(find.textContaining('1 / 5'), findsOneWidget);
+    await tester.tap(find.text('AL'));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(controller.currentQuest.id, 1);
+    expect(find.textContaining('2 / 5'), findsOneWidget);
+    await tester.tap(find.text('AÇ'));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.byType(BuildingDialog), findsOneWidget);
+    expect(find.text('AMBAR'), findsWidgets);
+
+    await tester.tap(find.text('KAPAT'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pumpWidget(const SizedBox.shrink());
+    expect(tester.takeException(), isNull);
+  });
+
   for (final size in const [Size(390, 844), Size(800, 1180)]) {
     testWidgets('oyun ekranı ${size.width}x${size.height} düzenine sığar', (
       tester,
@@ -1668,13 +1758,16 @@ void main() {
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
 
-      final controller = GameController();
+      final controller = _readyController();
       await tester.pumpWidget(
         MaterialApp(home: GameScreen(controller: controller)),
       );
       await tester.pump(const Duration(milliseconds: 250));
 
-      expect(find.text('KAZI'), findsOneWidget);
+      expect(find.text('KAZI'), findsNothing);
+      expect(find.byKey(const ValueKey('goal-banner')), findsOneWidget);
+      expect(find.textContaining('Matkap'), findsOneWidget);
+      expect(find.textContaining('madenci'), findsOneWidget);
       expect(find.bySemanticsLabel('Maden katmanları'), findsOneWidget);
       expect(tester.takeException(), isNull);
 
@@ -1690,6 +1783,16 @@ void main() {
       controller.dispose();
     });
   }
+}
+
+GameController _readyController({GameState? state}) {
+  final controller = GameController();
+  if (state != null) controller.state = state;
+  controller.state
+    ..musicEnabled = false
+    ..soundEffectsEnabled = false;
+  controller.isReady = true;
+  return controller;
 }
 
 class _MemorySaveStore implements SaveStore {

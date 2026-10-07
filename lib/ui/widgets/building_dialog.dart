@@ -136,7 +136,11 @@ class BuildingDialog extends StatelessWidget {
                   : '${_compactCash(GameEngine.minerCost(state))} kasa',
               enabled:
                   state.canAfford(GameEngine.minerCost(state)) &&
-                  state.activeMinerCount < 10,
+                  state.activeMinerCount < 10 &&
+                  (!state.guidedProgression ||
+                      state.debugModeEnabled ||
+                      state.initialTutorialComplete ||
+                      state.tutorialStep == 2),
               onPressed: controller.hireMiner,
               accent: MinePalette.amber,
             ),
@@ -472,7 +476,8 @@ class BuildingDialog extends StatelessWidget {
               ),
               ActionTile(
                 icon: Icons.description_rounded,
-                title: 'Montaj şeması • ${GameEngine.blueprintName(blueprintId)}',
+                title:
+                    'Montaj şeması • ${GameEngine.blueprintName(blueprintId)}',
                 description: wait > 0
                     ? 'Tüccar yeni yük hazırlıyor. ${_duration(wait)} sonra dönecek.'
                     : 'Bu planı ${_compactCash(cashCost.toDouble())} kasa karşılığında arşive ekle.',
@@ -2814,7 +2819,7 @@ class BuildingDialog extends StatelessWidget {
           state,
           role: 'scanner',
           name: 'Tarama',
-          benefit: 'İzotop ve sandık bulma şansını artırır.',
+          benefit: 'Üretim olurken sandık bulma olasılığını artırır.',
           icon: Icons.radar_rounded,
         ),
         _workerRoleRow(
@@ -2842,6 +2847,7 @@ class BuildingDialog extends StatelessWidget {
     final count = role == 'digging'
         ? state.diggingWorkers
         : state.workerAssignments[role] ?? 0;
+    final unlocked = state.workerRoleUnlocked(role);
     final priority = state.workerRolePriority.indexOf(role) + 1;
     return Row(
       children: [
@@ -2860,15 +2866,15 @@ class BuildingDialog extends StatelessWidget {
                 ),
               ),
               Text(
-                benefit,
-                maxLines: 1,
+                unlocked ? benefit : 'Danışman göreviyle açılacak. $benefit',
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(color: MinePalette.muted, fontSize: 8),
               ),
             ],
           ),
         ),
-        if (role != 'digging')
+        if (role != 'digging' && unlocked)
           IconButton(
             tooltip: 'Bir çalışanı kazıya döndür',
             constraints: const BoxConstraints.tightFor(width: 48, height: 48),
@@ -2891,7 +2897,7 @@ class BuildingDialog extends StatelessWidget {
             ),
           ),
         ),
-        if (role != 'digging')
+        if (role != 'digging' && unlocked)
           IconButton(
             tooltip: 'Bir kazıcıyı bu göreve ata',
             constraints: const BoxConstraints.tightFor(width: 48, height: 48),
@@ -2907,43 +2913,55 @@ class BuildingDialog extends StatelessWidget {
                 : null,
             icon: const Icon(Icons.add_circle_outline_rounded),
           )
+        else if (role != 'digging')
+          Tooltip(
+            message: 'Danışman göreviyle açılacak',
+            child: const SizedBox(
+              width: 48,
+              height: 48,
+              child: Icon(Icons.lock_rounded, color: MinePalette.muted),
+            ),
+          )
         else
           const SizedBox(width: 48),
-        PopupMenuButton<int>(
-          tooltip: 'Görev önceliğini değiştir',
-          onSelected: (position) =>
-              controller.setWorkerRolePriority(role, position - 1),
-          itemBuilder: (context) => [
-            for (var position = 1; position <= 4; position++)
-              PopupMenuItem(
-                value: position,
-                child: Text(
-                  'Öncelik $position${position == 1
-                      ? ' • düşük'
-                      : position == 4
-                      ? ' • yüksek'
-                      : ''}',
+        if (unlocked)
+          PopupMenuButton<int>(
+            tooltip: 'Görev önceliğini değiştir',
+            onSelected: (position) =>
+                controller.setWorkerRolePriority(role, position - 1),
+            itemBuilder: (context) => [
+              for (var position = 1; position <= 4; position++)
+                PopupMenuItem(
+                  value: position,
+                  child: Text(
+                    'Öncelik $position${position == 1
+                        ? ' • düşük'
+                        : position == 4
+                        ? ' • yüksek'
+                        : ''}',
+                  ),
+                ),
+            ],
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: const Color(0xFF102F3B),
+                border: Border.all(color: MinePalette.border),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                '$priority',
+                style: const TextStyle(
+                  color: MinePalette.amber,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
                 ),
               ),
-          ],
-          child: Container(
-            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: const Color(0xFF102F3B),
-              border: Border.all(color: MinePalette.border),
-              borderRadius: BorderRadius.circular(6),
             ),
-            child: Text(
-              '$priority',
-              style: const TextStyle(
-                color: MinePalette.amber,
-                fontSize: 11,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
-        ),
+          )
+        else
+          const SizedBox(width: 48, height: 48),
       ],
     );
   }
@@ -4001,7 +4019,11 @@ String _relicEffect(String id, int level) {
     'relic_11' => 'Reaktör güç darbesi +${30 * levelScale} saniye',
     'relic_12' => 'Çekirdek sıfırlamasında +$levelScale parça',
     'relic_150' =>
-      'İzotop T1->T2 bozunma şansı +%${switch (levelScale) { 1 => '1', 2 => '1,5', _ => '2' }} (Azami %10)',
+      'İzotop T1->T2 bozunma şansı +%${switch (levelScale) {
+        1 => '1',
+        2 => '1,5',
+        _ => '2',
+      }} (Azami %10)',
     'relic_151' => 'İzotop T1->T2 bozunma şansı +%1,5 (Azami %10)',
     'relic_152' => 'İzotop T1->T2 bozunma şansı +%2 (Azami %10)',
     'relic_153' => switch (levelScale) {
@@ -4034,9 +4056,10 @@ int _achievementProgress(AchievementDefinition achievement, GameState state) =>
       'mine' => state.totalMined,
       'depth' || 'world' => state.deepestMeters.floor(),
       'crew' => state.crewCount,
-      'sale' => state.totalSold.exponent >= 9
-          ? 1000000000
-          : state.totalSold.toDouble().clamp(0, 1000000000).floor(),
+      'sale' =>
+        state.totalSold.exponent >= 9
+            ? 1000000000
+            : state.totalSold.toDouble().clamp(0, 1000000000).floor(),
       'chest' => state.chestsOpened,
       'cave' => state.cavesCompleted,
       'relic' => state.relicsFound,

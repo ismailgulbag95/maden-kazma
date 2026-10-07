@@ -7,6 +7,7 @@ import '../data/save_store.dart';
 import '../domain/models/game_state.dart';
 import '../domain/models/mr_mine_big_number.dart';
 import '../domain/models/quest_definition.dart';
+import '../domain/models/advisor_guide.dart';
 import '../domain/models/resource_definition.dart';
 import '../domain/models/gem_definition.dart';
 import '../domain/models/cave_route_definition.dart';
@@ -31,8 +32,12 @@ String _saleCashLabel(Object value) {
     final d = big.toDouble();
     return '${(d / 1e18).toStringAsFixed(2)}Qi';
   }
-  if (big.exponent >= 15) return '${(big.toDouble() / 1e15).toStringAsFixed(2)}Qa';
-  if (big.exponent >= 12) return '${(big.toDouble() / 1e12).toStringAsFixed(2)}T';
+  if (big.exponent >= 15) {
+    return '${(big.toDouble() / 1e15).toStringAsFixed(2)}Qa';
+  }
+  if (big.exponent >= 12) {
+    return '${(big.toDouble() / 1e12).toStringAsFixed(2)}T';
+  }
   if (big.exponent >= 9) return '${(big.toDouble() / 1e9).toStringAsFixed(2)}B';
   if (big.exponent >= 6) return '${(big.toDouble() / 1e6).toStringAsFixed(2)}M';
   if (big.exponent >= 3) return '${(big.toDouble() / 1e3).toStringAsFixed(2)}K';
@@ -60,6 +65,7 @@ class GameController extends ChangeNotifier {
   DateTime _lastTickAt = DateTime.now();
   Duration _tickRemainder = Duration.zero;
   bool isReady = false;
+  String? initializationError;
   bool isSaving = false;
   String? saveError;
   int offlineSeconds = 0;
@@ -70,16 +76,46 @@ class GameController extends ChangeNotifier {
   bool _disposed = false;
 
   QuestDefinition get currentQuest => QuestCatalog.all.firstWhere(
-    (quest) => !state.claimedQuestIds.contains(quest.id),
-    orElse: () => QuestCatalog.all.last,
+    (quest) =>
+        !state.claimedQuestIds.contains(quest.id) && _isQuestAvailable(quest),
+    orElse: () => QuestCatalog.endgameGoal,
   );
 
   int get currentQuestProgress =>
       state.progressFor(currentQuest).clamp(0, currentQuest.target).toInt();
 
+  int get readyQuestCount =>
+      QuestCatalog.all
+          .where(
+            (quest) =>
+                !state.claimedQuestIds.contains(quest.id) &&
+                _isQuestAvailable(quest) &&
+                state.progressFor(quest) >= quest.target,
+          )
+          .length +
+      (state.claimedQuestIds.containsAll(
+                QuestCatalog.all.map((quest) => quest.id),
+              ) &&
+              state.progressFor(QuestCatalog.endgameGoal) >=
+                  QuestCatalog.endgameGoal.target &&
+              !state.claimedQuestIds.contains(QuestCatalog.endgameGoal.id)
+          ? 1
+          : 0);
+
   bool get currentQuestReady =>
       currentQuestProgress >= currentQuest.target &&
       !state.claimedQuestIds.contains(currentQuest.id);
+
+  bool _isQuestAvailable(QuestDefinition quest) {
+    if (quest.id < 5 || !state.initialTutorialComplete) return true;
+    return switch (quest.kind) {
+      QuestKind.chest => state.totalChestsFound > 0 || state.chestsOpened > 0,
+      QuestKind.cave => state.canOpenBuilding('expedition'),
+      QuestKind.relic => state.canOpenBuilding('research'),
+      QuestKind.boss => state.canOpenBuilding('boss'),
+      _ => true,
+    };
+  }
 
   List<String> takeNotices() {
     final result = List<String>.of(_notices);
@@ -88,7 +124,9 @@ class GameController extends ChangeNotifier {
   }
 
   Future<void> initialize() async {
-    await SoundService.instance.initialize();
+    // Audio is optional; do not make local storage or the audio browser plugin
+    // a prerequisite for showing the first playable frame.
+    unawaited(SoundService.instance.initialize().catchError((_) {}));
     final now = DateTime.now();
     try {
       final rawSave = await _saveStore.load();
@@ -143,9 +181,15 @@ class GameController extends ChangeNotifier {
     }
     GameEngine.prepareChallengeWindows(state, now);
     GameEngine.ensureOpenMineDeposits(state);
-    await SoundService.instance.setMusicEnabled(state.musicEnabled);
-    await SoundService.instance.setSoundEffectsEnabled(
-      state.soundEffectsEnabled,
+    unawaited(
+      SoundService.instance
+          .setMusicEnabled(state.musicEnabled)
+          .catchError((_) {}),
+    );
+    unawaited(
+      SoundService.instance
+          .setSoundEffectsEnabled(state.soundEffectsEnabled)
+          .catchError((_) {}),
     );
     for (final achievement in GameEngine.checkAchievements(state)) {
       _notices.add(
@@ -159,8 +203,16 @@ class GameController extends ChangeNotifier {
       unawaited(SoundService.instance.startReactorAlarm());
     }
     notifyListeners();
-    await saveNow();
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
+    unawaited(saveNow());
+  }
+
+  void reportInitializationFailure(Object error) {
+    if (isReady || _disposed) return;
+    initializationError = error.toString();
+    saveError = 'Oyun başlatılırken hata oluştu: $error';
+    isReady = true;
+    notifyListeners();
   }
 
   void _tick() {
@@ -188,7 +240,9 @@ class GameController extends ChangeNotifier {
         unawaited(SoundService.instance.stopReactorAlarm());
       }
     }
-    _notices.addAll(result.events);
+    _notices.addAll(
+      result.events.where((event) => !event.startsWith('Otomatik satış')),
+    );
     for (final achievement in GameEngine.checkAchievements(state)) {
       _notices.add(
         '${achievement.title} başarımı açıldı: +${achievement.reward} kasa.',
@@ -236,7 +290,9 @@ class GameController extends ChangeNotifier {
     if (state.resonanceChains > previousResonanceChains) {
       _notices.add('Katman Rezonansı tamamlandı; üretim beş dakika hızlandı.');
     }
-    unawaited(SoundService.instance.playOreCollect());
+    if (state.soundEffectsEnabled) {
+      unawaited(SoundService.instance.playOreCollect());
+    }
     _refreshState();
     return true;
   }
@@ -248,22 +304,9 @@ class GameController extends ChangeNotifier {
       notifyListeners();
       return false;
     }
-    unawaited(SoundService.instance.playOreCollect());
-    _refreshState();
-    return true;
-  }
-
-  bool dig() {
-    if (!GameEngine.manualDig(state)) {
-      _notices.add(
-        state.activeWorldIndex < GameState.worldEntryDepths.length - 1
-            ? 'Bu kuyunun sonuna ulaştın. Sefer ekranından sonraki dünyaya geç.'
-            : 'Son katmana ulaştın.',
-      );
-      notifyListeners();
-      return false;
+    if (state.soundEffectsEnabled) {
+      unawaited(SoundService.instance.playOreCollect());
     }
-    unawaited(SoundService.instance.playDrillPing());
     _refreshState();
     return true;
   }
@@ -1146,9 +1189,11 @@ class GameController extends ChangeNotifier {
     final offer = GameEngine.merchantOffer(state);
     final success = GameEngine.acceptMerchantDeal(state);
     if (!success) {
-      _notices.add(offer.blueprintId != null
-          ? 'Montaj şemasını almak için yeterli kasa yok.'
-          : 'Takas için gereken cevher yok veya rezerve edilmiş.');
+      _notices.add(
+        offer.blueprintId != null
+            ? 'Montaj şemasını almak için yeterli kasa yok.'
+            : 'Takas için gereken cevher yok veya rezerve edilmiş.',
+      );
     } else if (offer.blueprintId != null) {
       _notices.add(
         '${GameEngine.blueprintName(offer.blueprintId!)} planı arşive eklendi.',
@@ -1280,7 +1325,34 @@ class GameController extends ChangeNotifier {
       state.relicScrap++;
       state.workerScrap++;
     }
+    if (state.guidedProgression && state.initialTutorialComplete) {
+      GameEngine.completeStarterTutorial(state, _notices);
+      _notices.add(
+        'İlk vardiya tamamlandı. Danışman robot yeni sistemleri sırayla tanıtacak.',
+      );
+    }
     _notices.add('Görev tamamlandı: +$reward kasa.');
+    _refreshState();
+  }
+
+  void acknowledgeAdvisorGuide(String guideId) {
+    if (!state.guidedProgression || !state.initialTutorialComplete) return;
+    final guide = AdvisorGuideCatalog.byId[guideId];
+    if (guide == null ||
+        guide.isTutorial ||
+        state.deepestMeters < guide.requiredDepthMeters ||
+        state.activeMinerCount < guide.requiredMinerCount ||
+        !state.completedAdvisorGuideIds.add(guideId)) {
+      return;
+    }
+    if (guide.unlockBuildingId == 'elevator') {
+      state.unlockedBuildings.add('elevator');
+    }
+    final unlockedWorkerRole = guide.unlockWorkerRole;
+    if (unlockedWorkerRole != null) {
+      state.completedAdvisorGuideIds.add('worker_role_$unlockedWorkerRole');
+    }
+    GameEngine.unlockReachedMilestones(state, _notices);
     _refreshState();
   }
 
@@ -1348,12 +1420,18 @@ class GameController extends ChangeNotifier {
   }
 
   void startNewGame() {
+    final wasMusicEnabled = state.musicEnabled;
+    final wereSoundEffectsEnabled = state.soundEffectsEnabled;
     _notices.clear();
     state = GameState.newGame(lastSavedAt: DateTime.now());
-    unawaited(SoundService.instance.setMusicEnabled(state.musicEnabled));
-    unawaited(
-      SoundService.instance.setSoundEffectsEnabled(state.soundEffectsEnabled),
-    );
+    if (!wasMusicEnabled) {
+      unawaited(SoundService.instance.setMusicEnabled(state.musicEnabled));
+    }
+    if (!wereSoundEffectsEnabled) {
+      unawaited(
+        SoundService.instance.setSoundEffectsEnabled(state.soundEffectsEnabled),
+      );
+    }
     _lastTickAt = DateTime.now();
     _tickRemainder = Duration.zero;
     offlineSeconds = 0;
@@ -1376,15 +1454,6 @@ class GameController extends ChangeNotifier {
   void showNotice(String message) {
     if (state.notificationsEnabled) _notices.add(message);
     notifyListeners();
-  }
-
-  void markBuildingOpened() {
-    if (state.tutorialStep < 4 || state.tutorialStep >= 5) return;
-    state.tutorialStep = 5;
-    _notices.add(
-      'İlk vardiya tamamlandı. Derinlik kilometre taşlarını keşfet!',
-    );
-    _refreshState();
   }
 
   String _upgradeName(String track) => switch (track) {
@@ -1412,7 +1481,7 @@ class GameController extends ChangeNotifier {
     _disposed = true;
     _ticker?.cancel();
     unawaited(saveNow());
-    unawaited(SoundService.instance.dispose());
+    unawaited(SoundService.disposeIfCreated());
     super.dispose();
   }
 }

@@ -100,8 +100,14 @@ void main() {
 
     test('precision cutoff (>10 exponent difference) drops small addition', () {
       final big = MrMineBigNumber.fromParts(1.0, 15); // 10^15
-      final smallDropped = MrMineBigNumber.fromParts(1.0, 4); // 10^4 (diff = 11 > 10)
-      final smallKept = MrMineBigNumber.fromParts(1.0, 5); // 10^5 (diff = 10 <= 10)
+      final smallDropped = MrMineBigNumber.fromParts(
+        1.0,
+        4,
+      ); // 10^4 (diff = 11 > 10)
+      final smallKept = MrMineBigNumber.fromParts(
+        1.0,
+        5,
+      ); // 10^5 (diff = 10 <= 10)
 
       // powerDifference > 10 drops addition completely
       expect(big.add(smallDropped), big);
@@ -166,79 +172,98 @@ void main() {
       expect(smallExp.ceiling(), MrMineBigNumber.zero);
     });
 
-    test('parse rejects invalid input including bare dot and missing digits', () {
-      expect(() => MrMineBigNumber.parse('.'), throwsFormatException);
-      expect(() => MrMineBigNumber.parse('+.'), throwsFormatException);
-      expect(() => MrMineBigNumber.parse('-.'), throwsFormatException);
-      expect(() => MrMineBigNumber.parse('.e5'), throwsFormatException);
-      expect(() => MrMineBigNumber.parse('e5'), throwsFormatException);
-      expect(() => MrMineBigNumber.parse('1.2.3'), throwsFormatException);
-      expect(() => MrMineBigNumber.parse(''), throwsFormatException);
-      expect(() => MrMineBigNumber.parse('   '), throwsFormatException);
-      expect(() => MrMineBigNumber.parse('abc'), throwsFormatException);
+    test(
+      'parse rejects invalid input including bare dot and missing digits',
+      () {
+        expect(() => MrMineBigNumber.parse('.'), throwsFormatException);
+        expect(() => MrMineBigNumber.parse('+.'), throwsFormatException);
+        expect(() => MrMineBigNumber.parse('-.'), throwsFormatException);
+        expect(() => MrMineBigNumber.parse('.e5'), throwsFormatException);
+        expect(() => MrMineBigNumber.parse('e5'), throwsFormatException);
+        expect(() => MrMineBigNumber.parse('1.2.3'), throwsFormatException);
+        expect(() => MrMineBigNumber.parse(''), throwsFormatException);
+        expect(() => MrMineBigNumber.parse('   '), throwsFormatException);
+        expect(() => MrMineBigNumber.parse('abc'), throwsFormatException);
 
-      // Valid cases
-      expect(MrMineBigNumber.parse('1.'), MrMineBigNumber(1));
-      expect(MrMineBigNumber.parse('.5'), MrMineBigNumber(0.5));
-      expect(MrMineBigNumber.parse('0'), MrMineBigNumber.zero);
-      expect(MrMineBigNumber.parse('100'), MrMineBigNumber(100));
-    });
+        // Valid cases
+        expect(MrMineBigNumber.parse('1.'), MrMineBigNumber(1));
+        expect(MrMineBigNumber.parse('.5'), MrMineBigNumber(0.5));
+        expect(MrMineBigNumber.parse('0'), MrMineBigNumber.zero);
+        expect(MrMineBigNumber.parse('100'), MrMineBigNumber(100));
+      },
+    );
 
-    test('exact equals and hashCode match source without tolerance divergence', () {
-      final a = MrMineBigNumber.fromParts(1.23456789, 8);
-      final b = MrMineBigNumber.fromParts(1.23456789, 8);
-      expect(a.equals(b), isTrue);
-      expect(a == b, isTrue);
-      expect(a.hashCode, equals(b.hashCode));
+    test(
+      'exact equals and hashCode match source without tolerance divergence',
+      () {
+        final a = MrMineBigNumber.fromParts(1.23456789, 8);
+        final b = MrMineBigNumber.fromParts(1.23456789, 8);
+        expect(a.equals(b), isTrue);
+        expect(a == b, isTrue);
+        expect(a.hashCode, equals(b.hashCode));
 
-      final c = MrMineBigNumber.fromParts(1.234567890000001, 8);
-      expect(a.equals(c), isFalse);
-      expect(a == c, isFalse);
-    });
+        final c = MrMineBigNumber.fromParts(1.234567890000001, 8);
+        expect(a.equals(c), isFalse);
+        expect(a == c, isFalse);
+      },
+    );
 
-    test('source display toString semantics and lossless toJson save round-trip', () {
-      // Source display semantics
-      expect(MrMineBigNumber.zero.toString(), '0');
-      expect(MrMineBigNumber(100).toString(), '100');
-      expect(MrMineBigNumber.fromParts(1.5, 18).toString(), '1500000000000000000');
-      // Values < 1 produce '0' in source display toString because floor(toFloat(15)) is 0
-      expect(MrMineBigNumber(0.5).toString(), '0');
+    test(
+      'source display toString semantics and lossless toJson save round-trip',
+      () {
+        // Source display semantics
+        expect(MrMineBigNumber.zero.toString(), '0');
+        expect(MrMineBigNumber(100).toString(), '100');
+        expect(
+          MrMineBigNumber.fromParts(1.5, 18).toString(),
+          '1500000000000000000',
+        );
+        // Values < 1 produce '0' in source display toString because floor(toFloat(15)) is 0
+        expect(MrMineBigNumber(0.5).toString(), '0');
 
-      // Lossless persistence round-trip via toJson / fromJson for huge money values
-      final numbers = [
-        MrMineBigNumber.zero,
-        MrMineBigNumber(1),
-        MrMineBigNumber(240),
-        MrMineBigNumber(123456789),
-        MrMineBigNumber.fromParts(1.5, 18),
-        MrMineBigNumber.fromParts(4.32, 40),
-        MrMineBigNumber.fromString('4.5e400'),
-        MrMineBigNumber.fromString('2.5e1000'),
-      ];
+        // Lossless persistence round-trip via toJson / fromJson for huge money values
+        final numbers = [
+          MrMineBigNumber.zero,
+          MrMineBigNumber(1),
+          MrMineBigNumber(240),
+          MrMineBigNumber(123456789),
+          MrMineBigNumber.fromParts(1.5, 18),
+          MrMineBigNumber.fromParts(4.32, 40),
+          MrMineBigNumber.fromString('4.5e400'),
+          MrMineBigNumber.fromString('2.5e1000'),
+        ];
 
-      for (final n in numbers) {
-        final json = n.toJson();
-        final fromJson = MrMineBigNumber.fromJson(json);
-        expect(fromJson, equals(n), reason: 'Failed round-trip for $n -> $json');
-        expect(fromJson == n, isTrue);
-        expect(fromJson.hashCode, equals(n.hashCode));
-      }
+        for (final n in numbers) {
+          final json = n.toJson();
+          final fromJson = MrMineBigNumber.fromJson(json);
+          expect(
+            fromJson,
+            equals(n),
+            reason: 'Failed round-trip for $n -> $json',
+          );
+          expect(fromJson == n, isTrue);
+          expect(fromJson.hashCode, equals(n.hashCode));
+        }
 
-      // Legacy num fromJson
-      expect(MrMineBigNumber.fromJson(240), MrMineBigNumber(240));
-      expect(MrMineBigNumber.fromJson(100.5), MrMineBigNumber(100.5));
-      expect(MrMineBigNumber.fromJson('1000'), MrMineBigNumber(1000));
-    });
+        // Legacy num fromJson
+        expect(MrMineBigNumber.fromJson(240), MrMineBigNumber(240));
+        expect(MrMineBigNumber.fromJson(100.5), MrMineBigNumber(100.5));
+        expect(MrMineBigNumber.fromJson('1000'), MrMineBigNumber(1000));
+      },
+    );
   });
 
   group('GameState money and save migration with MrMineBigNumber', () {
-    test('GameState defaults to 240 BigNumber coins and newGame defaults to 0', () {
-      final stateDefault = GameState();
-      expect(stateDefault.coins, MrMineBigNumber(240));
+    test(
+      'GameState defaults to 240 BigNumber coins and newGame defaults to 0',
+      () {
+        final stateDefault = GameState();
+        expect(stateDefault.coins, MrMineBigNumber(240));
 
-      final stateNew = GameState.newGame();
-      expect(stateNew.coins, MrMineBigNumber.zero);
-    });
+        final stateNew = GameState.newGame();
+        expect(stateNew.coins, MrMineBigNumber.zero);
+      },
+    );
 
     test('addCoins, spendCoins, and canAfford operate safely at huge values >1e308', () {
       final state = GameState(coins: MrMineBigNumber.fromString('5.0e400'));
@@ -267,7 +292,10 @@ void main() {
       state.debugUnlimitedMoney = true;
       expect(state.canAfford(MrMineBigNumber.fromString('1.0e500')), isTrue);
       expect(state.spendCoins(MrMineBigNumber.fromString('1.0e500')), isTrue);
-      expect(state.coins, MrMineBigNumber.fromString('3.5e400')); // unmodified in debug mode
+      expect(
+        state.coins,
+        MrMineBigNumber.fromString('3.5e400'),
+      ); // unmodified in debug mode
     });
 
     test('save migration reads legacy numeric coins and new string coins without data loss', () {
@@ -325,33 +353,35 @@ void main() {
       expect(roundTripped.totalSold, stateModern.totalSold);
     });
 
-    test('QuestKind.sell clamps giant totalSold safely without integer overflow', () {
-      const sellQuest = QuestDefinition(
-        id: 1,
-        chapter: 1,
-        title: 'Satış Testi',
-        description: 'Test',
-        kind: QuestKind.sell,
-        target: 1000,
-        reward: 10,
-      );
+    test(
+      'QuestKind.sell clamps giant totalSold safely without integer overflow',
+      () {
+        const sellQuest = QuestDefinition(
+          id: 1,
+          chapter: 1,
+          title: 'Satış Testi',
+          description: 'Test',
+          kind: QuestKind.sell,
+          target: 1000,
+          reward: 10,
+        );
 
-      final state = GameState(
-        totalSold: MrMineBigNumber.fromString('5.2e40'),
-      );
-      expect(state.progressFor(sellQuest), 1000000000);
+        final state = GameState(
+          totalSold: MrMineBigNumber.fromString('5.2e40'),
+        );
+        expect(state.progressFor(sellQuest), 1000000000);
 
-      final stateSmall = GameState(
-        totalSold: MrMineBigNumber(350),
-      );
-      expect(stateSmall.progressFor(sellQuest), 350);
-    });
+        final stateSmall = GameState(totalSold: MrMineBigNumber(350));
+        expect(stateSmall.progressFor(sellQuest), 350);
+      },
+    );
   });
 
   group('GameEngine sale routes and BigNumber revenue aggregation', () {
     test('sellResource calculates revenue with chained BigNumber factors and updates totalSold', () {
-      final state = GameState.newGame();
+      final state = GameState.newGame()..tutorialStep = 1;
       state.inventory['coal'] = 500;
+      state.cargoUsed = 500;
 
       final revenue = GameEngine.sellResource(state, 'coal', requested: 200);
       // coal baseValue = 1.0; 200 * 1 = 200
@@ -362,9 +392,10 @@ void main() {
     });
 
     test('sellAll aggregates values accurately using BigNumber addition', () {
-      final state = GameState.newGame();
+      final state = GameState.newGame()..tutorialStep = 1;
       state.inventory['coal'] = 100; // 100 * 1 = 100
       state.inventory['copper'] = 50; // 50 * 2 = 100
+      state.cargoUsed = 150;
 
       final totalRevenue = GameEngine.sellAll(state);
       expect(totalRevenue, MrMineBigNumber(200));

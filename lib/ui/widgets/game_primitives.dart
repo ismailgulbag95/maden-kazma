@@ -105,7 +105,13 @@ class UpgradeRow extends StatelessWidget {
           return '$name $available/${entry.value}';
         })
         .join(' • ');
+    final tutorialLocked =
+        state.guidedProgression &&
+        !state.debugModeEnabled &&
+        !state.initialTutorialComplete &&
+        state.tutorialStep < 3;
     final canBuy =
+        !tutorialLocked &&
         level < maxLevel &&
         cost > 0 &&
         state.canAfford(cost) &&

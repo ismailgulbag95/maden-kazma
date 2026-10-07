@@ -13,14 +13,14 @@ Taşın Altı, oyuncunun bir maden karakolunu yönetip giderek daha derin jeoloj
 
 ## Ana döngü
 
-1. Yeni vardiya sıfır kasa ve işe alınmış işçi olmadan başlar. Oyuncu yüzeyde çıkan ilk kömür yığınına birkaç kez tıklar; her başarılı vuruş kaynak verir, hasar görünür ve tükenen yığın sahneden kaybolur.
+1. Yeni vardiya 5 km derinlikte, sıfır kasa ve işe alınmış işçi olmadan başlar. Başlangıç katında dört garantili kömür damarı vardır; her başarılı vuruş kaynak verir, hasar görünür ve tükenen yığın sahneden kaybolur.
 2. Oyuncu cevheri satar ve ilk madenciyi işe alır. İlk madenci saniyede bir kaynak üretmez; her açık 1 km kuyuda kendi vardiya yuvasında düzenli kaynak toplar.
 3. Açık kuyuların üretimi tek ambarda birleşir. Ambar dolunca işçiler ve sondaj bekler; satış yeniden yer açar.
 4. Oyuncu gelirini işçi sayısı ve sondaj geliştirmeleri arasında paylaştırır. İleri sondaj şemaları kasa yanında cevher de ister.
-5. KAZI eylemi derinliği ilerletir; her 1 km eşiğinde yeni bir kuyu satırı ve işçi yuvaları görünür. Derinlik 100 m'yi geçince biyomuna uygun minerallerden rastgele yığınlar belirir; metre başına olasılık %0,4'tür ve bir katta aynı anda en fazla dört yığın bulunur. Satırlar açılırken topluca doldurulmaz.
+5. Otomatik matkap derinliği ilerletir; her 1 km eşiğinde yeni bir kuyu satırı ve işçi yuvaları görünür. Derinlik 100 m'yi geçince biyomuna uygun minerallerden rastgele yığınlar belirir; metre başına olasılık %0,045'tir ve bir katta aynı anda en fazla dört yığın bulunur. Satırlar açılırken topluca doldurulmaz.
 6. Oyuncu sandık, rezonans, sefer, kalıntı ve muhafız gibi etkin hedefleri değerlendirir.
 
-Idle üretim temel ilerlemeyi sağlar. Etkin oyuncu sahadaki yığınlara vurarak her seferinde cevher alır, KAZI ile kuyuyu ilerletir ve satış/yükseltme kararlarını verir. İlk yüzey kömürü öğretici amaçla garantilidir. Sonraki yığınlar derinlik ilerledikçe olasılıkla, son 100 m içindeki uygun katta ve rastgele bir kaya cebinde belirir; derinlikte açılan yeni mineraller daha sık seçilir. Normal yığın beş başarılı vuruşta kırılır, her vuruşta pay verir. Yığınların konumu, doğduğu derinlik, cevheri ve hasarı kayıtla korunur; tükenen yığınlar sahneden silinir.
+Idle üretim temel ilerlemeyi sağlar. Etkin oyuncu sahadaki yığınlara vurarak her seferinde cevher alır; matkap otomatik çalışırken oyuncu satış ve yükseltme kararlarını verir. Başlangıç katındaki kömür damarları öğretici amaçla garantilidir. Sonraki yığınlar derinlik ilerledikçe olasılıkla, son 100 m içindeki uygun katta ve rastgele bir kaya cebinde belirir; derinlikte açılan yeni mineraller daha sık seçilir. Normal yığın beş başarılı vuruşta kırılır, her vuruşta pay verir. Yığınların konumu, doğduğu derinlik, cevheri ve hasarı kayıtla korunur; tükenen yığınlar sahneden silinir.
 
 Her yerel gün üç farklı, ödüllü hedef; her pazartesi bir haftalık kilometre taşı sunulur. Kuyuda ortalama 2,5–5 dakikada bir altına hücum, göçük tünel, zengin damar, kayıp kâşif, gezgin tüccar, kadim oda veya yaratık yuvası olayı belirir. Olay çevrimdışı vardiyada oluşmaz; oyuncu ödülü alana kadar görünür kalır.
 
@@ -60,7 +60,7 @@ Tam kilometre taşları ve hedeflenen açılma ritmi [PROGRESSION.md](PROGRESSIO
 
 ## Dikey dilim kabul ölçütü
 
-- Yeni kayıtta oyuncu ilk 30 saniyede kazı, satış ve yükseltme sırasını anlayabilmeli.
+- Yeni kayıtta oyuncu ilk 30 saniyede cevher çıkarma, satış ve yükseltme sırasını anlayabilmeli.
 - İlk görevler yığını kırma, cevheri satma, ilk işçiyi işe alma ve sondajı geliştirme sırasını eylem içinde öğretmeli.
 - 20 katmanlık ilk bölümde en az dört kaynak, sınırlı ambar, yükseltilebilir sondaj, sandık, görev ve yeni bir aktif etkileşim olmalı.
 - Kaydet/yükle, yönetici kademesine bağlı %25/%50/%100 çevrimdışı üretim, 12/24/48 saatlik sınırlar ve bozuk kayıt yedeği çalışmalı.

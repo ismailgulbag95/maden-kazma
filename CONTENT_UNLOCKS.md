@@ -4,7 +4,7 @@ Derinlik eşikleri metre cinsindedir. Dünya, Ay ve Titan cevher açılımları 
 
 | Derinlik | Kilit / olay | Oyuncuya açılan eylem |
 |---:|---|---|
-| 0 m | İlk vardiya | Garantili kömür yığınını beş kez elle vur; cevheri satıp ilk madenciyi işe al |
+| 5.000 m | İlk vardiya | Dört garantili kömür damarını beşer kez vur; cevheri satıp ilk madenciyi işe al |
 | 100 m'den sonra | Olasılıklı cevher doğumu | Derinlikte açılmış minerallerden biri, son 100 m içinde ve rastgele kaya cebinde belirir; her başarılı vuruş cevher verir, beşinci vuruşta tükenir |
 | Her 1.000 m | Yeni kuyu satırı | Derinlik eşiğinde yeni satır ve işçi yuvaları açılır; katlar baştan yığınla doldurulmaz |
 | 10.000 m | Uzman madenciler | Jeolog, sondaj mühendisi, kâşif veya muhafız uzmanı seç |
@@ -31,7 +31,7 @@ Derinlik eşikleri metre cinsindedir. Dünya, Ay ve Titan cevher açılımları 
 | 2.039.000 m | Sondaj Robotu Mk III | İleri Titan montaj şemaları açılır |
 | 2.566.000 m | Titan son katmanı | Titan son derinlik başarımını aç |
 
-Canlı yeni vardiya `GameState.newGame` ile 0 kasa ve 0 madenciyle başlar; yüzeydeki garantili kömür yığını ilk kaynak ve satış için kullanılır, ilk madenci 50 kasaya alınır. İlk on madenci için işe alım maliyetleri kaynak tablosundaki sırayı izler; sonraki alımlarda bu projeye özgü maliyet eğrisi sürer. Yöneticisiz çevrimdışı üretim yoktur. Yönetici kademeleri sırasıyla %25/12 saat, %50/24 saat ve %100/48 saat sağlar. Sondaj ucu, fan ve motor 43. seviyeye kadar gelişir. 6–9. seviyeler 50 km, 10–13. seviyeler 225 km, sandık kaynağındaki 14–17. seviye şemalar bu projede 100 km eşiğinden sonra tarifle üretilebilir; 21–23. seviyeler Ay'da malzeme karşılığı açılır. Robot Mk II 24–26. seviyeleri 1.257 km'de; Robot Mk III 37–40. seviyeleri 2.039 km'de açar.
+Canlı yeni vardiya `GameState.newGame` ile 5 km'de, 0 kasa ve 0 madenciyle başlar; başlangıç katındaki garantili kömür damarları ilk satış ve işe alım için kullanılır, ilk madenci 50 kasaya alınır. İlk beş görev cevher çıkarma, satış, işe alım, sondaj yükseltmesi ve otomatik matkap ilerleyişini öğretir. Derinlik görevleri bu 5 km başlangıcına göre sayılır; eski kayıtların ilerleyişi korunur. İlk on madenci için işe alım maliyetleri kaynak tablosundaki sırayı izler; sonraki alımlarda bu projeye özgü maliyet eğrisi sürer. Yöneticisiz çevrimdışı üretim yoktur. Yönetici kademeleri sırasıyla %25/12 saat, %50/24 saat ve %100/48 saat sağlar. Sondaj ucu, fan ve motor 43. seviyeye kadar gelişir. 6–9. seviyeler 50 km, 10–13. seviyeler 225 km, sandık kaynağındaki 14–17. seviye şemalar bu projede 100 km eşiğinden sonra tarifle üretilebilir; 21–23. seviyeler Ay'da malzeme karşılığı açılır. Robot Mk II 24–26. seviyeleri 1.257 km'de; Robot Mk III 37–40. seviyeleri 2.039 km'de açar.
 
 ## Tıklanabilir cevher damarları ve katman görünümü
 

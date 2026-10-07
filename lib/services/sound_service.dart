@@ -5,7 +5,15 @@ import 'package:audioplayers/audioplayers.dart';
 class SoundService {
   SoundService._();
 
-  static final SoundService instance = SoundService._();
+  static SoundService? _instance;
+  static SoundService get instance => _instance ??= SoundService._();
+
+  static Future<void> disposeIfCreated() async {
+    final service = _instance;
+    if (service == null) return;
+    await service.dispose();
+    _instance = null;
+  }
 
   final AudioPlayer _effects = AudioPlayer();
   final AudioPlayer _music = AudioPlayer();
@@ -26,8 +34,6 @@ class SoundService {
       // Unsupported audio devices can still run the game without sound.
     }
   }
-
-  Future<void> playDrillPing() => _playEffect('drill_ping.wav', .7);
 
   Future<void> playChestOpen() => _playEffect('chest_open.wav', .7);
 
@@ -115,9 +121,13 @@ class SoundService {
   Future<void> dispose() async {
     await stopBgm();
     await stopReactorAlarm();
-    await _effects.dispose();
-    await _music.dispose();
-    await _alarm.dispose();
+    for (final player in [_effects, _music, _alarm]) {
+      try {
+        await player.dispose();
+      } catch (_) {
+        // Platform audio plugins are optional in tests and unsupported hosts.
+      }
+    }
     _initialized = false;
   }
 }

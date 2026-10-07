@@ -4,8 +4,8 @@ Derinlik değerleri metre cinsindendir. `1 km = 1.000 m`. Süre sütunu denge he
 
 | Derinlik | Hedeflenen açılma zamanı | Yeni içerik | Oyuncunun yeni kararı | Sondaj gücü hedefi |
 |---:|---:|---|---|---|
-| 0 m | Başlangıç | 0 kasa, 0 madenci; garantili 5 vuruşluk kömür yığını | Kömür çıkarıp satarak ilk işe alım parasını biriktir | Başlangıç seviyesi |
-| 0 m | İlk satıştan sonra | İlk madenci 50 kasa; ilk on ekip maliyeti kaynak tablosunu izler | Gelirin ne kadarını ekibe ayırmalı? | Başlangıç seviyesi |
+| 5 km | Başlangıç | 0 kasa, 0 madenci; dört garantili 5 vuruşluk kömür damarı | Kömür çıkarıp satarak ilk işe alım parasını biriktir | Başlangıç seviyesi |
+| 5 km | İlk satıştan sonra | İlk madenci 50 kasa; ilk on ekip maliyeti kaynak tablosunu izler | Gelirin ne kadarını ekibe ayırmalı? | Başlangıç seviyesi |
 | 1 km | 3–5 dk hedefi | Eşik açılınca yeni kuyu satırı ve işçi yuvaları; yığınlar derinlik ilerleyişinde daha seyrek rastgele doğar | Kargo, sondaj ve ekip arasında yatırım | 3–5 seviye |
 | 10 km | 10–15 dk | Yetenekli uzmanlar ve belirgin yeni kat biyomu | Hangi uzmanı büyütmeli? | 6–10 seviye |
 | 15 km | 15–20 dk | Tüccar hattı | Kaynak takası mı doğrudan satış mı? | 8–12 seviye |
@@ -33,7 +33,7 @@ Derinlik değerleri metre cinsindendir. `1 km = 1.000 m`. Süre sütunu denge he
 
 ## İlk 30 dakika
 
-- **0–30 saniye:** garantili ilk kömür yığını beş vuruşta kırılır; her vuruşta cevher ambara girer ve hasar görsel olarak artar.
+- **0–30 saniye:** 5 km katındaki garantili kömür damarları beşer vuruşta kırılır; her vuruşta cevher ambara girer ve hasar görsel olarak artar.
 - **1–3 dakika:** oyuncu cevheri satar, ilk 50 kasalık madenciyi alır; işçi her açık kuyuda otomatik üretime başlar.
 - **3–5 dakika:** 1 km eşiğinde yeni satırlar açılır; derinlikte doğan yığınlar satılır ve 150 kasalık ikinci seviye sondaj yatırımı hedeflenir.
 - **10–15 dakika:** ilk uzmanlık sistemi açılır.

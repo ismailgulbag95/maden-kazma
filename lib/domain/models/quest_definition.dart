@@ -20,6 +20,7 @@ class QuestDefinition {
     required this.kind,
     required this.target,
     required this.reward,
+    this.absoluteDepth = false,
   });
 
   final int id;
@@ -29,6 +30,7 @@ class QuestDefinition {
   final QuestKind kind;
   final int target;
   final int reward;
+  final bool absoluteDepth;
 }
 
 abstract final class QuestCatalog {
@@ -66,6 +68,17 @@ abstract final class QuestCatalog {
     'Son haritanın boş bıraktığı bölgeyi kendi vardiya kayıtlarınla tamamla.',
   ];
 
+  static const endgameGoal = QuestDefinition(
+    id: 112,
+    chapter: 14,
+    title: 'Titan kuyusunun son katı',
+    description: 'Matkabı geliştir ve 2.566 km derinliğe ulaş.',
+    kind: QuestKind.depth,
+    target: 2566000,
+    reward: 0,
+    absoluteDepth: true,
+  );
+
   static const _tutorial = [
     (
       QuestKind.mine,
@@ -98,7 +111,7 @@ abstract final class QuestCatalog {
     (
       QuestKind.depth,
       'İlk katman ölçümü',
-      'Daha güçlü sondajla kuyu ölçümünü ilerlet',
+      'Matkap otomatik ilerler; 5 km başlangıç noktasından 80 metre daha derine in (5,08 km)',
       'metre derinlik',
       80,
     ),

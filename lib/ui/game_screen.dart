@@ -6,9 +6,11 @@ import 'package:flutter/rendering.dart' show ScrollDirection;
 
 import '../app/game_controller.dart';
 import '../core/design/palette.dart';
+import '../domain/models/advisor_guide.dart';
 import '../domain/models/mine_event_definition.dart';
 import '../domain/models/game_state.dart';
 import '../domain/models/mr_mine_big_number.dart';
+import '../domain/models/quest_definition.dart';
 import '../domain/models/resource_definition.dart';
 import '../domain/models/ore_deposit.dart';
 import '../domain/simulation/game_engine.dart';
@@ -30,6 +32,7 @@ class GameScreen extends StatefulWidget {
 
 class _GameScreenState extends State<GameScreen> {
   bool _offlineDialogShown = false;
+  bool _hasRenderedReadyState = false;
   String? _activeNotice;
   Timer? _noticeTimer;
 
@@ -38,12 +41,19 @@ class _GameScreenState extends State<GameScreen> {
     super.initState();
     widget.controller.addListener(_onControllerChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) unawaited(SoundService.instance.startBgm());
+      if (mounted && widget.controller.state.musicEnabled) {
+        unawaited(SoundService.instance.startBgm());
+      }
     });
   }
 
   void _onControllerChanged() {
     if (!mounted) return;
+    if (!widget.controller.isReady) return;
+    if (!_hasRenderedReadyState) {
+      _hasRenderedReadyState = true;
+      setState(() {});
+    }
     final notices = widget.controller.takeNotices();
     if (notices.isEmpty) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -57,7 +67,10 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _openBuilding(String id) {
-    widget.controller.markBuildingOpened();
+    if (!widget.controller.state.canOpenBuilding(id)) {
+      widget.controller.showNotice(_lockedBuildingMessage());
+      return;
+    }
     showDialog<void>(
       context: context,
       builder: (context) =>
@@ -66,19 +79,37 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _openUtilities(String panel) {
-    if (panel == 'workshop' ||
-        panel == 'warehouse' ||
-        panel == 'elevator' ||
-        panel == 'trade' ||
-        panel == 'research' ||
-        panel == 'expedition') {
-      widget.controller.markBuildingOpened();
+    if (!widget.controller.state.canOpenBuilding(panel)) {
+      widget.controller.showNotice(_lockedBuildingMessage());
+      return;
     }
     showDialog<void>(
       context: context,
       builder: (context) =>
           BuildingDialog(controller: widget.controller, buildingId: panel),
     );
+  }
+
+  void _openAdvisorGuide(AdvisorGuideDefinition guide) {
+    if (guide.isTutorial) {
+      final targetPanel = guide.targetPanel;
+      if (targetPanel != null) _openUtilities(targetPanel);
+      return;
+    }
+    widget.controller.acknowledgeAdvisorGuide(guide.id);
+    final targetPanel = guide.targetPanel;
+    if (targetPanel != null) _openUtilities(targetPanel);
+  }
+
+  String _lockedBuildingMessage() {
+    if (!widget.controller.state.initialTutorialComplete) {
+      return 'Danışman robotun görevini tamamlayınca bu sistem açılacak.';
+    }
+    final guide = AdvisorGuideCatalog.currentFor(widget.controller.state);
+    if (guide != null) {
+      return 'Önce danışman robotun ${guide.targetLabel} tanıtımını tamamla.';
+    }
+    return 'Bu sistem henüz açılmadı.';
   }
 
   void _openSettings() {
@@ -90,6 +121,72 @@ class _GameScreenState extends State<GameScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (!widget.controller.isReady) {
+      return const Scaffold(
+        backgroundColor: MinePalette.ink,
+        body: SafeArea(
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(color: MinePalette.cyan),
+                SizedBox(height: 16),
+                Text(
+                  'Maden hazırlanıyor…',
+                  style: TextStyle(
+                    color: MinePalette.cream,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    if (widget.controller.initializationError != null) {
+      return Scaffold(
+        backgroundColor: MinePalette.ink,
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.error_outline_rounded,
+                    color: MinePalette.amber,
+                    size: 42,
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Oyun başlatılamadı',
+                    style: TextStyle(
+                      color: MinePalette.cream,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    widget.controller.initializationError!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: MinePalette.muted),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Sayfayı yenileyip tekrar deneyin.',
+                    style: TextStyle(color: MinePalette.muted),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     if (!_offlineDialogShown && widget.controller.offlineSeconds >= 30) {
       _offlineDialogShown = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -157,11 +254,13 @@ class _GameScreenState extends State<GameScreen> {
                                     controller: widget.controller,
                                     onBuilding: _openBuilding,
                                     onUtility: _openUtilities,
+                                    onAdvisorGuide: _openAdvisorGuide,
                                   )
                                 : _WideGameLayout(
                                     controller: widget.controller,
                                     onBuilding: _openBuilding,
                                     onUtility: _openUtilities,
+                                    onAdvisorGuide: _openAdvisorGuide,
                                   ),
                           ),
                         ),
@@ -503,11 +602,13 @@ class _WideGameLayout extends StatelessWidget {
     required this.controller,
     required this.onBuilding,
     required this.onUtility,
+    required this.onAdvisorGuide,
   });
 
   final GameController controller;
   final ValueChanged<String> onBuilding;
   final ValueChanged<String> onUtility;
+  final ValueChanged<AdvisorGuideDefinition> onAdvisorGuide;
 
   @override
   Widget build(BuildContext context) => Row(
@@ -523,8 +624,12 @@ class _WideGameLayout extends StatelessWidget {
                 onBuilding: onBuilding,
               ),
             ),
-            if (controller.state.tutorialStep < 5)
-              _TutorialBanner(state: controller.state),
+            _GoalBanner(
+              controller: controller,
+              guide: AdvisorGuideCatalog.currentFor(controller.state),
+              onOpenTarget: onAdvisorGuide,
+              onOpenUtility: onUtility,
+            ),
             Expanded(child: _MineShaftView(controller: controller)),
             SizedBox(
               height: 74,
@@ -549,11 +654,13 @@ class _CompactGameLayout extends StatelessWidget {
     required this.controller,
     required this.onBuilding,
     required this.onUtility,
+    required this.onAdvisorGuide,
   });
 
   final GameController controller;
   final ValueChanged<String> onBuilding;
   final ValueChanged<String> onUtility;
+  final ValueChanged<AdvisorGuideDefinition> onAdvisorGuide;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -573,8 +680,12 @@ class _CompactGameLayout extends StatelessWidget {
         children: [
           SizedBox(height: outpostHeight, child: outpost),
           Expanded(child: mine),
-          if (controller.state.tutorialStep < 5)
-            _TutorialBanner(state: controller.state),
+          _GoalBanner(
+            controller: controller,
+            guide: AdvisorGuideCatalog.currentFor(controller.state),
+            onOpenTarget: onAdvisorGuide,
+            onOpenUtility: onUtility,
+          ),
           mineEventBanner,
           SizedBox(
             height: 74,
@@ -589,49 +700,234 @@ class _CompactGameLayout extends StatelessWidget {
   );
 }
 
-class _TutorialBanner extends StatelessWidget {
-  const _TutorialBanner({required this.state});
+class _GoalBanner extends StatelessWidget {
+  const _GoalBanner({
+    required this.controller,
+    required this.guide,
+    required this.onOpenTarget,
+    required this.onOpenUtility,
+  });
 
-  final GameState state;
+  final GameController controller;
+  final AdvisorGuideDefinition? guide;
+  final ValueChanged<AdvisorGuideDefinition> onOpenTarget;
+  final ValueChanged<String> onOpenUtility;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(9, 0, 9, 5),
-    child: Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 460),
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 39),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-          decoration: BoxDecoration(
-            color: const Color(0xEC0A242E),
-            border: Border.all(color: MinePalette.amber),
-            borderRadius: BorderRadius.circular(7),
-            boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 8)],
-          ),
-          child: Row(
-            children: [
-              const Icon(
-                Icons.lightbulb_rounded,
-                color: MinePalette.amber,
-                size: 16,
-              ),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  _tutorialText(state.tutorialStep),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: MinePalette.cream,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w900,
+  Widget build(BuildContext context) {
+    final state = controller.state;
+    final quest = controller.currentQuest;
+    final progress = controller.currentQuestProgress;
+    final isTutorial = guide?.isTutorial ?? false;
+    final tutorialNumber =
+        state.claimedQuestIds
+            .where((id) => id >= 0 && id < 5)
+            .length
+            .clamp(0, 4)
+            .toInt() +
+        1;
+    final title = guide == null
+        ? quest.title
+        : isTutorial
+        ? '$tutorialNumber / 5 • ${guide!.title}'
+        : guide!.title;
+    final message = guide?.message ?? quest.description;
+    final detail = _goalRequirementLine(controller, guide: guide, quest: quest);
+    final investmentPlan = _investmentRequirementLine(state);
+    final ready = controller.currentQuestReady;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(9, 0, 9, 5),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Container(
+            key: const ValueKey('goal-banner'),
+            constraints: const BoxConstraints(minHeight: 76),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            decoration: BoxDecoration(
+              color: const Color(0xF10A242E),
+              border: Border.all(color: MinePalette.amber, width: 1.3),
+              borderRadius: BorderRadius.circular(9),
+              boxShadow: const [
+                BoxShadow(color: Colors.black45, blurRadius: 8),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0B3440),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: MinePalette.teal, width: 1.4),
+                    boxShadow: const [
+                      BoxShadow(color: Color(0x6634D3CB), blurRadius: 9),
+                    ],
+                  ),
+                  child: const AnimatedCrewSprite(
+                    index: 3,
+                    action: CrewAction.scanning,
+                    width: 52,
+                    height: 52,
+                    phaseOffset: .29,
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: MinePalette.amber,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        message,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: MinePalette.cream,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        guide == null && quest.kind == QuestKind.depth
+                            ? '$detail • $progress / ${quest.target} m'
+                            : detail,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: MinePalette.teal,
+                          fontSize: 8,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      Text(
+                        investmentPlan,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: MinePalette.muted,
+                          fontSize: 8,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (guide == null ||
+                    !isTutorial ||
+                    ready ||
+                    guide!.targetPanel != null) ...[
+                  const SizedBox(width: 6),
+                  SizedBox(
+                    height: 34,
+                    child: ElevatedButton(
+                      onPressed: guide == null
+                          ? ready
+                                ? controller.claimCurrentQuest
+                                : () => onOpenUtility('quests')
+                          : isTutorial
+                          ? ready
+                                ? controller.claimCurrentQuest
+                                : () => onOpenTarget(guide!)
+                          : () => onOpenTarget(guide!),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: MinePalette.amber,
+                        foregroundColor: MinePalette.ink,
+                        padding: const EdgeInsets.symmetric(horizontal: 9),
+                        textStyle: const TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      child: Text(
+                        guide == null
+                            ? ready
+                                  ? 'AL'
+                                  : 'GÖREV'
+                            : isTutorial
+                            ? ready
+                                  ? 'AL'
+                                  : 'AÇ'
+                            : guide!.targetPanel == null
+                            ? 'TAMAM'
+                            : 'AÇ',
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _AdvisorTargetMarker extends StatelessWidget {
+  const _AdvisorTargetMarker({this.size = 28});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => IgnorePointer(
+    child: Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: const Color(0xEE0B3440),
+        shape: BoxShape.circle,
+        border: Border.all(color: MinePalette.teal, width: 1.5),
+        boxShadow: const [BoxShadow(color: Color(0xAA34D3CB), blurRadius: 10)],
+      ),
+      child: AnimatedCrewSprite(
+        index: 3,
+        action: CrewAction.scanning,
+        width: size - 2,
+        height: size - 2,
+        phaseOffset: .29,
+      ),
+    ),
+  );
+}
+
+class _QuestCountBadge extends StatelessWidget {
+  const _QuestCountBadge({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
+    padding: const EdgeInsets.symmetric(horizontal: 4),
+    alignment: Alignment.center,
+    decoration: BoxDecoration(
+      color: MinePalette.danger,
+      shape: BoxShape.rectangle,
+      borderRadius: BorderRadius.circular(9),
+      border: Border.all(color: MinePalette.ink, width: 1.2),
+      boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 3)],
+    ),
+    child: Text(
+      count > 99 ? '99+' : '$count',
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 8,
+        height: 1,
+        fontWeight: FontWeight.w900,
       ),
     ),
   );
@@ -667,10 +963,6 @@ class _CompactActionBar extends StatelessWidget {
                   : (Icons.explore_rounded, 'SEFER', 'expedition'),
               (Icons.emoji_events_rounded, 'ROZET', 'achievements'),
             ];
-      final digWidth = math.max(
-        82.0,
-        math.min(142.0, constraints.maxWidth * .27),
-      );
       return Container(
         height: 74,
         padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 7),
@@ -695,33 +987,17 @@ class _CompactActionBar extends StatelessWidget {
               _QuickNav(
                 icon: shortcuts[index].$1,
                 label: shortcuts[index].$2,
+                enabled: controller.state.canOpenBuilding(shortcuts[index].$3),
+                badgeCount: shortcuts[index].$3 == 'quests'
+                    ? controller.readyQuestCount
+                    : 0,
+                highlighted:
+                    AdvisorGuideCatalog.currentFor(controller.state)?.target ==
+                    shortcuts[index].$3,
                 onTap: () => onUtility(shortcuts[index].$3),
               ),
-              const SizedBox(width: 2),
+              if (index < shortcuts.length - 1) const SizedBox(width: 2),
             ],
-            SizedBox(
-              width: digWidth,
-              height: 56,
-              child: ElevatedButton.icon(
-                onPressed: controller.dig,
-                icon: const Icon(Icons.bolt_rounded, size: 20),
-                label: const Text(
-                  'KAZI',
-                  style: TextStyle(
-                    fontSize: 16,
-                    letterSpacing: 1.5,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFFBE3E),
-                  foregroundColor: const Color(0xFF201509),
-                  side: const BorderSide(color: Color(0xFFFFE08B), width: 2),
-                  elevation: 4,
-                  padding: const EdgeInsets.symmetric(horizontal: 5),
-                ),
-              ),
-            ),
           ],
         ),
       );
@@ -846,40 +1122,84 @@ class _QuickNav extends StatelessWidget {
   const _QuickNav({
     required this.icon,
     required this.label,
+    required this.enabled,
+    this.badgeCount = 0,
+    this.highlighted = false,
     required this.onTap,
   });
 
   final IconData icon;
   final String label;
+  final bool enabled;
+  final int badgeCount;
+  final bool highlighted;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) => Expanded(
     child: Semantics(
-      button: true,
+      button: enabled,
+      enabled: enabled,
       label: label,
       child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 18, color: MinePalette.cyan),
-              const SizedBox(height: 2),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  label,
-                  style: const TextStyle(
-                    color: MinePalette.cream,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w900,
+        onTap: enabled ? onTap : null,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: highlighted
+                        ? BoxDecoration(
+                            border: Border.all(
+                              color: MinePalette.amber,
+                              width: 1.5,
+                            ),
+                            borderRadius: BorderRadius.circular(6),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Color(0x99FFBE3E),
+                                blurRadius: 8,
+                              ),
+                            ],
+                          )
+                        : null,
+                    child: Icon(
+                      enabled ? icon : Icons.lock_outline_rounded,
+                      size: 18,
+                      color: highlighted
+                          ? MinePalette.amber
+                          : enabled
+                          ? MinePalette.cyan
+                          : MinePalette.muted,
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 2),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        color: enabled ? MinePalette.cream : MinePalette.muted,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+            if (badgeCount > 0)
+              Positioned(
+                top: -1,
+                right: -1,
+                child: _QuestCountBadge(count: badgeCount),
+              ),
+          ],
         ),
       ),
     ),
@@ -918,9 +1238,9 @@ double _surfaceBuildingSpriteHeight(
   return math.min(availableHeight, width / croppedAspectRatio).toDouble();
 }
 
-// Four galleries at a quarter-height pitch. The first and last are offset by
-// one eighth so the spacing stays even when consecutive 1 km tiles meet.
-const _galleryHeightRatios = <double>[.125, .375, .625, .875];
+// Each 1 km tile is one gallery. About five equal galleries fit in a viewport.
+const _galleryHeightRatios = <double>[.92];
+const int _mineFloorsPerViewport = 5;
 const double _mineVisualFloorMeters = 1000;
 
 String _mineWallAsset({required int worldIndex, required int majorBand}) {
@@ -1059,6 +1379,7 @@ class _SurfaceOutpost extends StatelessWidget {
       state: state,
       width: width,
       height: height,
+      highlighted: AdvisorGuideCatalog.currentFor(state)?.target == item.$1,
       onTap: () => onBuilding(item.$1),
     );
   }
@@ -1072,6 +1393,7 @@ class _BuildingButton extends StatelessWidget {
     required this.state,
     required this.width,
     required this.height,
+    required this.highlighted,
     required this.onTap,
   });
 
@@ -1081,10 +1403,12 @@ class _BuildingButton extends StatelessWidget {
   final GameState state;
   final double width;
   final double height;
+  final bool highlighted;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final unlocked = state.canOpenBuilding(id);
     final pending =
         id == 'expedition' && state.caveCompletedPending ||
         id == 'research' && state.excavationCompletedPending ||
@@ -1107,8 +1431,9 @@ class _BuildingButton extends StatelessWidget {
         .clamp(0.0, math.max(0.0, height - 15))
         .toDouble();
     return Semantics(
-      button: true,
-      label: '$label binasını aç',
+      button: unlocked,
+      enabled: unlocked,
+      label: unlocked ? '$label binasını aç' : '$label kilitli',
       key: ValueKey('surface-building-$id'),
       child: SizedBox(
         width: width,
@@ -1116,7 +1441,7 @@ class _BuildingButton extends StatelessWidget {
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: onTap,
+            onTap: unlocked ? onTap : null,
             borderRadius: BorderRadius.circular(8),
             child: Stack(
               alignment: Alignment.bottomCenter,
@@ -1155,6 +1480,43 @@ class _BuildingButton extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (highlighted)
+                  Positioned(
+                    right: -3,
+                    top: 6,
+                    child: const _AdvisorTargetMarker(size: 30),
+                  ),
+                if (!unlocked)
+                  Positioned.fill(
+                    top: 4,
+                    bottom: 14,
+                    child: IgnorePointer(
+                      child: Icon(
+                        Icons.lock_outline_rounded,
+                        size: width < 64 ? 15 : 20,
+                        color: MinePalette.muted,
+                      ),
+                    ),
+                  ),
+                if (highlighted)
+                  Positioned.fill(
+                    top: 2,
+                    bottom: 12,
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: MinePalette.amber,
+                            width: 1.5,
+                          ),
+                          borderRadius: BorderRadius.circular(7),
+                          boxShadow: const [
+                            BoxShadow(color: Color(0x99FFBE3E), blurRadius: 9),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 Positioned(
                   left: 0,
                   right: 0,
@@ -1357,59 +1719,78 @@ class _RightDock extends StatelessWidget {
   final ValueChanged<String> onUtility;
 
   @override
-  Widget build(BuildContext context) => Container(
-    decoration: const BoxDecoration(
-      color: Color(0xE909202A),
-      border: Border(left: BorderSide(color: MinePalette.border)),
-    ),
-    child: SingleChildScrollView(
-      padding: const EdgeInsets.all(9),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _UpgradeDock(controller: controller),
-          const SizedBox(height: 10),
-          _QuestDock(controller: controller),
-          const SizedBox(height: 10),
-          OutlinedButton.icon(
-            onPressed: () => onUtility('achievements'),
-            icon: const Icon(Icons.emoji_events_rounded),
-            label: Text(
-              'BAŞARIMLAR • ${controller.state.unlockedAchievements.length}',
-            ),
-          ),
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
-            onPressed: () => onUtility('research'),
-            icon: const Icon(Icons.auto_awesome),
-            label: const Text('REZONANS TARAMASI'),
-          ),
-          if (controller.state.totalChestsFound > 0) ...[
-            const SizedBox(height: 8),
-            ElevatedButton.icon(
-              onPressed: () => controller.openChest(
-                tier: controller.state.deepChests > 0
-                    ? 'deep'
-                    : controller.state.goldChests > 0
-                    ? 'gold'
-                    : 'basic',
-              ),
-              icon: const Icon(Icons.inventory_2_rounded),
-              label: Text('${controller.state.totalChestsFound} SANDIĞI AÇ'),
-            ),
-          ],
-          if (GameEngine.availableBossIndex(controller.state) != null) ...[
-            const SizedBox(height: 8),
-            ElevatedButton.icon(
-              onPressed: () => onUtility('boss'),
-              icon: const Icon(Icons.shield_moon_rounded),
-              label: const Text('MUHAFIZLA SAVAŞ'),
-            ),
-          ],
-        ],
+  Widget build(BuildContext context) {
+    final state = controller.state;
+    final canOpenWorkshop = state.canOpenBuilding('workshop');
+    final canOpenResearch = state.canOpenBuilding('research');
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xE909202A),
+        border: Border(left: BorderSide(color: MinePalette.border)),
       ),
-    ),
-  );
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(9),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (canOpenWorkshop)
+              _UpgradeDock(controller: controller)
+            else
+              GamePanel(
+                title: 'YÜKSELTMELER',
+                icon: Icons.lock_outline_rounded,
+                child: const Text(
+                  'Atölye, ilk görevleri tamamladığında açılacak.',
+                  style: TextStyle(color: MinePalette.muted, fontSize: 11),
+                ),
+              ),
+            const SizedBox(height: 10),
+            _QuestDock(controller: controller),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: state.canOpenBuilding('achievements')
+                  ? () => onUtility('achievements')
+                  : null,
+              icon: const Icon(Icons.emoji_events_rounded),
+              label: Text(
+                'BAŞARIMLAR • ${controller.state.unlockedAchievements.length}',
+              ),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: canOpenResearch ? () => onUtility('research') : null,
+              icon: const Icon(Icons.auto_awesome),
+              label: const Text('REZONANS TARAMASI'),
+            ),
+            if (state.totalChestsFound > 0) ...[
+              const SizedBox(height: 8),
+              ElevatedButton.icon(
+                onPressed: state.canOpenBuilding('trade')
+                    ? () => controller.openChest(
+                        tier: state.deepChests > 0
+                            ? 'deep'
+                            : state.goldChests > 0
+                            ? 'gold'
+                            : 'basic',
+                      )
+                    : null,
+                icon: const Icon(Icons.inventory_2_rounded),
+                label: Text('${state.totalChestsFound} SANDIĞI AÇ'),
+              ),
+            ],
+            if (GameEngine.availableBossIndex(state) != null) ...[
+              const SizedBox(height: 8),
+              ElevatedButton.icon(
+                onPressed: () => onUtility('boss'),
+                icon: const Icon(Icons.shield_moon_rounded),
+                label: const Text('MUHAFIZLA SAVAŞ'),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _UpgradeDock extends StatelessWidget {
@@ -1442,6 +1823,7 @@ class _QuestDock extends StatelessWidget {
     final ratio = quest.target <= 0
         ? 0.0
         : (progress / quest.target).clamp(0, 1).toDouble();
+    final progressUnit = quest.kind == QuestKind.depth ? ' m' : '';
     return GamePanel(
       title: 'GÖREVLER',
       icon: Icons.assignment_turned_in_rounded,
@@ -1461,6 +1843,15 @@ class _QuestDock extends StatelessWidget {
             quest.description,
             style: const TextStyle(color: MinePalette.muted, fontSize: 10),
           ),
+          const SizedBox(height: 4),
+          Text(
+            _goalRequirementLine(controller, quest: quest),
+            style: const TextStyle(
+              color: MinePalette.teal,
+              fontSize: 9,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
           const SizedBox(height: 9),
           LinearProgressIndicator(
             value: ratio,
@@ -1474,7 +1865,7 @@ class _QuestDock extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '$progress / ${quest.target}',
+                '$progress$progressUnit / ${quest.target}$progressUnit',
                 style: const TextStyle(color: MinePalette.muted, fontSize: 10),
               ),
               Text(
@@ -1541,8 +1932,11 @@ class _MineShaftViewState extends State<_MineShaftView> {
       }
       _cameraController.animateTo(
         target,
-        duration: const Duration(milliseconds: 500),
-        curve: Curves.easeOutCubic,
+        // The game state advances once per second. Keep the camera glide a
+        // little longer than that interval so each update blends into the
+        // next instead of stopping between depth ticks.
+        duration: const Duration(milliseconds: 1200),
+        curve: Curves.linear,
       );
     });
   }
@@ -1572,12 +1966,15 @@ class _MineShaftViewState extends State<_MineShaftView> {
           state.worldDepths[worldIndex.toString()] ?? worldStartDepth,
         );
         final localDeepest = math.max(0.0, worldDepth - worldStartDepth);
-        final floorCount = (localDeepest / _mineVisualFloorMeters).floor() + 1;
-        final floorHeight = math.max(288.0, height);
+        final discoveredFloorCount =
+            (localDeepest / _mineVisualFloorMeters).floor() + 1;
+        final floorHeight = math.max(96.0, height / _mineFloorsPerViewport);
+        final visibleFloorCount = (height / floorHeight).ceil() + 1;
+        final floorCount = math.max(discoveredFloorCount, visibleFloorCount);
         final localDepth = (state.depthMeters - worldStartDepth)
             .clamp(0.0, localDeepest)
             .toDouble();
-        final activeFloor = (localDepth / _mineVisualFloorMeters).floor().clamp(
+        final drillingFloor = (discoveredFloorCount - 1).clamp(
           0,
           floorCount - 1,
         );
@@ -1612,11 +2009,36 @@ class _MineShaftViewState extends State<_MineShaftView> {
                           height: floorHeight,
                           narrow: narrow,
                           floorIndex: floorIndex,
-                          isActiveFloor: floorIndex == activeFloor,
+                          isActiveFloor: floorIndex == drillingFloor,
+                          isDiscoveredFloor: floorIndex < discoveredFloorCount,
                         ),
                       );
                     },
                   ),
+                ),
+              ),
+            ),
+            if (AdvisorGuideCatalog.currentFor(state) == null)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: _AmbientAdvisorDrone(
+                    width: width,
+                    height: height,
+                    narrow: narrow,
+                  ),
+                ),
+              ),
+            Positioned(
+              left: (width - (narrow ? 122.0 : 164.0)) / 2,
+              top: 0,
+              width: narrow ? 122.0 : 164.0,
+              height: height,
+              child: IgnorePointer(
+                child: _MineElevatorMotion(
+                  width: narrow ? 122.0 : 164.0,
+                  height: height,
+                  worldExtent: floorCount * floorHeight,
+                  cameraController: _cameraController,
                 ),
               ),
             ),
@@ -1754,6 +2176,7 @@ class _MineWorld extends StatelessWidget {
     required this.narrow,
     required this.floorIndex,
     required this.isActiveFloor,
+    required this.isDiscoveredFloor,
   });
 
   final GameController controller;
@@ -1762,11 +2185,13 @@ class _MineWorld extends StatelessWidget {
   final bool narrow;
   final int floorIndex;
   final bool isActiveFloor;
+  final bool isDiscoveredFloor;
 
   @override
   Widget build(BuildContext context) {
     final state = controller.state;
     final worldIndex = state.activeWorldIndex.clamp(0, 2).toInt();
+    final guideTarget = AdvisorGuideCatalog.currentFor(state)?.target;
     final minorVariant = (floorIndex % 100) ~/ 50;
     final deposits =
         state.oreDeposits.values
@@ -1778,18 +2203,11 @@ class _MineWorld extends StatelessWidget {
             )
             .toList()
           ..sort((left, right) => left.id.compareTo(right.id));
-    final galleryFloors = _galleryHeightRatios
-        .map((ratio) => height * ratio)
-        .toList(growable: false);
     final shaftWidth = narrow ? 86.0 : 112.0;
-    final elevatorWidth = narrow ? 122.0 : 164.0;
-    final elevatorHeight = elevatorWidth * 2 / 3;
-    final rigWidth = narrow ? 108.0 : 136.0;
+    final rigWidth = math.min((narrow ? 108.0 : 136.0) * 1.3, width * .48);
     final rigHeight = rigWidth * 1.107;
     final edgeRockWidth = narrow ? 32.0 : 48.0;
-    final unminedGroundHeight = math
-        .min(108.0, math.max(72.0, height * .15))
-        .toDouble();
+    final dugGroundCapHeight = math.min(height * .92, width / 3.0).toDouble();
     final edgeTint = switch (worldIndex) {
       1 => const Color(0xFFA9CFDE),
       2 => const Color(0xFFA9C9B0),
@@ -1800,8 +2218,6 @@ class _MineWorld extends StatelessWidget {
       2 => const Color(0xFFB3C79D),
       _ => null,
     };
-    final robotWidth = narrow ? 38.0 : 48.0;
-    final robotHeight = narrow ? 38.0 : 48.0;
     final workerGap = narrow ? 7.0 : 12.0;
     final shaftLeft = (width - shaftWidth) / 2;
     final workerSlots = _layoutMineWorkers(
@@ -1820,7 +2236,7 @@ class _MineWorld extends StatelessWidget {
       narrow: narrow,
     );
     return Stack(
-      clipBehavior: Clip.hardEdge,
+      clipBehavior: Clip.none,
       children: [
         const Positioned.fill(child: CustomPaint(painter: _MineBasePainter())),
         Positioned.fill(
@@ -1887,96 +2303,18 @@ class _MineWorld extends StatelessWidget {
         Positioned.fill(
           child: CustomPaint(painter: _ShaftPainter(variant: minorVariant)),
         ),
-        Positioned(
-          left: 8,
-          top: 48,
-          child: Container(
-            key: ValueKey('mine-floor-label-$worldIndex-$floorIndex'),
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-            decoration: BoxDecoration(
-              color: const Color(0xD90A2029),
-              border: Border.all(color: MinePalette.border),
-              borderRadius: BorderRadius.circular(5),
-            ),
-            child: Text(
-              '${_depthLabel((GameState.worldEntryDepths[worldIndex] + floorIndex * 1000).round())} – '
-              '${_depthLabel((GameState.worldEntryDepths[worldIndex] + (floorIndex + 1) * 1000).round())}',
-              style: const TextStyle(
-                color: MinePalette.cream,
-                fontSize: 8,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
-        ),
-        if (isActiveFloor)
-          Positioned(
-            left: (width - elevatorWidth) / 2,
-            top: galleryFloors.first - elevatorHeight,
-            width: elevatorWidth,
-            height: galleryFloors.last - galleryFloors.first + elevatorHeight,
-            child: _MineElevatorMotion(
-              width: elevatorWidth,
-              height: elevatorHeight,
-            ),
-          ),
-        for (var worker = 0; worker < workerSlots.length; worker++)
-          Positioned(
-            left: workerSlots[worker].left,
-            top: workerSlots[worker].top,
-            child: IgnorePointer(
-              child: Transform.flip(
-                flipX: workerSlots[worker].mirrored,
-                child: AnimatedCrewSprite(
-                  key: ValueKey(
-                    'mine-worker-$floorIndex-${workerSlots[worker].gallery}-${workerSlots[worker].crewIndex}',
-                  ),
-                  index: 0,
-                  action: CrewAction.mining,
-                  detailedMiningAnimation: true,
-                  width: workerSlots[worker].width,
-                  height: workerSlots[worker].height,
-                  phaseOffset:
-                      workerSlots[worker].crewIndex * .31 +
-                      workerSlots[worker].gallery * .17,
-                ),
-              ),
-            ),
-          ),
-        if (isActiveFloor && state.drones > 0)
-          Positioned(
-            left: math.max(0, shaftLeft - robotWidth - workerGap).toDouble(),
-            top: galleryFloors[2] - robotHeight,
-            child: IgnorePointer(
-              child: AnimatedCrewSprite(
-                index: 3,
-                action: CrewAction.scanning,
-                width: robotWidth,
-                height: robotHeight,
-                phaseOffset: .42,
-              ),
-            ),
-          ),
-        if (isActiveFloor)
-          Positioned(
-            left: (width - rigWidth) / 2,
-            // The drill point reaches about 98% down its transparent asset.
-            top: height - rigHeight * .98,
-            child: IgnorePointer(
-              child: ContinuousDrillRig(width: rigWidth, height: rigHeight),
-            ),
-          ),
         if (isActiveFloor)
           Positioned(
             left: 0,
             right: 0,
             bottom: 0,
-            height: unminedGroundHeight,
+            height: dugGroundCapHeight,
             child: IgnorePointer(
               child: groundTint == null
                   ? Image.asset(
                       'assets/packs/mine-dug-ground-cap.png',
-                      fit: BoxFit.fill,
+                      fit: BoxFit.cover,
+                      alignment: Alignment.bottomCenter,
                       filterQuality: FilterQuality.none,
                     )
                   : ColorFiltered(
@@ -1986,37 +2324,208 @@ class _MineWorld extends StatelessWidget {
                       ),
                       child: Image.asset(
                         'assets/packs/mine-dug-ground-cap.png',
-                        fit: BoxFit.fill,
+                        fit: BoxFit.cover,
+                        alignment: Alignment.bottomCenter,
                         filterQuality: FilterQuality.none,
                       ),
                     ),
             ),
           ),
-        for (var index = 0; index < deposits.length; index++)
-          _OreNode(
-            key: ValueKey('ore-node-${deposits[index].id}'),
-            deposit: deposits[index],
-            resource: ResourceCatalog.byId[deposits[index].resourceId]!,
-            placement: oreNodes[index],
-            onTap: () {
-              final deposit = deposits[index];
-              final amountBefore =
-                  controller.state.inventory[deposit.resourceId] ?? 0;
-              if (!controller.mineDeposit(deposit.id)) return null;
-              return (controller.state.inventory[deposit.resourceId] ?? 0) -
-                  amountBefore;
-            },
+        if (_shouldLabelMineFloor(worldIndex, floorIndex))
+          Positioned(
+            left: 8,
+            top: 6,
+            child: Container(
+              key: ValueKey('mine-floor-label-$worldIndex-$floorIndex'),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xD90A2029),
+                border: Border.all(color: MinePalette.border),
+                borderRadius: BorderRadius.circular(5),
+              ),
+              child: Text(
+                _mineFloorDepthLabel(worldIndex, floorIndex),
+                style: const TextStyle(
+                  color: MinePalette.cream,
+                  fontSize: 8,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
           ),
+        if (isDiscoveredFloor && !isActiveFloor)
+          for (var worker = 0; worker < workerSlots.length; worker++)
+            Positioned(
+              left: workerSlots[worker].left,
+              top: workerSlots[worker].top,
+              child: IgnorePointer(
+                child: Transform.flip(
+                  flipX: workerSlots[worker].mirrored,
+                  child: AnimatedCrewSprite(
+                    key: ValueKey(
+                      'mine-worker-$floorIndex-${workerSlots[worker].gallery}-${workerSlots[worker].crewIndex}',
+                    ),
+                    index: 0,
+                    action: CrewAction.mining,
+                    detailedMiningAnimation: true,
+                    width: workerSlots[worker].width,
+                    height: workerSlots[worker].height,
+                    phaseOffset:
+                        workerSlots[worker].crewIndex * .31 +
+                        workerSlots[worker].gallery * .17,
+                  ),
+                ),
+              ),
+            ),
+        if (isActiveFloor)
+          Positioned(
+            left: (width - rigWidth) / 2,
+            // The visible drill tip meets the floor edge at the current depth.
+            top: height - rigHeight * .985,
+            child: IgnorePointer(
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  ContinuousDrillRig(
+                    key: ValueKey('deep-drill-rig-$floorIndex'),
+                    width: rigWidth,
+                    height: rigHeight,
+                  ),
+                  if (guideTarget == 'drill')
+                    Positioned(
+                      right: 0,
+                      top: rigHeight * .44,
+                      child: const _AdvisorTargetMarker(size: 28),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        if (isDiscoveredFloor)
+          for (var index = 0; index < deposits.length; index++)
+            _OreNode(
+              key: ValueKey('ore-node-${deposits[index].id}'),
+              deposit: deposits[index],
+              resource: ResourceCatalog.byId[deposits[index].resourceId]!,
+              placement: oreNodes[index],
+              highlighted: guideTarget == 'ore',
+              onTap: () {
+                final deposit = deposits[index];
+                final amountBefore =
+                    controller.state.inventory[deposit.resourceId] ?? 0;
+                if (!controller.mineDeposit(deposit.id)) return null;
+                return (controller.state.inventory[deposit.resourceId] ?? 0) -
+                    amountBefore;
+              },
+            ),
       ],
     );
   }
 }
 
-class _MineElevatorMotion extends StatefulWidget {
-  const _MineElevatorMotion({required this.width, required this.height});
+class _AmbientAdvisorDrone extends StatefulWidget {
+  const _AmbientAdvisorDrone({
+    required this.width,
+    required this.height,
+    required this.narrow,
+  });
 
   final double width;
   final double height;
+  final bool narrow;
+
+  @override
+  State<_AmbientAdvisorDrone> createState() => _AmbientAdvisorDroneState();
+}
+
+class _AmbientAdvisorDroneState extends State<_AmbientAdvisorDrone> {
+  final math.Random _random = math.Random();
+  Timer? _timer;
+  bool _visible = true;
+  double _left = .12;
+  double _top = .18;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleHide();
+  }
+
+  void _scheduleHide() {
+    _timer = Timer(Duration(milliseconds: 2600 + _random.nextInt(1800)), () {
+      if (!mounted) return;
+      setState(() => _visible = false);
+      _timer = Timer(Duration(milliseconds: 1000 + _random.nextInt(1200)), () {
+        if (!mounted) return;
+        setState(() {
+          _left = .08 + _random.nextDouble() * .78;
+          _top = .08 + _random.nextDouble() * .72;
+          _visible = true;
+        });
+        _scheduleHide();
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = widget.narrow ? 60.0 : 76.0;
+    return Stack(
+      clipBehavior: Clip.hardEdge,
+      children: [
+        AnimatedPositioned(
+          left: (widget.width - size) * _left,
+          top: (widget.height - size) * _top,
+          width: size,
+          height: size,
+          duration: const Duration(milliseconds: 700),
+          curve: Curves.easeInOutCubic,
+          child: AnimatedOpacity(
+            opacity: _visible ? 1 : 0,
+            duration: const Duration(milliseconds: 320),
+            curve: Curves.easeInOut,
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0x4424CEC5),
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xBB39DCD2), width: 1.4),
+                boxShadow: const [
+                  BoxShadow(color: Color(0x8839DCD2), blurRadius: 14),
+                ],
+              ),
+              child: AnimatedCrewSprite(
+                index: 3,
+                action: CrewAction.scanning,
+                width: size - 3,
+                height: size - 3,
+                phaseOffset: .29,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+}
+
+class _MineElevatorMotion extends StatefulWidget {
+  const _MineElevatorMotion({
+    required this.width,
+    required this.height,
+    required this.worldExtent,
+    required this.cameraController,
+  });
+
+  final double width;
+  final double height;
+  final double worldExtent;
+  final ScrollController cameraController;
 
   @override
   State<_MineElevatorMotion> createState() => _MineElevatorMotionState();
@@ -2030,33 +2539,61 @@ class _MineElevatorMotionState extends State<_MineElevatorMotion>
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1800),
-    )..repeat(reverse: true);
+    _controller = AnimationController(vsync: this, duration: _travelDuration)
+      ..repeat(reverse: true);
     _position = CurvedAnimation(
       parent: _controller,
       curve: Curves.easeInOutSine,
     );
   }
 
+  Duration get _travelDuration {
+    final viewportHeight = math.max(1.0, widget.height);
+    final milliseconds = (widget.worldExtent / viewportHeight * 3200)
+        .round()
+        .clamp(3200, 120000)
+        .toInt();
+    return Duration(milliseconds: milliseconds);
+  }
+
+  @override
+  void didUpdateWidget(covariant _MineElevatorMotion oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.worldExtent != widget.worldExtent ||
+        oldWidget.height != widget.height) {
+      _controller.duration = _travelDuration;
+    }
+  }
+
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
-    animation: _position,
-    builder: (context, child) =>
-        Align(alignment: Alignment(0, -1 + _position.value * 2), child: child),
-    child: SizedBox(
-      width: widget.width,
-      height: widget.height,
-      child: IgnorePointer(
-        child: Image.asset(
-          'assets/packs/mine-elevator-car.png',
-          fit: BoxFit.contain,
-          alignment: Alignment.bottomCenter,
-          filterQuality: FilterQuality.none,
-        ),
-      ),
-    ),
+    animation: Listenable.merge([_position, widget.cameraController]),
+    builder: (context, _) {
+      final carHeight = math.min(widget.width * 2 / 3, widget.height);
+      final cameraTop = widget.cameraController.hasClients
+          ? widget.cameraController.position.pixels
+          : 0.0;
+      final worldTop =
+          -carHeight + (widget.worldExtent + carHeight * 2) * _position.value;
+      final top = worldTop - cameraTop;
+      return Stack(
+        clipBehavior: Clip.hardEdge,
+        children: [
+          Positioned(
+            left: 0,
+            top: top,
+            width: widget.width,
+            height: carHeight,
+            child: Image.asset(
+              'assets/packs/mine-elevator-car.png',
+              fit: BoxFit.contain,
+              alignment: Alignment.bottomCenter,
+              filterQuality: FilterQuality.none,
+            ),
+          ),
+        ],
+      );
+    },
   );
 
   @override
@@ -2097,8 +2634,24 @@ List<_MineWorkerPlacement> _layoutMineWorkers({
 }) {
   if (crewCount <= 0) return const [];
   final workerCount = math.min(crewCount, 10);
-  final workerWidth = (narrow ? 46.0 : 60.0) * .7;
-  final workerHeight = (narrow ? 62.0 : 80.0) * .7;
+  final baseWorkerWidth = (narrow ? 46.0 : 60.0) * .7;
+  final rightCount = workerCount <= 3
+      ? workerCount
+      : workerCount <= 6
+      ? 3
+      : (workerCount + 1) ~/ 2;
+  final leftCount = workerCount - rightCount;
+  final maxSideCount = math.max(rightCount, leftCount);
+  final edgeInset = narrow ? 0.0 : 8.0;
+  final availableSideWidth = (width - shaftWidth) / 2 - edgeInset - workerGap;
+  final fittedWorkerWidth = maxSideCount <= 0
+      ? baseWorkerWidth
+      : (availableSideWidth - workerGap * (maxSideCount - 1)) / maxSideCount;
+  final workerWidth = math
+      .min(baseWorkerWidth, fittedWorkerWidth)
+      .clamp(12.0, baseWorkerWidth);
+  final workerHeight =
+      (narrow ? 62.0 : 80.0) * .7 * workerWidth / baseWorkerWidth;
   final galleryFloors = _galleryHeightRatios
       .map((ratio) => height * ratio)
       .toList(growable: false);
@@ -2106,10 +2659,9 @@ List<_MineWorkerPlacement> _layoutMineWorkers({
 
   for (var gallery = 0; gallery < galleryFloors.length; gallery++) {
     for (var crewIndex = 0; crewIndex < workerCount; crewIndex++) {
-      final mirrored = crewIndex >= 4;
-      final sideIndex = mirrored ? crewIndex - 4 : crewIndex;
-      final sideCount = mirrored ? workerCount - 4 : math.min(workerCount, 4);
-      final edgeInset = narrow ? 34.0 : 50.0;
+      final mirrored = crewIndex >= rightCount;
+      final sideIndex = mirrored ? crewIndex - rightCount : crewIndex;
+      final sideCount = mirrored ? leftCount : rightCount;
       final firstLeft = mirrored ? edgeInset : width - edgeInset - workerWidth;
       final firstInwardDistance = mirrored
           ? shaftLeft - workerGap - firstLeft - workerWidth
@@ -2162,12 +2714,14 @@ class _OreNode extends StatefulWidget {
     required this.deposit,
     required this.resource,
     required this.placement,
+    required this.highlighted,
     required this.onTap,
   });
 
   final OreDepositState deposit;
   final ResourceDefinition resource;
   final _OreNodePlacement placement;
+  final bool highlighted;
   final int? Function() onTap;
 
   @override
@@ -2179,6 +2733,15 @@ class _OreNodeState extends State<_OreNode> {
 
   final List<_OreGainPopupHandle> _activePopups = [];
   int _popupSequence = 0;
+
+  @override
+  void dispose() {
+    for (final popup in _activePopups.toList()) {
+      popup.remove();
+    }
+    _activePopups.clear();
+    super.dispose();
+  }
 
   void _handleTap() {
     final amount = widget.onTap();
@@ -2266,33 +2829,54 @@ class _OreNodeState extends State<_OreNode> {
     return Positioned(
       left: widget.placement.left,
       top: widget.placement.top,
-      child: SizedBox(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 320),
         width: widget.placement.width,
         height: widget.placement.height,
-        child: Semantics(
-          button: true,
-          label: '${widget.resource.name} cevher taşı',
-          hint: 'Kırmak için dokun.',
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: _handleTap,
-            child: Align(
-              alignment: Alignment.bottomCenter,
-              child: SizedBox(
-                width: widget.placement.iconWidth,
-                height: widget.placement.iconHeight,
-                child: AtlasSprite(
-                  asset: 'resources-treasure-sheet.png',
-                  index: widget.resource.iconIndex,
-                  columns: 4,
-                  rows: 4,
-                  fit: BoxFit.contain,
+        decoration: widget.highlighted
+            ? BoxDecoration(
+                border: Border.all(color: MinePalette.amber, width: 2),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: const [
+                  BoxShadow(color: Color(0xAAFFBE3E), blurRadius: 12),
+                ],
+              )
+            : null,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Semantics(
+              button: true,
+              label: '${widget.resource.name} cevher taşı',
+              hint: 'Kırmak için dokun.',
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _handleTap,
+                child: Align(
                   alignment: Alignment.bottomCenter,
-                  sourceCrop: _oreSpriteCrop(widget.resource.iconIndex),
+                  child: SizedBox(
+                    width: widget.placement.iconWidth,
+                    height: widget.placement.iconHeight,
+                    child: AtlasSprite(
+                      asset: 'resources-treasure-sheet.png',
+                      index: widget.resource.iconIndex,
+                      columns: 4,
+                      rows: 4,
+                      fit: BoxFit.contain,
+                      alignment: Alignment.bottomCenter,
+                      sourceCrop: _oreSpriteCrop(widget.resource.iconIndex),
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
+            if (widget.highlighted)
+              Positioned(
+                right: -7,
+                top: -10,
+                child: const _AdvisorTargetMarker(size: 27),
+              ),
+          ],
         ),
       ),
     );
@@ -2342,42 +2926,32 @@ List<_OreNodePlacement> _layoutMineOreNodes({
   const wallInset = 4.0;
   final shaftWidth = narrow ? 86.0 : 112.0;
   final shaftLeft = (width - shaftWidth) / 2;
-  final workerWidth = narrow ? 46.0 : 60.0;
-  final workerGap = narrow ? 7.0 : 12.0;
   final nodeWidth = math.min(
-    narrow ? 88.0 : 108.0,
-    math.max(48.0, shaftLeft - workerGap - workerWidth - wallInset - 4),
+    narrow ? 70.0 : 108.0,
+    math.max(44.0, (shaftLeft - wallInset - 4) / 2),
   );
-  final nodeHeight = narrow ? 76.0 : 90.0;
+  final nodeHeight = math.min(
+    narrow ? 76.0 : 90.0,
+    math.max(48.0, height * .75),
+  );
   final iconWidth = math.min(nodeWidth - 4, narrow ? 84.0 : 104.0) * .8;
   final iconHeight = (narrow ? 68.0 : 82.0) * .8;
   final floors = _galleryHeightRatios
       .map((ratio) => height * ratio)
       .toList(growable: false);
-  final galleryCount = floors.length;
-  final occupiedSlots = <int>{};
   final placements = <_OreNodePlacement>[];
 
   for (var index = 0; index < deposits.length; index++) {
-    final deposit = deposits[index];
-    final preferredGallery = deposit.pocket.clamp(0, galleryCount - 1).toInt();
-    final preferredSide = deposit.side.clamp(0, 1).toInt();
-    final preferredSlot = preferredSide * galleryCount + preferredGallery;
-    var slot = preferredSlot;
-    for (var offset = 0; offset < galleryCount * 2; offset++) {
-      final candidate = (preferredSlot + offset) % (galleryCount * 2);
-      if (occupiedSlots.add(candidate)) {
-        slot = candidate;
-        break;
-      }
-    }
-    final side = slot ~/ galleryCount;
-    final gallery = slot % galleryCount;
-    final floorY = floors[gallery];
+    final side = index % 2;
+    final lane = index ~/ 2;
+    final laneOffset = lane * (nodeWidth + 4);
+    final floorY = floors.single;
     final floorSurfaceY = floorY - 8;
     placements.add(
       _OreNodePlacement(
-        left: side == 0 ? wallInset : width - wallInset - nodeWidth,
+        left: side == 0
+            ? wallInset + laneOffset
+            : width - wallInset - nodeWidth - laneOffset,
         top: floorSurfaceY - nodeHeight,
         width: nodeWidth,
         height: nodeHeight,
@@ -2398,12 +2972,16 @@ class _MineActionBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
+      final state = controller.state;
+      final guideTarget = AdvisorGuideCatalog.currentFor(state)?.target;
       final compact = constraints.maxWidth < 690;
       final veryNarrow = constraints.maxWidth < 450;
       final shortcuts = veryNarrow
           ? [
               (Icons.engineering_rounded, 'EKİP', 'workshop'),
               (Icons.inventory_2_rounded, 'AMBAR', 'warehouse'),
+              (Icons.task_alt_rounded, 'GÖREV', 'quests'),
+              (Icons.map_rounded, 'SEFER', 'expedition'),
             ]
           : compact
           ? [
@@ -2430,11 +3008,6 @@ class _MineActionBar extends StatelessWidget {
           : compact
           ? 63.0
           : 77.0;
-      final digWidth = veryNarrow
-          ? math.min(178.0, constraints.maxWidth * .44)
-          : compact
-          ? 198.0
-          : 206.0;
       final gap = compact ? 5.0 : 7.0;
       return Container(
         height: 74,
@@ -2458,7 +3031,7 @@ class _MineActionBar extends StatelessWidget {
           ],
         ),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             for (var index = 0; index < shortcuts.length; index++) ...[
               SizedBox(
@@ -2466,33 +3039,13 @@ class _MineActionBar extends StatelessWidget {
                 child: _SquareAction(
                   icon: shortcuts[index].$1,
                   label: shortcuts[index].$2,
+                  enabled: state.canOpenBuilding(shortcuts[index].$3),
+                  highlighted: guideTarget == shortcuts[index].$3,
                   onTap: () => onUtility(shortcuts[index].$3),
                 ),
               ),
               SizedBox(width: gap),
             ],
-            SizedBox(
-              width: digWidth,
-              height: 56,
-              child: ElevatedButton.icon(
-                onPressed: controller.dig,
-                icon: Icon(Icons.bolt_rounded, size: compact ? 21 : 25),
-                label: Text(
-                  'KAZI',
-                  style: TextStyle(
-                    fontSize: compact ? 17 : 20,
-                    letterSpacing: 2,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFFBE3E),
-                  foregroundColor: const Color(0xFF201509),
-                  side: const BorderSide(color: Color(0xFFFFE08B), width: 2),
-                  elevation: 4,
-                ),
-              ),
-            ),
           ],
         ),
       );
@@ -2504,16 +3057,21 @@ class _SquareAction extends StatelessWidget {
   const _SquareAction({
     required this.icon,
     required this.label,
+    required this.enabled,
+    this.highlighted = false,
     required this.onTap,
   });
 
   final IconData icon;
   final String label;
+  final bool enabled;
+  final bool highlighted;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) => Semantics(
-    button: true,
+    button: enabled,
+    enabled: enabled,
     label: label,
     child: SizedBox(
       height: 56,
@@ -2521,27 +3079,66 @@ class _SquareAction extends StatelessWidget {
         color: const Color(0xFF102E3A),
         borderRadius: BorderRadius.circular(8),
         child: InkWell(
-          onTap: onTap,
+          onTap: enabled ? onTap : null,
           borderRadius: BorderRadius.circular(8),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+          child: Stack(
+            clipBehavior: Clip.none,
             children: [
-              Icon(icon, size: 20, color: MinePalette.cyan),
-              const SizedBox(height: 2),
-              Flexible(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    style: const TextStyle(
-                      color: MinePalette.cream,
-                      fontSize: 8,
-                      fontWeight: FontWeight.w900,
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: highlighted
+                        ? BoxDecoration(
+                            border: Border.all(
+                              color: MinePalette.amber,
+                              width: 1.5,
+                            ),
+                            borderRadius: BorderRadius.circular(6),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Color(0x99FFBE3E),
+                                blurRadius: 8,
+                              ),
+                            ],
+                          )
+                        : null,
+                    child: Icon(
+                      enabled ? icon : Icons.lock_outline_rounded,
+                      size: 20,
+                      color: highlighted
+                          ? MinePalette.amber
+                          : enabled
+                          ? MinePalette.cyan
+                          : MinePalette.muted,
                     ),
                   ),
-                ),
+                  const SizedBox(height: 2),
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        style: TextStyle(
+                          color: enabled
+                              ? MinePalette.cream
+                              : MinePalette.muted,
+                          fontSize: 8,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
+              if (highlighted)
+                const Positioned(
+                  right: -2,
+                  top: -7,
+                  child: _AdvisorTargetMarker(size: 25),
+                ),
             ],
           ),
         ),
@@ -2711,15 +3308,39 @@ class _ShaftPainter extends CustomPainter {
     final x = (size.width - shaftWidth) / 2;
     for (var level = 0; level < _galleryHeightRatios.length; level++) {
       final y = size.height * _galleryHeightRatios[level];
-      final nextY = level + 1 < _galleryHeightRatios.length
-          ? size.height * _galleryHeightRatios[level + 1]
-          : size.height - 7;
       final spans = <(double, double)>[
         (0, x - 3),
         (x + shaftWidth + 3, size.width),
       ];
       for (final (start, end) in spans) {
-        final beam = Rect.fromLTRB(start, y - 7, end, y + 10);
+        for (final supportRatio in [.08, .92]) {
+          final supportX = start + (end - start) * supportRatio;
+          final supportTop = Rect.fromLTRB(
+            supportX - 5,
+            0,
+            supportX + 5,
+            math.max(0.0, y - 7),
+          );
+          final supportBottom = Rect.fromLTRB(
+            supportX - 5,
+            math.min(size.height, y + 10),
+            supportX + 5,
+            size.height,
+          );
+          for (final support in [supportTop, supportBottom]) {
+            if (support.height <= 0) continue;
+            canvas.drawRect(support, Paint()..color = const Color(0xFF30241D));
+            canvas.drawRect(
+              Rect.fromLTWH(support.left + 4, support.top, 3, support.height),
+              Paint()..color = const Color(0xFF785238),
+            );
+          }
+        }
+
+        final beamBottom = level == _galleryHeightRatios.length - 1
+            ? size.height
+            : y + 10;
+        final beam = Rect.fromLTRB(start, y - 7, end, beamBottom);
         canvas.drawRect(beam, Paint()..color = const Color(0xFF1C1715));
         canvas.drawRect(
           Rect.fromLTRB(start, y - 7, end, y - 3),
@@ -2753,22 +3374,6 @@ class _ShaftPainter extends CustomPainter {
             Paint()..color = const Color(0xFFE5B66B),
           );
         }
-
-        for (final supportRatio in [.08, .92]) {
-          final supportX = start + (end - start) * supportRatio;
-          final supportHeight = nextY - y - 17;
-          if (supportHeight <= 0) continue;
-          final support = Rect.fromLTWH(supportX - 5, y + 9, 10, supportHeight);
-          canvas.drawRect(support, Paint()..color = const Color(0xFF30241D));
-          canvas.drawRect(
-            Rect.fromLTWH(supportX - 1, support.top, 3, support.height),
-            Paint()..color = const Color(0xFF785238),
-          );
-          canvas.drawRect(
-            Rect.fromLTWH(support.left + 1, support.top, 2, 3),
-            Paint()..color = const Color(0xFFE5B66B),
-          );
-        }
       }
     }
     canvas.restore();
@@ -2781,6 +3386,16 @@ class _ShaftPainter extends CustomPainter {
 
 String _depthLabel(int meters) =>
     meters >= 1000 ? '${_number(meters ~/ 1000)} km' : '$meters m';
+
+bool _shouldLabelMineFloor(int worldIndex, int floorIndex) {
+  final depthAtFloorEnd =
+      GameState.worldEntryDepths[worldIndex] + (floorIndex + 1) * 1000;
+  return depthAtFloorEnd == 1000 || depthAtFloorEnd % 5000 == 0;
+}
+
+String _mineFloorDepthLabel(int worldIndex, int floorIndex) => _depthLabel(
+  (GameState.worldEntryDepths[worldIndex] + (floorIndex + 1) * 1000).round(),
+);
 
 String _number(num value) {
   final raw = value.round().toString();
@@ -2805,18 +3420,123 @@ String _formatCoins(MrMineBigNumber coins) {
   return result.toString();
 }
 
+String _goalRequirementLine(
+  GameController controller, {
+  AdvisorGuideDefinition? guide,
+  required QuestDefinition quest,
+}) {
+  final state = controller.state;
+  if (guide != null) {
+    if (guide.isTutorial) {
+      switch (quest.id) {
+        case 0:
+          final veins = state.oreDeposits.values
+              .where((deposit) => !deposit.depleted)
+              .length;
+          return '$veins kömür damarı hazır • her damar 5 vuruşta tükenir.';
+        case 1:
+          return 'Satış hedefi: 40 kasa • toplam satış: ${_formatCoins(state.totalSold)}.';
+        case 2:
+          final cost = GameEngine.minerCost(state);
+          return 'Madenci: ${_formatCoins(MrMineBigNumber.fromNum(cost))} kasa • kasan: ${_formatCoins(state.coins)}.';
+        case 3:
+          final cost = GameEngine.upgradeCost(state, 'drill');
+          final requirements = GameEngine.upgradeMaterialRequirements(
+            state,
+            'drill',
+          );
+          final recipe = requirements.entries
+              .map(
+                (entry) =>
+                    '${entry.value} ${ResourceCatalog.byId[entry.key]?.name ?? entry.key}',
+              )
+              .join(' + ');
+          final materials = recipe.isEmpty ? '' : ' + $recipe';
+          return 'Sondaj ucu: ${_formatCoins(MrMineBigNumber.fromNum(cost))} kasa$materials.';
+        case 4:
+          final remaining =
+              (80 - (state.deepestMeters - state.questDepthBaselineMeters))
+                  .ceil()
+                  .clamp(0, 80);
+          return 'Matkap otomatik ilerliyor • $remaining m kaldı • hedef 5,08 km.';
+      }
+    }
+    if (guide.requiredDepthMeters > 0) {
+      return 'Kilometre taşı: ${_depthLabel(guide.requiredDepthMeters)} • açmak için AÇ düğmesine dokun.';
+    }
+    return 'Açılan sistemi görmek için AÇ düğmesine dokun.';
+  }
+
+  final progress = controller.currentQuestProgress;
+  final remaining = math.max(0, quest.target - progress);
+  if (controller.currentQuestReady) return 'Hedef tamamlandı • ödülünü al.';
+  return switch (quest.kind) {
+    QuestKind.mine =>
+      '$remaining cevher daha çıkar • kuyudaki damarları tıkla.',
+    QuestKind.depth =>
+      quest.absoluteDepth
+          ? 'Son hedef: ${_depthLabel(quest.target)} • matkap otomatik ilerliyor.'
+          : '$remaining m kaldı • matkap otomatik ilerliyor.',
+    QuestKind.hire =>
+      'Sıradaki madenci: ${_formatCoins(MrMineBigNumber.fromNum(GameEngine.minerCost(state)))} kasa • kasan: ${_formatCoins(state.coins)}.',
+    QuestKind.sell =>
+      'Satış hedefi ${_number(quest.target)} kasa • toplam satış: ${_formatCoins(state.totalSold)}.',
+    QuestKind.upgrade => _drillUpgradeRequirementLine(state),
+    QuestKind.chest =>
+      'Bulunan sandık: ${state.totalChestsFound} • Ticaret panelinde bir sandık aç.',
+    QuestKind.cave => 'Sefer Garajında bir rota başlat ve dronu geri getir.',
+    QuestKind.relic =>
+      'Araştırmada kalıntı kazısı başlat ve buluntuyu teslim al.',
+    QuestKind.boss => 'Cephanelikte zayıf noktayı açıp muhafıza saldır.',
+    QuestKind.resonance =>
+      'Parlayan damarları işaretli sırayla seç ve diziyi tamamla.',
+  };
+}
+
+String _investmentRequirementLine(GameState state) {
+  final minerCost = GameEngine.minerCost(state).round();
+  final drillCost = GameEngine.upgradeCost(state, 'drill');
+  final drillLevel = state.upgradeLevel('drill') + 1;
+  final requirements = GameEngine.upgradeMaterialRequirements(state, 'drill');
+  final materials = requirements.entries
+      .map((entry) {
+        final name = ResourceCatalog.byId[entry.key]?.name ?? entry.key;
+        final available = math.max(
+          0,
+          state.amount(entry.key) - state.reserve(entry.key),
+        );
+        return '$available/${entry.value} $name';
+      })
+      .join(' + ');
+  final materialSuffix = materials.isEmpty ? '' : ' + $materials';
+  final drill = drillCost <= 0
+      ? 'Matkap üst sınırda'
+      : 'Matkap $drillLevel. kademe: ${_formatCoins(MrMineBigNumber.fromNum(drillCost))} kasa$materialSuffix';
+  final hire = state.activeMinerCount <= 0
+      ? 'önce madenci: ${_formatCoins(MrMineBigNumber.fromNum(minerCost))} kasa'
+      : 'sonraki madenci: ${_formatCoins(MrMineBigNumber.fromNum(minerCost))} kasa';
+  return '$drill • $hire';
+}
+
+String _drillUpgradeRequirementLine(GameState state) {
+  final cost = GameEngine.upgradeCost(state, 'drill');
+  final requirements = GameEngine.upgradeMaterialRequirements(state, 'drill');
+  final recipe = requirements.entries
+      .map(
+        (entry) =>
+            '${entry.value} ${ResourceCatalog.byId[entry.key]?.name ?? entry.key}',
+      )
+      .join(' + ');
+  final cash =
+      'Sondaj ucu: ${_formatCoins(MrMineBigNumber.fromNum(cost))} kasa';
+  final materials = recipe.isEmpty ? '' : ' + $recipe';
+  final crew = state.activeMinerCount <= 0 ? ' • önce 1 madenci al' : '';
+  return '$cash$materials$crew.';
+}
+
 String _duration(int seconds) {
   final safe = math.max(0, seconds);
   final minutes = safe ~/ 60;
   final remainingSeconds = safe % 60;
   return '${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
 }
-
-String _tutorialText(int step) => switch (step) {
-  0 => '1 / 5  •  Kömür yığınını birkaç kez tıklayıp kır; cevheri topla.',
-  1 => '2 / 5  •  Ambarı açıp topladığın cevheri sat.',
-  2 => '3 / 5  •  Satış kasasıyla atölyeden ilk madencini işe al.',
-  3 => '4 / 5  •  Atölyeden sondaj ucunu yükselt.',
-  4 => '5 / 5  •  KAZI ile kuyuyu ilerlet veya yüzey binalarını keşfet.',
-  _ => '',
-};

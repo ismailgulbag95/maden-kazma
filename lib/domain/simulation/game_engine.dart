@@ -215,9 +215,11 @@ abstract final class GameEngine {
     }
     state.discoveredEncounters.add('blueprint_encounter_$id');
     state.discoveredEncounters.add('${encounter.$1} • montaj planları');
-    for (var blueprintId = encounter.$3;
-        blueprintId <= encounter.$4;
-        blueprintId++) {
+    for (
+      var blueprintId = encounter.$3;
+      blueprintId <= encounter.$4;
+      blueprintId++
+    ) {
       state.knownBlueprintIds.add(blueprintId);
     }
     return true;
@@ -232,8 +234,7 @@ abstract final class GameEngine {
         _ => 0,
       };
 
-  static int _targetLevelForBlueprint(int blueprintId) =>
-      blueprintId ~/ 4 + 2;
+  static int _targetLevelForBlueprint(int blueprintId) => blueprintId ~/ 4 + 2;
 
   static int _highestEquipmentLevel(GameState state) => max(
     max(state.drillEngineLevel, state.drillBitLevel),
@@ -245,7 +246,8 @@ abstract final class GameEngine {
       for (var id = range.$1; id <= range.$2; id++)
         if (!state.knownBlueprintIds.contains(id) &&
             (id % 4 != 3 ||
-                _targetLevelForBlueprint(id) <= CargoEquipmentCatalog.all.length) &&
+                _targetLevelForBlueprint(id) <=
+                    CargoEquipmentCatalog.all.length) &&
             _targetLevelForBlueprint(id) >
                 _levelForBlueprintPart(state, id % 4))
           id,
@@ -277,10 +279,12 @@ abstract final class GameEngine {
         DrillAssemblyCatalog.byId['fan']!,
         targetLevel - 1,
       ),
-      _ => CargoEquipmentCatalog.all
-          .where((equipment) => equipment.level == targetLevel)
-          .firstOrNull
-          ?.cashCost ?? 0,
+      _ =>
+        CargoEquipmentCatalog.all
+                .where((equipment) => equipment.level == targetLevel)
+                .firstOrNull
+                ?.cashCost ??
+            0,
     };
   }
 
@@ -292,8 +296,8 @@ abstract final class GameEngine {
       (range) =>
           state.knownBlueprintIds.any((id) => id >= range.$1 && id <= range.$2),
     );
-    final firstDiscovery = _highestEquipmentLevel(state) == 13 &&
-        !hasDiscoveredPlan;
+    final firstDiscovery =
+        _highestEquipmentLevel(state) == 13 && !hasDiscoveredPlan;
     final depthKm = state.depthMeters / 1000;
     if (!firstDiscovery && random.nextDouble() > 500 / (depthKm + 1)) {
       return null;
@@ -307,13 +311,11 @@ abstract final class GameEngine {
     if (state.knownBlueprintIds.isEmpty) return const [];
     final lastOwnedId = state.knownBlueprintIds.reduce(max);
     final currentBlueprintLevel = _targetLevelForBlueprint(lastOwnedId);
-    return _discoverableBlueprints(state)
-        .where((id) {
-          final level = _targetLevelForBlueprint(id);
-          return level == currentBlueprintLevel ||
-              level == currentBlueprintLevel + 1;
-        })
-        .toList();
+    return _discoverableBlueprints(state).where((id) {
+      final level = _targetLevelForBlueprint(id);
+      return level == currentBlueprintLevel ||
+          level == currentBlueprintLevel + 1;
+    }).toList();
   }
 
   static double _sourceErf(double value) {
@@ -327,9 +329,7 @@ abstract final class GameEngine {
     const p = 0.3275911;
     final t = 1 / (1 + p * x);
     final y =
-        1 -
-        (((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t) *
-            exp(-x * x);
+        1 - (((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t) * exp(-x * x);
     return sign * y;
   }
 
@@ -497,8 +497,7 @@ abstract final class GameEngine {
       componentId,
       nextLevel,
     );
-    if (blueprintId != null &&
-        !state.knownBlueprintIds.contains(blueprintId)) {
+    if (blueprintId != null && !state.knownBlueprintIds.contains(blueprintId)) {
       return false;
     }
     if (drillAssemblyMaterialDeficits(state, componentId).isNotEmpty) {
@@ -818,6 +817,9 @@ abstract final class GameEngine {
   }
 
   static bool upgradeWorkerLevel(GameState state) {
+    if (state.guidedProgression && !state.canOpenBuilding('workshop')) {
+      return false;
+    }
     final level = state.activeWorkerLevel;
     final cost = workerLevelCost(state);
     if (state.activeMinerCount < 10 || level >= 10 || !state.canAfford(cost)) {
@@ -845,17 +847,24 @@ abstract final class GameEngine {
   }
 
   static bool canUpgradeCargo(GameState state) {
+    if (state.guidedProgression && !state.canOpenBuilding('warehouse')) {
+      return false;
+    }
     final next = nextCargoEquipment(state);
     final blueprintId = next == null
         ? null
         : DrillAssemblyCatalog.blueprintIdFor('cargo', next.level);
     return next != null &&
-        (blueprintId == null || state.knownBlueprintIds.contains(blueprintId)) &&
+        (blueprintId == null ||
+            state.knownBlueprintIds.contains(blueprintId)) &&
         state.canAfford(next.cashCost) &&
         cargoUpgradeDeficits(state).isEmpty;
   }
 
   static bool upgradeCargo(GameState state) {
+    if (state.guidedProgression && !state.canOpenBuilding('warehouse')) {
+      return false;
+    }
     final next = nextCargoEquipment(state);
     if (next == null || !canUpgradeCargo(state)) return false;
     state.spendCoins(next.cashCost);
@@ -878,36 +887,58 @@ abstract final class GameEngine {
   static const double mineDepositSpawnChancePerMeter = .00045;
   static const int maxLiveDepositsPerFloor = 4;
 
-  /// Gives a fresh surface shift its guaranteed coal tutorial deposit.
-  /// Other deposits spawn as the drill advances; open floors stay empty until
-  /// a random spawn lands in them.
+  /// Gives the new crew a small, guaranteed coal group on its starting floor.
   static void ensureOpenMineDeposits(GameState state) {
+    final starterFloor = MineBiome.floorAt(GameState.startingDepthMeters);
     state.oreDeposits.removeWhere((_, deposit) {
       if (deposit.depleted) return false;
       final spawnDepth =
           deposit.spawnDepthMeters ??
           GameState.worldEntryDepths[deposit.worldIndex] +
               deposit.floorIndex * mineFloorMeters.toDouble();
-      return MineBiome.worldAt(spawnDepth) != deposit.worldIndex ||
+      final wrongBiome =
+          MineBiome.worldAt(spawnDepth) != deposit.worldIndex ||
           !MineBiome.containsMineral(spawnDepth, deposit.resourceId);
+      // Older builds reran the tutorial guarantee at the player's current
+      // depth, leaving four tutorial coal veins on every floor they crossed.
+      // Natural veins do not spawn before 100 km, so remove those stale
+      // duplicates from existing saves while keeping the original starter set.
+      final duplicateTutorialCoal =
+          deposit.worldIndex == 0 &&
+          deposit.floorIndex != starterFloor &&
+          deposit.resourceId == 'coal' &&
+          spawnDepth < mineDepositSpawnDepth;
+      return wrongBiome || duplicateTutorialCoal;
     });
 
-    if (state.activeWorldIndex != 0 || state.depthMeters >= mineFloorMeters) {
+    if (state.activeWorldIndex != 0 ||
+        !state.guidedProgression ||
+        state.initialTutorialComplete ||
+        state.tutorialStep != 0) {
       return;
     }
-    if (state.oreDeposits.keys.any((id) => id.startsWith('0:0:'))) return;
+    final starterDepth = GameState.startingDepthMeters;
+    if (!MineBiome.containsMineral(starterDepth, 'coal')) return;
+
+    const starterCoalVeins = 4;
+    final createdStarterVeins = state.oreDeposits.keys
+        .where((id) => id.startsWith('0:$starterFloor:'))
+        .length;
+    if (createdStarterVeins >= starterCoalVeins) return;
 
     final random = Random(state.seed);
-    _createMineDeposit(
-      state,
-      worldIndex: 0,
-      floorIndex: 0,
-      spawnDepth: 0,
-      resource: ResourceCatalog.byId['coal']!,
-      valuePerClick: 2,
-      hitPoints: 5,
-      random: random,
-    );
+    for (var vein = createdStarterVeins; vein < starterCoalVeins; vein++) {
+      _createMineDeposit(
+        state,
+        worldIndex: 0,
+        floorIndex: starterFloor,
+        spawnDepth: starterDepth,
+        resource: ResourceCatalog.byId['coal']!,
+        valuePerClick: 2,
+        hitPoints: 5,
+        random: random,
+      );
+    }
     state.seed = random.nextInt(0x7fffffff);
   }
 
@@ -920,7 +951,9 @@ abstract final class GameEngine {
     required double metersAdvanced,
     double chancePerMeter = mineDepositSpawnChancePerMeter,
   }) {
-    if (state.depthMeters <= mineDepositSpawnDepth || metersAdvanced <= 0) {
+    if (state.depthMeters <= mineDepositSpawnDepth ||
+        metersAdvanced <= 0 ||
+        state.cargoFull) {
       return false;
     }
     if (MrMineProgression.worldAtDepth(state.depthMeters) !=
@@ -1006,8 +1039,8 @@ abstract final class GameEngine {
         (worldDepth / mineFloorMeters).floor() + 1,
       );
       if (endFloor <= firstFloor) continue;
-      final hired = state.worldMinerCounts[key] ?? 0;
-      final workerLevel = state.worldWorkerLevels[key] ?? 0;
+      final hired = _minerCountForWorld(state, world);
+      final workerLevel = _workerLevelForWorld(state, world);
       final workerGate = ((hired * 2 + workerLevel * 3) / 40)
           .clamp(0, 1)
           .toDouble();
@@ -1080,6 +1113,16 @@ abstract final class GameEngine {
     }
     return rates;
   }
+
+  static int _minerCountForWorld(GameState state, int worldIndex) =>
+      worldIndex == state.activeWorldIndex
+      ? state.activeMinerCount
+      : state.worldMinerCounts[worldIndex.toString()] ?? 0;
+
+  static int _workerLevelForWorld(GameState state, int worldIndex) =>
+      worldIndex == state.activeWorldIndex
+      ? state.activeWorkerLevel
+      : state.worldWorkerLevels[worldIndex.toString()] ?? 0;
 
   static double _expectedMineralValuePerSecond(Map<String, double> rates) =>
       ResourceCatalog.minerals.fold<double>(
@@ -1729,13 +1772,22 @@ abstract final class GameEngine {
     final earned = <AchievementDefinition>[];
     for (final achievement in AchievementCatalog.all) {
       if (state.unlockedAchievements.contains(achievement.id)) continue;
+      // A fresh shift begins at 5 km, so earlier depth milestones are already
+      // reached. Record them without granting their old milestone rewards.
+      if (state.guidedProgression &&
+          achievement.kind == 'depth' &&
+          state.questDepthBaselineMeters >= achievement.target) {
+        state.unlockedAchievements.add(achievement.id);
+        continue;
+      }
       final progress = switch (achievement.kind) {
         'mine' => state.totalMined,
         'depth' || 'world' => state.deepestMeters.floor(),
         'crew' => state.crewCount,
-        'sale' => state.totalSold.exponent >= 9
-            ? 1000000000
-            : state.totalSold.toDouble().clamp(0, 1000000000).floor(),
+        'sale' =>
+          state.totalSold.exponent >= 9
+              ? 1000000000
+              : state.totalSold.toDouble().clamp(0, 1000000000).floor(),
         'chest' => state.chestsOpened,
         'cave' => state.cavesCompleted,
         'relic' => state.relicsFound,
@@ -1799,6 +1851,12 @@ abstract final class GameEngine {
         recordDailyProgress(state, 'depth', metersAdvanced, now: currentTime);
       }
       state.deepestMeters = max(state.deepestMeters, state.depthMeters);
+      if (state.guidedProgression &&
+          !state.initialTutorialComplete &&
+          state.tutorialStep == 4 &&
+          state.deepestMeters - state.questDepthBaselineMeters >= 80) {
+        state.tutorialStep = 5;
+      }
       final relicPressureResistance = state.equippedRelics.contains('relic_6')
           ? 1 - (0.4 + state.relicLevel('relic_6') * 0.1)
           : 1.0;
@@ -1822,7 +1880,18 @@ abstract final class GameEngine {
         useSourceRolls: requestedSeconds <= 4 && allowRandomEvents,
       );
       mined += producedThisSecond;
-      if (producedThisSecond > 0 &&
+      if (state.autoSellEnabled &&
+          state.cargoRatio >= state.autoSellThreshold &&
+          (!state.guidedProgression || state.canOpenBuilding('trade'))) {
+        final revenue = sellAll(state, worldIndex: state.activeWorldIndex);
+        if (revenue.greaterThan(MrMineBigNumber.zero)) {
+          events.add('Otomatik satış +$revenue kasa');
+        }
+      }
+      if ((!state.guidedProgression ||
+              state.initialTutorialComplete ||
+              state.debugModeEnabled) &&
+          producedThisSecond > 0 &&
           random.nextInt(
                 max(
                   200,
@@ -1855,6 +1924,9 @@ abstract final class GameEngine {
       _advanceGemCrafting(state, events);
       _unlockMilestones(state, events);
       if (allowRandomEvents &&
+          (!state.guidedProgression ||
+              state.initialTutorialComplete ||
+              state.debugModeEnabled) &&
           state.activeMineEventId == null &&
           state.miningSeconds >= state.nextMineEventAtSeconds) {
         final event =
@@ -1944,7 +2016,9 @@ abstract final class GameEngine {
         }
         state.totalMined += addedThis;
         totalAdded += addedThis;
-        if (addedThis > 0) recordDailyProgress(state, 'mine', addedThis, now: now);
+        if (addedThis > 0) {
+          recordDailyProgress(state, 'mine', addedThis, now: now);
+        }
       } else {
         final added = _addResource(
           state,
@@ -1983,8 +2057,8 @@ abstract final class GameEngine {
       );
       if (endFloor <= firstFloor) continue;
 
-      final hired = state.worldMinerCounts[world.toString()] ?? 0;
-      final workerLevel = state.worldWorkerLevels[world.toString()] ?? 0;
+      final hired = _minerCountForWorld(state, world);
+      final workerLevel = _workerLevelForWorld(state, world);
       final workerGateThreshold = (hired * 2 + workerLevel * 3)
           .clamp(0, 40)
           .toInt();
@@ -2086,6 +2160,9 @@ abstract final class GameEngine {
   }
 
   static bool switchWorld(GameState state, int worldIndex) {
+    if (state.guidedProgression && !state.canOpenBuilding('expedition')) {
+      return false;
+    }
     if (worldIndex < 0 || worldIndex >= GameState.worldEntryDepths.length) {
       return false;
     }
@@ -2206,29 +2283,20 @@ abstract final class GameEngine {
     return collectedAfterHit - alreadyCollected;
   }
 
-  /// The KAZI button advances the active drill without awarding ore.
-  static bool manualDig(GameState state, {DateTime? now}) {
-    final drillLevel = state.upgradeLevel('drill');
-    final distance = 1 + drillLevel ~/ 5;
-    final previousDepth = state.depthMeters;
-    state.depthMeters = min(
-      maxDrillDepthForWorld(state.activeWorldIndex),
-      state.depthMeters + distance,
-    );
-    final metersAdvanced = state.depthMeters - previousDepth;
-    if (metersAdvanced <= 0) return false;
-    state.deepestMeters = max(state.deepestMeters, state.depthMeters);
-    final random = Random(state.seed);
-    rollForMineralDepositSpawn(state, random, metersAdvanced: metersAdvanced);
-    state.seed = random.nextInt(0x7fffffff);
-    recordDailyProgress(state, 'depth', metersAdvanced.floor(), now: now);
-    if (state.tutorialStep == 4) state.tutorialStep = 5;
-    _unlockMilestones(state, []);
-    ensureOpenMineDeposits(state);
-    return true;
-  }
-
   static bool buyUpgrade(GameState state, String track) {
+    if (track == 'drill' && state.activeMinerCount == 0) return false;
+    if (state.guidedProgression &&
+        !state.debugModeEnabled &&
+        !state.initialTutorialComplete &&
+        state.tutorialStep < 3) {
+      return false;
+    }
+    if (state.guidedProgression &&
+        !state.canOpenBuilding(
+          track == 'warehouse' ? 'warehouse' : 'workshop',
+        )) {
+      return false;
+    }
     if (track == 'workers') return upgradeWorkerLevel(state);
     if (track == 'warehouse') return upgradeCargo(state);
     if (track == 'reactor') return upgradeReactor(state);
@@ -2256,6 +2324,7 @@ abstract final class GameEngine {
         (delta != -1 && delta != 1)) {
       return false;
     }
+    if (delta > 0 && !state.workerRoleUnlocked(role)) return false;
     final current = state.workerAssignments[role] ?? 0;
     if (delta > 0) {
       final targetIndex = state.workerRolePriority.indexOf(role);
@@ -2290,6 +2359,7 @@ abstract final class GameEngine {
     String role,
     int position,
   ) {
+    if (!state.workerRoleUnlocked(role)) return false;
     final current = state.workerRolePriority.indexOf(role);
     if (current < 0 ||
         position < 0 ||
@@ -2302,6 +2372,15 @@ abstract final class GameEngine {
   }
 
   static bool hireMiner(GameState state) {
+    if (state.guidedProgression &&
+        !state.debugModeEnabled &&
+        !state.initialTutorialComplete &&
+        state.tutorialStep != 2) {
+      return false;
+    }
+    if (state.guidedProgression && !state.canOpenBuilding('workshop')) {
+      return false;
+    }
     final cost = minerCost(state);
     if (!state.canAfford(cost) || state.activeMinerCount >= 10) {
       return false;
@@ -2430,7 +2509,9 @@ abstract final class GameEngine {
   }
 
   static int _unreserved(GameState state, String id) =>
-      max(0, state.amount(id) - state.reserve(id));
+      state.lockedResources.contains(id)
+      ? 0
+      : max(0, state.amount(id) - state.reserve(id));
 
   static void _consumeResource(GameState state, String id, int amount) {
     final resource = ResourceCatalog.byId[id];
@@ -2449,16 +2530,16 @@ abstract final class GameEngine {
     String resourceId, {
     int? requested,
   }) {
+    if (state.guidedProgression && !state.canOpenBuilding('warehouse')) {
+      return MrMineBigNumber.zero;
+    }
     final resource = ResourceCatalog.byId[resourceId];
     if (resource == null ||
         (resource.kind != ResourceKind.mineral &&
             resource.kind != ResourceKind.isotope)) {
       return MrMineBigNumber.zero;
     }
-    final available = max(
-      0,
-      state.amount(resourceId) - state.reserve(resourceId),
-    );
+    final available = _unreserved(state, resourceId);
     final quantity = min(available, requested ?? available);
     if (quantity <= 0) return MrMineBigNumber.zero;
     state.inventory[resourceId] = state.amount(resourceId) - quantity;
@@ -2600,6 +2681,11 @@ abstract final class GameEngine {
       _ => 2,
     };
     final oreAmount = ore == null ? 0 : oreBase + random.nextInt(4);
+    if (ore != null &&
+        oreAmount > 0 &&
+        !_fitsLoot(state, {ore.id: oreAmount})) {
+      return 0;
+    }
     switch (tier) {
       case 'basic':
         state.chestsFound--;
@@ -2622,7 +2708,9 @@ abstract final class GameEngine {
     if (tier == 'gold') {
       final blueprintId = _rollDiscoveredBlueprint(state, random);
       if (blueprintId != null) {
-        state.discoveredEncounters.add('Montaj şeması #$blueprintId keşfedildi');
+        state.discoveredEncounters.add(
+          'Montaj şeması #$blueprintId keşfedildi',
+        );
       }
     }
     if (ore != null && oreAmount > 0) _addResource(state, ore, oreAmount);
@@ -3125,9 +3213,8 @@ abstract final class GameEngine {
       } else if (entry.key == 'cave_scientist') {
         if (!addScientist(state)) {
           state.addCoins(
-            MrMineBigNumber.fromNum(entry.value).multiply(
-              const MrMineBigNumber.raw(4.5, 2),
-            ),
+            MrMineBigNumber.fromNum(entry.value)
+                .multiply(const MrMineBigNumber.raw(4.5, 2)),
           );
         }
       } else if (entry.key == 'cave_buff') {
@@ -3143,9 +3230,8 @@ abstract final class GameEngine {
     }
     state.addCoins(
       MrMineBigNumber.fromNum(80).add(
-        MrMineBigNumber.fromNum(state.expeditionLevel).multiply(
-          const MrMineBigNumber.raw(2.5, 1),
-        ),
+        MrMineBigNumber.fromNum(state.expeditionLevel)
+            .multiply(const MrMineBigNumber.raw(2.5, 1)),
       ),
     );
     state.cavesCompleted++;
@@ -3571,7 +3657,18 @@ abstract final class GameEngine {
     return (remaining / weight).floor();
   }
 
-  static bool _fitsLoot(GameState state, Map<String, int> loot) => true;
+  static bool _fitsLoot(GameState state, Map<String, int> loot) {
+    var additionalCargo = 0.0;
+    for (final entry in loot.entries) {
+      final resource = ResourceCatalog.byId[entry.key];
+      if (resource == null || !resource.countsTowardsCapacityAndValue) {
+        continue;
+      }
+      additionalCargo += max(0, entry.value) * max(1, resource.weight);
+    }
+    return state.cargoUsed + additionalCargo <=
+        state.effectiveCargoCapacity + 1e-9;
+  }
 
   static void _generateCaveLoot(GameState state, Random random) {
     final ore = MineBiome.dominantMineral(state.depthMeters);
@@ -3606,6 +3703,11 @@ abstract final class GameEngine {
   }
 
   static void _unlockMilestones(GameState state, List<String> events) {
+    if (state.guidedProgression &&
+        !state.debugModeEnabled &&
+        !state.initialTutorialComplete) {
+      return;
+    }
     if (state.deepestMeters >= 1032000) {
       state.knownBlueprintIds.addAll(
         List<int>.generate(9, (index) => 61 + index),
@@ -3623,7 +3725,12 @@ abstract final class GameEngine {
     }
     for (final entry in milestoneBuildings.entries) {
       final depth = double.parse(entry.key);
+      final guideAcknowledged =
+          !state.guidedProgression ||
+          state.debugModeEnabled ||
+          state.completedAdvisorGuideIds.contains(entry.value);
       if (state.deepestMeters >= depth &&
+          guideAcknowledged &&
           state.unlockedBuildings.add(entry.value)) {
         events.add(_milestoneMessage(entry.value));
         state.addCoins(100 + (depth / 1000).floor());
@@ -3648,6 +3755,16 @@ abstract final class GameEngine {
         );
       }
     }
+  }
+
+  static void completeStarterTutorial(GameState state, List<String> events) {
+    if (!state.guidedProgression || !state.initialTutorialComplete) return;
+    state.unlockedBuildings.addAll({'workshop', 'warehouse'});
+    _unlockMilestones(state, events);
+  }
+
+  static void unlockReachedMilestones(GameState state, List<String> events) {
+    _unlockMilestones(state, events);
   }
 
   static String _milestoneMessage(String id) => switch (id) {

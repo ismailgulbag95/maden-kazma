@@ -18,7 +18,8 @@ import 'mr_mine_drill_difficulty.dart';
 import 'buff_lab_definition.dart';
 
 class GameState {
-  static const int currentSchemaVersion = 21;
+  static const int currentSchemaVersion = 24;
+  static const double startingDepthMeters = 5000;
   static const List<double> worldEntryDepths = [0, 1032000, 1814000];
   static const List<double> autoSellThresholdChoices = [.6, .75, .85, .95];
   static const List<double> cargoCapacities = [
@@ -44,6 +45,8 @@ class GameState {
     Object? coins,
     this.depthMeters = 0,
     this.deepestMeters = 0,
+    this.questDepthBaselineMeters = 0,
+    this.questCrewBaselineCount = 1,
     this.pressure = 14,
     this.energy = 0,
     this.cargoCapacity = 1500,
@@ -105,6 +108,7 @@ class GameState {
     this.notificationsEnabled = true,
     this.debugModeEnabled = false,
     this.debugUnlimitedMoney = false,
+    this.guidedProgression = false,
     this.managerLevel = 0,
     this.oilPumpLevel = 1,
     this.oilPumpProgress = 0,
@@ -133,6 +137,7 @@ class GameState {
     Set<String>? lockedResources,
     Set<String>? activeBuffIds,
     Set<String>? unlockedBuildings,
+    Set<String>? completedAdvisorGuideIds,
     Set<String>? discoveredEncounters,
     Set<int>? defeatedBossIds,
     Set<String>? unlockedAchievements,
@@ -179,9 +184,8 @@ class GameState {
            },
        reactorComponents = reactorComponents ?? ReactorCatalog.starterLayout(),
        claimedQuestIds = claimedQuestIds ?? <int>{},
-       knownBlueprintIds = knownBlueprintIds ?? <int>{
-         for (var id = 0; id <= 15; id++) id,
-       },
+       knownBlueprintIds =
+           knownBlueprintIds ?? <int>{for (var id = 0; id <= 15; id++) id},
        unlockedRelics = unlockedRelics ?? <String>{},
        equippedRelics = equippedRelics ?? <String>{},
        equippedGems = equippedGems ?? <String>{},
@@ -197,6 +201,7 @@ class GameState {
              'research',
              'expedition',
            },
+       completedAdvisorGuideIds = completedAdvisorGuideIds ?? <String>{},
        discoveredEncounters = discoveredEncounters ?? <String>{},
        defeatedBossIds = defeatedBossIds ?? <int>{},
        unlockedAchievements = unlockedAchievements ?? <String>{},
@@ -253,7 +258,10 @@ class GameState {
        _coins = _coerceBigNumber(coins, const MrMineBigNumber.raw(2.4, 2)),
        _totalSold = _coerceBigNumber(totalSold, MrMineBigNumber.zero);
 
-  static MrMineBigNumber _coerceBigNumber(Object? val, MrMineBigNumber fallback) {
+  static MrMineBigNumber _coerceBigNumber(
+    Object? val,
+    MrMineBigNumber fallback,
+  ) {
     if (val == null) return fallback;
     if (val is MrMineBigNumber) return val;
     if (val is num) return MrMineBigNumber.fromNum(val);
@@ -275,8 +283,11 @@ class GameState {
   set totalSold(Object value) {
     _totalSold = _coerceBigNumber(value, _totalSold);
   }
+
   double depthMeters;
   double deepestMeters;
+  double questDepthBaselineMeters;
+  int questCrewBaselineCount;
   double pressure;
   double energy;
   double cargoCapacity;
@@ -337,6 +348,7 @@ class GameState {
   bool notificationsEnabled;
   bool debugModeEnabled;
   bool debugUnlimitedMoney;
+  bool guidedProgression;
   int managerLevel;
   int oilPumpLevel;
   double oilPumpProgress;
@@ -357,6 +369,7 @@ class GameState {
   final Set<String> lockedResources;
   final Set<String> activeBuffIds;
   final Set<String> unlockedBuildings;
+  final Set<String> completedAdvisorGuideIds;
   final Set<String> discoveredEncounters;
   final Set<int> defeatedBossIds;
   final Set<String> unlockedAchievements;
@@ -404,6 +417,10 @@ class GameState {
     final state = GameState(
       coins: MrMineBigNumber.zero,
       totalSold: MrMineBigNumber.zero,
+      depthMeters: startingDepthMeters,
+      deepestMeters: startingDepthMeters,
+      questDepthBaselineMeters: startingDepthMeters,
+      questCrewBaselineCount: 0,
       crewCount: 0,
       cargoCapacity: cargoCapacities.first,
       cargoLevel: 1,
@@ -411,12 +428,53 @@ class GameState {
       inventory: {'coal': 0, 'copper': 0},
       worldMinerCounts: {'0': 0, '1': 1, '2': 1},
       worldWorkerLevels: {'0': 0, '1': 0, '2': 0},
+      worldDepths: {'0': startingDepthMeters},
+      unlockedBuildings: <String>{},
+      knownBlueprintIds: <int>{},
+      guidedProgression: true,
     );
     state.seed = seed ?? Random.secure().nextInt(0x7fffffff);
     return state;
   }
 
   int get totalChestsFound => chestsFound + goldChests + deepChests;
+
+  bool get initialTutorialComplete =>
+      !guidedProgression ||
+      (tutorialStep >= 5 &&
+          const [0, 1, 2, 3, 4].every(claimedQuestIds.contains));
+
+  bool canOpenBuilding(String id) {
+    if (!guidedProgression || debugModeEnabled) return true;
+    if (id == 'quests') {
+      return !initialTutorialComplete ||
+          completedAdvisorGuideIds.contains('ongoing_quests');
+    }
+    if (id == 'achievements') {
+      return completedAdvisorGuideIds.contains('achievement_book');
+    }
+    if (id == 'mine_event') {
+      return completedAdvisorGuideIds.contains('mine_events');
+    }
+    if (!initialTutorialComplete) {
+      if (id == 'warehouse') return tutorialStep >= 1;
+      if (id == 'workshop') return tutorialStep >= 2;
+      return false;
+    }
+    if (id == 'trade' &&
+        totalChestsFound > 0 &&
+        completedAdvisorGuideIds.contains('first_depth_chest')) {
+      return true;
+    }
+    final buildingId = switch (id) {
+      'trade' => 'trader',
+      'research' => 'scientists',
+      'expedition' => 'caves',
+      'boss' => 'armory',
+      _ => id,
+    };
+    return unlockedBuildings.contains(buildingId);
+  }
 
   int get chestCollectorCapacity => 5 + chestCollectorLevel * 2;
 
@@ -461,8 +519,11 @@ class GameState {
       RegExp(r'^relic_(?:[1-9]|1[0-2]|15[0-5])$').hasMatch(id);
 
   int relicLevel(String relicId) {
-    final level = relicLevels[relicId] ??
-        relicLevels[relicId.startsWith('relic_') ? relicId.substring(6) : 'relic_$relicId'] ??
+    final level =
+        relicLevels[relicId] ??
+        relicLevels[relicId.startsWith('relic_')
+            ? relicId.substring(6)
+            : 'relic_$relicId'] ??
         1;
     return level.clamp(1, 5).toInt();
   }
@@ -470,17 +531,20 @@ class GameState {
   /// Chance for Tier 1 isotope to decay to Tier 2 (Mr. Mine Stat 37, capped at 10% / 0.10).
   double get isotopeOneDecayChance {
     var chance = 0.0;
-    if (equippedRelics.contains('relic_150') || equippedRelics.contains('150')) {
+    if (equippedRelics.contains('relic_150') ||
+        equippedRelics.contains('150')) {
       chance += switch (relicLevel('relic_150')) {
         1 => 0.01,
         2 => 0.015,
         _ => 0.02,
       };
     }
-    if (equippedRelics.contains('relic_151') || equippedRelics.contains('151')) {
+    if (equippedRelics.contains('relic_151') ||
+        equippedRelics.contains('151')) {
       chance += 0.015;
     }
-    if (equippedRelics.contains('relic_152') || equippedRelics.contains('152')) {
+    if (equippedRelics.contains('relic_152') ||
+        equippedRelics.contains('152')) {
       chance += 0.02;
     }
     return min(0.10, chance);
@@ -489,17 +553,20 @@ class GameState {
   /// Chance for Tier 2 isotope to decay to Tier 3 (Mr. Mine Stat 38, capped at 5% / 0.05).
   double get isotopeTwoDecayChance {
     var chance = 0.0;
-    if (equippedRelics.contains('relic_153') || equippedRelics.contains('153')) {
+    if (equippedRelics.contains('relic_153') ||
+        equippedRelics.contains('153')) {
       chance += switch (relicLevel('relic_153')) {
         1 => 0.0,
         2 => 0.005,
         _ => 0.01,
       };
     }
-    if (equippedRelics.contains('relic_154') || equippedRelics.contains('154')) {
+    if (equippedRelics.contains('relic_154') ||
+        equippedRelics.contains('154')) {
       chance += 0.005;
     }
-    if (equippedRelics.contains('relic_155') || equippedRelics.contains('155')) {
+    if (equippedRelics.contains('relic_155') ||
+        equippedRelics.contains('155')) {
       chance += 0.01;
     }
     return min(0.05, chance);
@@ -534,7 +601,9 @@ class GameState {
   void addCoins(Object amount) {
     final value = amount is MrMineBigNumber
         ? amount
-        : (amount is num ? MrMineBigNumber.fromNum(amount) : MrMineBigNumber.zero);
+        : (amount is num
+              ? MrMineBigNumber.fromNum(amount)
+              : MrMineBigNumber.zero);
     if (value.isNegative) return;
     coins = coins.add(value);
   }
@@ -563,6 +632,16 @@ class GameState {
   int get transportWorkers => workerAssignments['transport'] ?? 0;
   int get scannerWorkers => workerAssignments['scanner'] ?? 0;
   int get sortingWorkers => workerAssignments['sorting'] ?? 0;
+  bool workerRoleUnlocked(String role) {
+    if (role == 'digging') return true;
+    if (!const {'transport', 'scanner', 'sorting'}.contains(role)) {
+      return false;
+    }
+    if (!guidedProgression || debugModeEnabled) return true;
+    if ((workerAssignments[role] ?? 0) > 0) return true;
+    return completedAdvisorGuideIds.contains('worker_role_$role');
+  }
+
   int get diggingWorkers =>
       (crewCount - transportWorkers - scannerWorkers - sortingWorkers)
           .clamp(0, crewCount)
@@ -630,11 +709,18 @@ class GameState {
 
   int progressFor(QuestDefinition quest) => switch (quest.kind) {
     QuestKind.mine => totalMined,
-    QuestKind.depth => deepestMeters.floor(),
-    QuestKind.hire => crewCount - 1,
-    QuestKind.sell => totalSold.exponent >= 9
-        ? 1000000000
-        : totalSold.toDouble().clamp(0, 1000000000).floor(),
+    QuestKind.depth =>
+      quest.absoluteDepth
+          ? deepestMeters.floor()
+          : (deepestMeters - questDepthBaselineMeters)
+                .floor()
+                .clamp(0, 1e12)
+                .toInt(),
+    QuestKind.hire => crewCount - questCrewBaselineCount,
+    QuestKind.sell =>
+      totalSold.exponent >= 9
+          ? 1000000000
+          : totalSold.toDouble().clamp(0, 1000000000).floor(),
     QuestKind.upgrade => upgrades.values.fold(0, (sum, level) => sum + level),
     QuestKind.chest => chestsOpened,
     QuestKind.cave => cavesCompleted,
@@ -658,6 +744,8 @@ class GameState {
       'coins': coins.toJson(),
       'depthMeters': depthMeters,
       'deepestMeters': deepestMeters,
+      'questDepthBaselineMeters': questDepthBaselineMeters,
+      'questCrewBaselineCount': questCrewBaselineCount,
       'pressure': pressure,
       'energy': energy,
       'cargoCapacity': cargoCapacity,
@@ -744,6 +832,7 @@ class GameState {
       'notificationsEnabled': notificationsEnabled,
       'debugModeEnabled': debugModeEnabled,
       'debugUnlimitedMoney': debugUnlimitedMoney,
+      'guidedProgression': guidedProgression,
       'managerLevel': managerLevel,
       'oilPumpLevel': oilPumpLevel,
       'oilPumpProgress': oilPumpProgress,
@@ -772,6 +861,7 @@ class GameState {
       'lockedResources': lockedResources.toList(),
       'activeBuffIds': activeBuffIds.toList(),
       'unlockedBuildings': unlockedBuildings.toList(),
+      'completedAdvisorGuideIds': completedAdvisorGuideIds.toList(),
       'discoveredEncounters': discoveredEncounters.toList(),
       'defeatedBossIds': defeatedBossIds.toList(),
       'unlockedAchievements': unlockedAchievements.toList(),
@@ -890,6 +980,8 @@ class GameState {
       coins: readCoins('coins'),
       depthMeters: readDouble('depthMeters'),
       deepestMeters: readDouble('deepestMeters'),
+      questDepthBaselineMeters: readDouble('questDepthBaselineMeters'),
+      questCrewBaselineCount: readInt('questCrewBaselineCount', 1),
       pressure: readDouble('pressure', 14),
       energy: readDouble('energy'),
       cargoCapacity: readDouble('cargoCapacity', 1500),
@@ -977,6 +1069,7 @@ class GameState {
       notificationsEnabled: json['notificationsEnabled'] as bool? ?? true,
       debugModeEnabled: json['debugModeEnabled'] as bool? ?? false,
       debugUnlimitedMoney: json['debugUnlimitedMoney'] as bool? ?? false,
+      guidedProgression: json['guidedProgression'] as bool? ?? false,
       managerLevel: readInt('managerLevel'),
       oilPumpLevel: readInt('oilPumpLevel', 1),
       oilPumpProgress: readDouble('oilPumpProgress'),
@@ -1009,6 +1102,7 @@ class GameState {
       lockedResources: readStringSet('lockedResources'),
       activeBuffIds: readStringSet('activeBuffIds'),
       unlockedBuildings: readStringSet('unlockedBuildings'),
+      completedAdvisorGuideIds: readStringSet('completedAdvisorGuideIds'),
       discoveredEncounters: readStringSet('discoveredEncounters'),
       defeatedBossIds: readIntSet('defeatedBossIds'),
       unlockedAchievements: readStringSet('unlockedAchievements'),
@@ -1392,9 +1486,7 @@ class GameState {
     while (state.equippedGems.length > 3) {
       state.equippedGems.remove(state.equippedGems.first);
     }
-    state.unlockedRelics.removeWhere(
-      (id) => !isValidRelicId(id),
-    );
+    state.unlockedRelics.removeWhere((id) => !isValidRelicId(id));
     state.equippedRelics.removeWhere(
       (id) => !state.unlockedRelics.contains(id),
     );
@@ -1427,6 +1519,12 @@ class GameState {
     state.deepestMeters = state.deepestMeters
         .clamp(state.depthMeters, 1e12)
         .toDouble();
+    state.questDepthBaselineMeters = state.questDepthBaselineMeters
+        .clamp(0, state.deepestMeters)
+        .toDouble();
+    state.questCrewBaselineCount = state.questCrewBaselineCount
+        .clamp(0, 1000000)
+        .toInt();
 
     if (state.activeWorldIndex < 0 || state.activeWorldIndex > 2) {
       state.activeWorldIndex = state.depthMeters >= worldEntryDepths[2]

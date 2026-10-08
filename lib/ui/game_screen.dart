@@ -858,6 +858,7 @@ class _GoalBanner extends StatelessWidget {
                     width: 52,
                     height: 52,
                     phaseOffset: .29,
+                    advisorDroneAnimation: true,
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -978,6 +979,7 @@ class _AdvisorTargetMarker extends StatelessWidget {
         width: size - 2,
         height: size - 2,
         phaseOffset: .29,
+        advisorDroneAnimation: true,
       ),
     ),
   );
@@ -2317,6 +2319,23 @@ class _MineWorld extends StatelessWidget {
     final shaftWidth = narrow ? 86.0 : 112.0;
     final rigWidth = math.min((narrow ? 108.0 : 136.0) * 1.3, width * .48);
     final rigHeight = rigWidth * 1.107;
+    final nextFloorDepth =
+        GameState.worldEntryDepths[worldIndex] +
+        (floorIndex + 1) * _mineVisualFloorMeters;
+    final hasNextFloor =
+        nextFloorDepth <= GameEngine.maxDrillDepthForWorld(worldIndex);
+    final secondsUntilNextFloor = hasNextFloor
+        ? math
+              .max(
+                0,
+                ((nextFloorDepth - state.depthMeters) /
+                        math.max(.001, state.drillRateMetersPerSecond))
+                    .ceil(),
+              )
+              .toInt()
+        : null;
+    final countdownWidth = math.min(116.0, width - 16).toDouble();
+    final countdownTop = math.max(4.0, height - rigHeight * .985 - 4);
     final edgeRockWidth = narrow ? 32.0 : 48.0;
     final dugGroundCapHeight = math.min(height * .92, width / 3.0).toDouble();
     final edgeTint = switch (worldIndex) {
@@ -2533,7 +2552,97 @@ class _MineWorld extends StatelessWidget {
                     amountBefore;
               },
             ),
+        if (isActiveFloor)
+          Positioned(
+            left: (width - countdownWidth) / 2,
+            top: countdownTop,
+            child: IgnorePointer(
+              child: _MineFloorCountdown(
+                width: countdownWidth,
+                secondsRemaining: secondsUntilNextFloor,
+              ),
+            ),
+          ),
       ],
+    );
+  }
+}
+
+class _MineFloorCountdown extends StatelessWidget {
+  const _MineFloorCountdown({
+    required this.width,
+    required this.secondsRemaining,
+  });
+
+  final double width;
+  final int? secondsRemaining;
+
+  @override
+  Widget build(BuildContext context) {
+    final seconds = secondsRemaining;
+    final minutes = seconds == null ? null : seconds ~/ 60;
+    final remainingSeconds = seconds == null ? null : seconds % 60;
+    final timeLabel = seconds == null
+        ? 'SON KAT'
+        : '$minutes dk ${remainingSeconds!.toString().padLeft(2, '0')} sn';
+    return Semantics(
+      label: seconds == null
+          ? 'Son kat'
+          : 'Sıradaki kata kalan süre: $minutes dakika $remainingSeconds saniye',
+      child: Container(
+        width: width,
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        decoration: BoxDecoration(
+          color: const Color(0xF20A242E),
+          border: Border.all(color: MinePalette.amber, width: 1),
+          borderRadius: BorderRadius.circular(7),
+          boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 6)],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              seconds == null ? 'SON DERİNLİK' : 'SONRAKİ KATA',
+              maxLines: 1,
+              style: const TextStyle(
+                color: MinePalette.muted,
+                fontSize: 7,
+                fontWeight: FontWeight.w900,
+                letterSpacing: .35,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Row(
+              children: [
+                Icon(
+                  seconds == null
+                      ? Icons.flag_rounded
+                      : Icons.hourglass_bottom_rounded,
+                  size: 11,
+                  color: MinePalette.amber,
+                ),
+                const SizedBox(width: 3),
+                Expanded(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      timeLabel,
+                      maxLines: 1,
+                      style: const TextStyle(
+                        color: MinePalette.cream,
+                        fontSize: 8,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -2823,6 +2932,7 @@ class _AmbientAdvisorDroneState extends State<_AmbientAdvisorDrone>
             width: size,
             height: size,
             phaseOffset: .29,
+            advisorDroneAnimation: true,
           ),
         ),
       ],

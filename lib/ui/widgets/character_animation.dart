@@ -28,13 +28,6 @@ const List<double> _miningFrameBottoms = [
   448 / 512,
 ];
 
-const List<Rect> _droneAntennaCutouts = [
-  // The beacon bulb and its short mast are stray protrusions on the advisor
-  // drone cell; trim only those pixels and preserve the robot shell below.
-  Rect.fromLTRB(.322, .125, .416, .285),
-  Rect.fromLTRB(.350, .250, .390, .355),
-];
-
 Rect _miningFrameCrop(int frame) =>
     Rect.fromLTRB(0, 0, 1, _miningFrameBottoms[frame.clamp(0, 7).toInt()]);
 
@@ -51,6 +44,7 @@ class AnimatedCrewSprite extends StatefulWidget {
     required this.action,
     this.phaseOffset = 0,
     this.detailedMiningAnimation = false,
+    this.advisorDroneAnimation = false,
   });
 
   final int index;
@@ -59,6 +53,7 @@ class AnimatedCrewSprite extends StatefulWidget {
   final CrewAction action;
   final double phaseOffset;
   final bool detailedMiningAnimation;
+  final bool advisorDroneAnimation;
 
   @override
   State<AnimatedCrewSprite> createState() => _AnimatedCrewSpriteState();
@@ -73,28 +68,49 @@ class _AnimatedCrewSpriteState extends State<AnimatedCrewSprite>
     super.initState();
     _clock = AnimationController(
       vsync: this,
-      duration: Duration(milliseconds: _periodFor(widget.action)),
+      duration: Duration(
+        milliseconds: _periodFor(
+          widget.action,
+          advisorDroneAnimation: widget.advisorDroneAnimation,
+        ),
+      ),
     )..repeat();
   }
 
   @override
   void didUpdateWidget(covariant AnimatedCrewSprite oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.action != widget.action) {
-      _clock.duration = Duration(milliseconds: _periodFor(widget.action));
+    if (oldWidget.action != widget.action ||
+        oldWidget.advisorDroneAnimation != widget.advisorDroneAnimation) {
+      _clock.duration = Duration(
+        milliseconds: _periodFor(
+          widget.action,
+          advisorDroneAnimation: widget.advisorDroneAnimation,
+        ),
+      );
       _clock.repeat();
     }
   }
 
-  int _periodFor(CrewAction action) => switch (action) {
-    CrewAction.mining => 1680,
-    CrewAction.drilling => 1250,
-    CrewAction.surveying || CrewAction.scanning => 2350,
-    CrewAction.repairing => 1980,
-    CrewAction.hauling => 1450,
-    CrewAction.operatingLift => 2100,
-    CrewAction.exploring => 2600,
-    CrewAction.hovering => 1800,
+  int _periodFor(CrewAction action, {required bool advisorDroneAnimation}) =>
+      advisorDroneAnimation
+      ? 6500
+      : switch (action) {
+          CrewAction.mining => 1680,
+          CrewAction.drilling => 1250,
+          CrewAction.surveying || CrewAction.scanning => 2350,
+          CrewAction.repairing => 1980,
+          CrewAction.hauling => 1450,
+          CrewAction.operatingLift => 2100,
+          CrewAction.exploring => 2600,
+          CrewAction.hovering => 1800,
+        };
+
+  int _advisorDroneFrame(double phase) => switch (phase) {
+    < .82 => 0,
+    < .86 => 1,
+    < .90 => 2,
+    _ => 3,
   };
 
   @override
@@ -103,10 +119,14 @@ class _AnimatedCrewSpriteState extends State<AnimatedCrewSprite>
     builder: (context, _) {
       final phase = (_clock.value + widget.phaseOffset) % 1;
       final wave = math.sin(phase * math.pi * 2);
-      final drone = widget.index == 3 || widget.action == CrewAction.hovering;
+      final drone =
+          widget.advisorDroneAnimation ||
+          widget.index == 3 ||
+          widget.action == CrewAction.hovering;
       final useDetailedMining =
           widget.detailedMiningAnimation && widget.action == CrewAction.mining;
       final miningFrame = (phase * 8).floor().clamp(0, 7).toInt();
+      final advisorFrame = _advisorDroneFrame(phase);
       final bob = useDetailedMining
           ? 0.0
           : switch (widget.action) {
@@ -159,10 +179,24 @@ class _AnimatedCrewSpriteState extends State<AnimatedCrewSprite>
                     child: AtlasSprite(
                       asset: useDetailedMining
                           ? 'miner-mining-cycle.png'
+                          : widget.advisorDroneAnimation
+                          ? 'advisor-drone-blink-sheet.png'
                           : 'crew-machines-sheet.png',
-                      index: useDetailedMining ? miningFrame : widget.index,
-                      columns: useDetailedMining ? 4 : 3,
-                      rows: useDetailedMining ? 2 : 3,
+                      index: useDetailedMining
+                          ? miningFrame
+                          : widget.advisorDroneAnimation
+                          ? advisorFrame
+                          : widget.index,
+                      columns: useDetailedMining
+                          ? 4
+                          : widget.advisorDroneAnimation
+                          ? 4
+                          : 3,
+                      rows: useDetailedMining
+                          ? 2
+                          : widget.advisorDroneAnimation
+                          ? 1
+                          : 3,
                       fit: BoxFit.contain,
                       alignment: drone
                           ? Alignment.center
@@ -170,13 +204,14 @@ class _AnimatedCrewSpriteState extends State<AnimatedCrewSprite>
                       sourceCrop: useDetailedMining
                           ? _miningFrameCrop(miningFrame)
                           : null,
-                      sourceCutouts: drone ? _droneAntennaCutouts : const [],
                     ),
                   ),
                 ),
               ),
             ),
-            if (widget.action != CrewAction.hovering && !useDetailedMining)
+            if (widget.action != CrewAction.hovering &&
+                !useDetailedMining &&
+                !widget.advisorDroneAnimation)
               Positioned.fill(
                 child: IgnorePointer(
                   child: CustomPaint(

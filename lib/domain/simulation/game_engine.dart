@@ -1617,6 +1617,10 @@ abstract final class GameEngine {
     final random = Random(
       state.seed ^ state.specialWorkerRoster.length ^ 0x5e11,
     );
+    final openPositions = _openSpecialWorkerPositions(state);
+    final position = openPositions.isEmpty
+        ? (state.activeWorldIndex, state.activeDepthFloor)
+        : openPositions[random.nextInt(openPositions.length)];
     var serial = state.specialWorkerRoster.length + 1;
     while (state.specialWorkerRoster.any(
       (worker) => worker.id == 'super_worker_$serial',
@@ -1624,8 +1628,8 @@ abstract final class GameEngine {
       serial++;
     }
     final worker = SpecialWorkerState.create(serial, random)
-      ..assignedWorld = state.activeWorldIndex
-      ..assignedFloor = state.activeDepthFloor;
+      ..assignedWorld = position.$1
+      ..assignedFloor = position.$2;
     state.specialWorkerRoster.add(worker);
     state.seed = random.nextInt(0x7fffffff);
     return true;
@@ -1689,6 +1693,19 @@ abstract final class GameEngine {
   }
 
   static void _moveRoamingSpecialWorkers(GameState state, Random random) {
+    final openPositions = _openSpecialWorkerPositions(state);
+    if (openPositions.isEmpty) return;
+    for (final worker in state.specialWorkerRoster.where(
+      (item) => item.autoMove && item.abilityId != 'auto_seller',
+    )) {
+      final position = openPositions[random.nextInt(openPositions.length)];
+      worker
+        ..assignedWorld = position.$1
+        ..assignedFloor = position.$2;
+    }
+  }
+
+  static List<(int, int)> _openSpecialWorkerPositions(GameState state) {
     final openPositions = <(int, int)>[];
     for (var world = 0; world < GameState.worldEntryDepths.length; world++) {
       final entryDepth = GameState.worldEntryDepths[world];
@@ -1702,15 +1719,7 @@ abstract final class GameEngine {
         openPositions.add((world, floor));
       }
     }
-    if (openPositions.isEmpty) return;
-    for (final worker in state.specialWorkerRoster.where(
-      (item) => item.autoMove && item.abilityId != 'auto_seller',
-    )) {
-      final position = openPositions[random.nextInt(openPositions.length)];
-      worker
-        ..assignedWorld = position.$1
-        ..assignedFloor = position.$2;
-    }
+    return openPositions;
   }
 
   static MrMineBigNumber _specialWorkerAutoSell(GameState state) {
@@ -1854,7 +1863,7 @@ abstract final class GameEngine {
       if (state.guidedProgression &&
           !state.initialTutorialComplete &&
           state.tutorialStep == 4 &&
-          state.deepestMeters - state.questDepthBaselineMeters >= 80) {
+          state.deepestMeters >= 10000) {
         state.tutorialStep = 5;
       }
       final relicPressureResistance = state.equippedRelics.contains('relic_6')

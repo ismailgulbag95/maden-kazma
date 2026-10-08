@@ -41,6 +41,8 @@ class SoundService {
 
   Future<void> playOreCollect() => _playEffect('ore_collect.wav', .35);
 
+  Future<void> playCargoFull() => _playEffect('cargo_full.wav', .24);
+
   Future<void> _playEffect(String fileName, double volume) async {
     if (!sfxEnabled) return;
     try {

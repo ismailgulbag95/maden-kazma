@@ -16,6 +16,7 @@ class AtlasSprite extends StatelessWidget {
     this.fit = BoxFit.contain,
     this.alignment = Alignment.center,
     this.sourceCrop,
+    this.sourceCutouts = const [],
   });
 
   final String asset;
@@ -30,6 +31,11 @@ class AtlasSprite extends StatelessWidget {
   /// Normalized crop within this atlas cell, useful for trimming sprite-cell
   /// whitespace while keeping the authored artwork at its original ratio.
   final Rect? sourceCrop;
+
+  /// Normalized regions within this atlas cell that should be transparent.
+  /// This is useful for removing small stray details without changing the
+  /// shared source artwork used by other sprites.
+  final List<Rect> sourceCutouts;
 
   static final Map<String, Future<ui.Image>> _images = {};
 
@@ -69,6 +75,7 @@ class AtlasSprite extends StatelessWidget {
               fit: fit,
               alignment: alignment,
               sourceCrop: sourceCrop,
+              sourceCutouts: sourceCutouts,
             ),
             size: Size(width ?? 96, height ?? 80),
           ),
@@ -353,6 +360,7 @@ class _AtlasPainter extends CustomPainter {
     required this.fit,
     required this.alignment,
     required this.sourceCrop,
+    required this.sourceCutouts,
   });
 
   final ui.Image image;
@@ -362,6 +370,7 @@ class _AtlasPainter extends CustomPainter {
   final BoxFit fit;
   final Alignment alignment;
   final Rect? sourceCrop;
+  final List<Rect> sourceCutouts;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -391,12 +400,55 @@ class _AtlasPainter extends CustomPainter {
       fitted.destination,
       Offset.zero & size,
     );
+    if (sourceCutouts.isEmpty) {
+      canvas.drawImageRect(
+        image,
+        sourceRect,
+        destinationRect,
+        Paint()..filterQuality = FilterQuality.none,
+      );
+      return;
+    }
+
+    canvas.saveLayer(Offset.zero & size, Paint());
     canvas.drawImageRect(
       image,
       sourceRect,
       destinationRect,
       Paint()..filterQuality = FilterQuality.none,
     );
+    final clearPaint = Paint()
+      ..blendMode = BlendMode.clear
+      ..isAntiAlias = false;
+    for (final cutout in sourceCutouts) {
+      final cutoutSource = Rect.fromLTRB(
+        cell.left + cell.width * cutout.left,
+        cell.top + cell.height * cutout.top,
+        cell.left + cell.width * cutout.right,
+        cell.top + cell.height * cutout.bottom,
+      ).intersect(sourceRect);
+      if (cutoutSource.isEmpty) continue;
+      final cutoutDestination = Rect.fromLTRB(
+        destinationRect.left +
+            (cutoutSource.left - sourceRect.left) /
+                sourceRect.width *
+                destinationRect.width,
+        destinationRect.top +
+            (cutoutSource.top - sourceRect.top) /
+                sourceRect.height *
+                destinationRect.height,
+        destinationRect.left +
+            (cutoutSource.right - sourceRect.left) /
+                sourceRect.width *
+                destinationRect.width,
+        destinationRect.top +
+            (cutoutSource.bottom - sourceRect.top) /
+                sourceRect.height *
+                destinationRect.height,
+      );
+      canvas.drawRect(cutoutDestination, clearPaint);
+    }
+    canvas.restore();
   }
 
   @override
@@ -404,6 +456,7 @@ class _AtlasPainter extends CustomPainter {
       image != oldDelegate.image ||
       index != oldDelegate.index ||
       sourceCrop != oldDelegate.sourceCrop ||
+      sourceCutouts != oldDelegate.sourceCutouts ||
       columns != oldDelegate.columns ||
       rows != oldDelegate.rows ||
       fit != oldDelegate.fit;

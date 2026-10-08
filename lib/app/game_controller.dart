@@ -72,6 +72,7 @@ class GameController extends ChangeNotifier {
   double offlineDepthGained = 0;
   int offlineOreGained = 0;
   int _tickCount = 0;
+  bool _lastCargoFull = false;
   bool _saveQueued = false;
   bool _disposed = false;
 
@@ -106,13 +107,24 @@ class GameController extends ChangeNotifier {
       currentQuestProgress >= currentQuest.target &&
       !state.claimedQuestIds.contains(currentQuest.id);
 
+  bool isQuestAvailable(QuestDefinition quest) => _isQuestAvailable(quest);
+
   bool _isQuestAvailable(QuestDefinition quest) {
-    if (quest.id < 5 || !state.initialTutorialComplete) return true;
+    if (quest.id < 5) return true;
+    final starterTutorialClaimed = const [
+      0,
+      1,
+      2,
+      3,
+      4,
+    ].every(state.claimedQuestIds.contains);
+    if (!state.initialTutorialComplete && !starterTutorialClaimed) return false;
     return switch (quest.kind) {
       QuestKind.chest => state.totalChestsFound > 0 || state.chestsOpened > 0,
       QuestKind.cave => state.canOpenBuilding('expedition'),
       QuestKind.relic => state.canOpenBuilding('research'),
       QuestKind.boss => state.canOpenBuilding('boss'),
+      QuestKind.resonance => state.canOpenBuilding('research'),
       _ => true,
     };
   }
@@ -196,6 +208,7 @@ class GameController extends ChangeNotifier {
         '${achievement.title} başarımı açıldı: +${achievement.reward} kasa.',
       );
     }
+    _lastCargoFull = state.cargoFull;
     state.lastSavedAt = now;
     _lastTickAt = now;
     isReady = true;
@@ -240,6 +253,7 @@ class GameController extends ChangeNotifier {
         unawaited(SoundService.instance.stopReactorAlarm());
       }
     }
+    _syncCargoFullAlarm();
     _notices.addAll(
       result.events.where((event) => !event.startsWith('Otomatik satış')),
     );
@@ -946,9 +960,10 @@ class GameController extends ChangeNotifier {
     if (!success) {
       _notices.add('Tarayıcıyı kullanmak için 80 kasa gerekir.');
     } else {
-      _notices.add(
-        'Tarayıcı yeni damar dizisini işaretledi: ${GameEngine.currentResonanceTarget(state)}.',
-      );
+      final sequence = state.resonancePattern
+          .map((id) => ResourceCatalog.byId[id]?.name ?? id)
+          .join(' → ');
+      _notices.add('Damar dizisi: $sequence. Kuyuya dönüp sırayla seç.');
     }
     _refreshState();
     return success;
@@ -1442,6 +1457,7 @@ class GameController extends ChangeNotifier {
   }
 
   void _refreshState() {
+    _syncCargoFullAlarm();
     for (final achievement in GameEngine.checkAchievements(state)) {
       _notices.add(
         '${achievement.title} başarımı açıldı: +${achievement.reward} kasa.',
@@ -1449,6 +1465,13 @@ class GameController extends ChangeNotifier {
     }
     notifyListeners();
     unawaited(saveNow());
+  }
+
+  void _syncCargoFullAlarm() {
+    if (!_lastCargoFull && state.cargoFull) {
+      unawaited(SoundService.instance.playCargoFull());
+    }
+    _lastCargoFull = state.cargoFull;
   }
 
   void showNotice(String message) {

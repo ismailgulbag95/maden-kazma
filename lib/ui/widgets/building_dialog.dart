@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../app/game_controller.dart';
 import '../../core/design/palette.dart';
 import '../../domain/models/achievement_definition.dart';
+import '../../domain/models/advisor_guide.dart';
 import '../../domain/models/cave_route_definition.dart';
 import '../../domain/models/cave_exploration_definition.dart';
 import '../../domain/models/daily_challenge_definition.dart';
@@ -41,6 +42,16 @@ class BuildingDialog extends StatelessWidget {
 
   final GameController controller;
   final String buildingId;
+
+  bool _shouldHighlightUpgrade(String track, GameState state) {
+    final guideId = AdvisorGuideCatalog.currentFor(state)?.id;
+    if (guideId == 'tutorial_upgrade') {
+      return track == 'drill';
+    }
+    if (guideId == 'elevator') return track == 'lift';
+    return controller.currentQuest.kind == QuestKind.upgrade &&
+        const {'drill', 'foundry', 'weapon'}.contains(track);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -162,8 +173,60 @@ class BuildingDialog extends StatelessWidget {
             ),
             _workerAssignmentsSection(state),
             for (final track in ['drill', 'foundry', 'weapon'])
-              UpgradeRow(controller: controller, track: track),
+              UpgradeRow(
+                controller: controller,
+                track: track,
+                highlighted: _shouldHighlightUpgrade(track, state),
+              ),
             _drillAssemblySection(state),
+            if (state.unlockedBuildings.contains('elevator')) ...[
+              const SizedBox(height: 8),
+              _subheading('KUYU ASANSÖRÜ'),
+              _meter(
+                'Kuyu basıncı',
+                state.pressure / 100,
+                '${state.pressure.toStringAsFixed(1)}%',
+              ),
+              const SizedBox(height: 8),
+              _meter(
+                'Enerji',
+                (state.energy / 100).clamp(0, 1).toDouble(),
+                '${state.energy.toStringAsFixed(0)} / 100',
+              ),
+              const SizedBox(height: 12),
+              UpgradeRow(
+                controller: controller,
+                track: 'lift',
+                highlighted: _shouldHighlightUpgrade('lift', state),
+              ),
+              ActionTile(
+                icon: Icons.air_rounded,
+                title: 'Basıncı boşalt',
+                description: 'Basıncı güvenli düzeye indirir ve 12 enerji üretir. En az %25 basınç gerekir.',
+                buttonLabel: state.amount('building_material') > 0
+                    ? '1 MALZ.'
+                    : '90 KASA',
+                enabled:
+                    state.pressure >= 25 &&
+                    (state.amount('building_material') > 0 ||
+                        state.canAfford(90)),
+                onPressed: controller.ventPressure,
+                accent: MinePalette.cyan,
+              ),
+              ActionTile(
+                icon: Icons.bolt_rounded,
+                title: 'Reaktör güç darbesi',
+                description: state.unlockedBuildings.contains('reactor')
+                    ? '25 enerji tüketerek iki dakikalığına sondaj hızını artırır.'
+                    : 'Reaktör 1.132 km kilometre taşında açılır. Şimdiki derinlik: ${state.deepestMeters.floor()} m.',
+                buttonLabel: 'ETKİNLEŞTİR',
+                enabled:
+                    state.unlockedBuildings.contains('reactor') &&
+                    state.energy >= 25,
+                onPressed: controller.activateReactorBuff,
+                accent: MinePalette.teal,
+              ),
+            ],
             if (state.unlockedBuildings.contains('reactor'))
               ActionTile(
                 icon: Icons.bolt_rounded,
@@ -273,56 +336,6 @@ class BuildingDialog extends StatelessWidget {
               enabled: GameEngine.availableBossIndex(state) != null,
               onPressed: () => _openNested(context, 'boss'),
               accent: MinePalette.danger,
-            ),
-          ],
-        );
-      case 'elevator':
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _sectionIntro(
-              'KUYU ASANSÖRÜ',
-              'Kafes asansör cevheri yüzeye taşır. Daha hızlı asansör derinliği ve kargo kapasitesini büyütür.',
-            ),
-            _meter(
-              'Kuyu basıncı',
-              state.pressure / 100,
-              '${state.pressure.toStringAsFixed(1)}%',
-            ),
-            const SizedBox(height: 8),
-            _meter(
-              'Enerji',
-              (state.energy / 100).clamp(0, 1).toDouble(),
-              '${state.energy.toStringAsFixed(0)} / 100',
-            ),
-            const SizedBox(height: 12),
-            UpgradeRow(controller: controller, track: 'lift'),
-            ActionTile(
-              icon: Icons.air_rounded,
-              title: 'Basıncı boşalt',
-              description: 'Basıncı güvenli düzeye indirir ve 12 enerji üretir. En az %25 basınç gerekir.',
-              buttonLabel: state.amount('building_material') > 0
-                  ? '1 MALZ.'
-                  : '90 KASA',
-              enabled:
-                  state.pressure >= 25 &&
-                  (state.amount('building_material') > 0 ||
-                      state.canAfford(90)),
-              onPressed: controller.ventPressure,
-              accent: MinePalette.cyan,
-            ),
-            ActionTile(
-              icon: Icons.bolt_rounded,
-              title: 'Reaktör güç darbesi',
-              description: state.unlockedBuildings.contains('reactor')
-                  ? '25 enerji tüketerek iki dakikalığına sondaj hızını artırır.'
-                  : 'Reaktör 1.132 km kilometre taşında açılır. Şimdiki derinlik: ${state.deepestMeters.floor()} m.',
-              buttonLabel: 'ETKİNLEŞTİR',
-              enabled:
-                  state.unlockedBuildings.contains('reactor') &&
-                  state.energy >= 25,
-              onPressed: controller.activateReactorBuff,
-              accent: MinePalette.teal,
             ),
           ],
         );
@@ -1255,9 +1268,15 @@ class BuildingDialog extends StatelessWidget {
 
   Widget _researchContents(BuildContext context) {
     final state = controller.state;
+    final resonanceQuestActive =
+        controller.currentQuest.kind == QuestKind.resonance;
     final targetName =
         ResourceCatalog.byId[GameEngine.currentResonanceTarget(state)]?.name ??
         'Kömür';
+    final resonanceSequence = state.resonancePattern
+        .map((id) => ResourceCatalog.byId[id]?.name ?? id)
+        .join(' → ');
+    final resonanceSequenceLength = math.max(1, state.resonancePattern.length);
     final relicNames = {
       'relic_1': 'Yankı Aynası',
       'relic_2': 'Cevher Kalbi',
@@ -1293,15 +1312,16 @@ class BuildingDialog extends StatelessWidget {
         ),
         ActionTile(
           icon: Icons.radar_rounded,
-          title: 'Katman Rezonansı',
+          title: 'Katman Rezonansı • Damar Akordu',
           description:
-              'Sıradaki damar: $targetName • Dizi ${state.resonanceProgress + 1}/${state.resonancePattern.length}. Doğru cevher düğümlerine art arda dokun; üretim beş dakika hızlansın.',
+              '${resonanceQuestActive ? 'Görevi buradan başlat: ' : ''}${state.upgradeLevel('scanner') > 0 ? 'Tarama ücretsiz.' : 'Diziyi taramak 80 kasa.'} Sonra kuyuya dön ve sırayı uygula: $resonanceSequence. Sıradaki damar: $targetName (${state.resonanceProgress + 1}/$resonanceSequenceLength). Doğru cevher taşlarına sırayla dokun; dizi tamamlanınca üretim 5 dakika hızlanır.',
           buttonLabel: state.upgradeLevel('scanner') > 0
               ? 'DİZİYİ TARA'
-              : '80 KASA',
+              : 'TARA • 80 KASA',
           enabled: state.upgradeLevel('scanner') > 0 || state.canAfford(80),
           onPressed: controller.scanResonance,
-          accent: MinePalette.cyan,
+          accent: resonanceQuestActive ? MinePalette.amber : MinePalette.cyan,
+          highlighted: resonanceQuestActive,
         ),
         UpgradeRow(controller: controller, track: 'scanner'),
         ActionTile(
@@ -2336,7 +2356,11 @@ class BuildingDialog extends StatelessWidget {
         .whereType<DailyChallengeDefinition>()
         .toList(growable: false);
     final remaining = QuestCatalog.all
-        .where((quest) => !state.claimedQuestIds.contains(quest.id))
+        .where(
+          (quest) =>
+              !state.claimedQuestIds.contains(quest.id) &&
+              controller.isQuestAvailable(quest),
+        )
         .take(20)
         .toList();
     return Column(
@@ -3918,21 +3942,15 @@ Widget _detailTile(String label, String value) => Container(
 (String, String, int, IconData) _buildingData(String id) => switch (id) {
   'workshop' => (
     'ATÖLYE',
-    'İşçi ekibi ve makine yükseltmeleri',
-    1,
-    Icons.construction_rounded,
+    'İşçi ekibi, makine yükseltmeleri ve kuyu asansörü',
+    0,
+    Icons.elevator_rounded,
   ),
   'warehouse' => (
     'AMBAR',
     'Kargo, rezerv ve maden satışları',
     2,
     Icons.inventory_2_rounded,
-  ),
-  'elevator' => (
-    'ASANSÖR',
-    'Derin kuyu ve basınç yönetimi',
-    0,
-    Icons.elevator_rounded,
   ),
   'trade' => (
     'TİCARET',

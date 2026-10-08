@@ -63,7 +63,7 @@ abstract final class AdvisorGuideCatalog {
     AdvisorGuideDefinition(
       id: 'tutorial_drill',
       title: 'Matkabın ilerlemesini izle',
-      message: 'Sondaj otomatik sürer. Başlangıçtan 80 m daha ilerleyip 5,08 km hedefine ulaş.',
+      message: 'Sondaj otomatik sürer. 10 km derinliğe ulaştığında bu görev tamamlanır.',
       target: 'drill',
       targetLabel: 'OTOMATİK MATKAP',
     ),
@@ -100,10 +100,10 @@ abstract final class AdvisorGuideCatalog {
     AdvisorGuideDefinition(
       id: 'elevator',
       title: 'Kuyu asansörü açıldı',
-      message: 'Asansör yükünü dipten yüzeye taşır. Buradan taşıma kapasitesini ve asansör düzenini geliştir.',
-      target: 'elevator',
-      targetLabel: 'ASANSÖR',
-      targetPanel: 'elevator',
+      message: 'Atölyedeki asansör modülü yükü dipten yüzeye taşır. Taşıma kapasitesini ve kuyu basıncını bu binadan yönet.',
+      target: 'workshop',
+      targetLabel: 'ATÖLYE',
+      targetPanel: 'workshop',
       unlockBuildingId: 'elevator',
     ),
     AdvisorGuideDefinition(

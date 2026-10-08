@@ -28,6 +28,13 @@ const List<double> _miningFrameBottoms = [
   448 / 512,
 ];
 
+const List<Rect> _droneAntennaCutouts = [
+  // The beacon bulb and its short mast are stray protrusions on the advisor
+  // drone cell; trim only those pixels and preserve the robot shell below.
+  Rect.fromLTRB(.322, .125, .416, .285),
+  Rect.fromLTRB(.350, .250, .390, .355),
+];
+
 Rect _miningFrameCrop(int frame) =>
     Rect.fromLTRB(0, 0, 1, _miningFrameBottoms[frame.clamp(0, 7).toInt()]);
 
@@ -163,6 +170,7 @@ class _AnimatedCrewSpriteState extends State<AnimatedCrewSprite>
                       sourceCrop: useDetailedMining
                           ? _miningFrameCrop(miningFrame)
                           : null,
+                      sourceCutouts: drone ? _droneAntennaCutouts : const [],
                     ),
                   ),
                 ),

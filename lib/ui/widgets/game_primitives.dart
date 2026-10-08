@@ -74,11 +74,13 @@ class UpgradeRow extends StatelessWidget {
     required this.controller,
     required this.track,
     this.compact = false,
+    this.highlighted = false,
   });
 
   final GameController controller;
   final String track;
   final bool compact;
+  final bool highlighted;
 
   @override
   Widget build(BuildContext context) {
@@ -133,9 +135,15 @@ class UpgradeRow extends StatelessWidget {
       margin: EdgeInsets.only(bottom: compact ? 5 : 8),
       padding: EdgeInsets.all(compact ? 5 : 9),
       decoration: BoxDecoration(
-        color: const Color(0xFF102F3B),
-        border: Border.all(color: const Color(0xFF294B55)),
+        color: highlighted ? const Color(0xFF2B3029) : const Color(0xFF102F3B),
+        border: Border.all(
+          color: highlighted ? MinePalette.amber : const Color(0xFF294B55),
+          width: highlighted ? 1.6 : 1,
+        ),
         borderRadius: BorderRadius.circular(7),
+        boxShadow: highlighted
+            ? const [BoxShadow(color: Color(0x66FFBE3E), blurRadius: 9)]
+            : null,
       ),
       child: Row(
         children: [
@@ -220,24 +228,42 @@ class UpgradeRow extends StatelessWidget {
           SizedBox(
             width: compact ? 44 : 48,
             height: compact ? 44 : 48,
-            child: IconButton.filled(
-              tooltip: level >= maxLevel
-                  ? 'Şema ailesi tamamlandı'
-                  : track == 'drill' && state.crewCount == 0
-                  ? 'Önce bir madenci işe al'
-                  : canBuy
-                  ? 'Yükselt • $cost kasa'
-                  : 'Eksik $missing kasa'
-                        '${materialText.isEmpty ? '' : ' • $materialText'}',
-              padding: EdgeInsets.zero,
-              onPressed: canBuy ? () => controller.upgrade(track) : null,
-              style: IconButton.styleFrom(
-                backgroundColor: MinePalette.amber,
-                foregroundColor: MinePalette.ink,
-                disabledBackgroundColor: const Color(0xFF203740),
-                disabledForegroundColor: MinePalette.muted,
+            child: DecoratedBox(
+              decoration: highlighted
+                  ? BoxDecoration(
+                      border: Border.all(color: MinePalette.amber, width: 2),
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: const [
+                        BoxShadow(color: Color(0x99FFBE3E), blurRadius: 7),
+                      ],
+                    )
+                  : const BoxDecoration(),
+              child: IconButton.filled(
+                tooltip: highlighted
+                    ? 'Görev için bu yükseltme düğmesine dokun'
+                    : level >= maxLevel
+                    ? 'Şema ailesi tamamlandı'
+                    : track == 'drill' && state.crewCount == 0
+                    ? 'Önce bir madenci işe al'
+                    : canBuy
+                    ? 'Yükselt • $cost kasa'
+                    : 'Eksik $missing kasa'
+                          '${materialText.isEmpty ? '' : ' • $materialText'}',
+                padding: EdgeInsets.zero,
+                onPressed: canBuy ? () => controller.upgrade(track) : null,
+                style: IconButton.styleFrom(
+                  backgroundColor: MinePalette.amber,
+                  foregroundColor: MinePalette.ink,
+                  disabledBackgroundColor: const Color(0xFF203740),
+                  disabledForegroundColor: MinePalette.muted,
+                ),
+                icon: Icon(
+                  highlighted
+                      ? Icons.touch_app_rounded
+                      : Icons.arrow_upward_rounded,
+                  size: 21,
+                ),
               ),
-              icon: const Icon(Icons.arrow_upward_rounded, size: 21),
             ),
           ),
         ],
@@ -256,6 +282,7 @@ class ActionTile extends StatelessWidget {
     required this.onPressed,
     this.enabled = true,
     this.accent = MinePalette.amber,
+    this.highlighted = false,
   });
 
   final IconData icon;
@@ -265,15 +292,22 @@ class ActionTile extends StatelessWidget {
   final VoidCallback? onPressed;
   final bool enabled;
   final Color accent;
+  final bool highlighted;
 
   @override
   Widget build(BuildContext context) => Container(
     margin: const EdgeInsets.only(bottom: 8),
     padding: const EdgeInsets.all(10),
     decoration: BoxDecoration(
-      color: const Color(0xFF102E3A),
-      border: Border.all(color: const Color(0xFF294B55)),
+      color: highlighted ? const Color(0xFF173741) : const Color(0xFF102E3A),
+      border: Border.all(
+        color: highlighted ? MinePalette.amber : const Color(0xFF294B55),
+        width: highlighted ? 2 : 1,
+      ),
       borderRadius: BorderRadius.circular(8),
+      boxShadow: highlighted
+          ? const [BoxShadow(color: Color(0x66FFBE3E), blurRadius: 10)]
+          : null,
     ),
     child: Row(
       children: [

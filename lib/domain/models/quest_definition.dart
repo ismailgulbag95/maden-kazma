@@ -111,9 +111,9 @@ abstract final class QuestCatalog {
     (
       QuestKind.depth,
       'İlk katman ölçümü',
-      'Matkap otomatik ilerler; 5 km başlangıç noktasından 80 metre daha derine in (5,08 km)',
+      'Matkabı otomatik ilerlet ve 10 km derinliğe ulaş',
       'metre derinlik',
-      80,
+      10000,
     ),
   ];
 
@@ -137,7 +137,7 @@ abstract final class QuestCatalog {
     (
       QuestKind.upgrade,
       'Takım bakımı',
-      'ekipman seviyelerini geliştir',
+      'Atölyede sondaj ucu, dökümhane veya muhafız silahını yükselt',
       'toplam ekipman seviyesi',
       6,
     ),
@@ -172,7 +172,7 @@ abstract final class QuestCatalog {
     (
       QuestKind.resonance,
       'Damar akordu',
-      'işaretli damarları doğru sırayla seç',
+      'Araştırma’da diziyi tara, sonra kuyuya dönüp cevher damarlarına sırayla dokun',
       'rezonans dizisi',
       1,
     ),
@@ -189,6 +189,7 @@ abstract final class QuestCatalog {
         kind: objective.$1,
         target: objective.$5,
         reward: 35 + index * 15,
+        absoluteDepth: index == 4,
       );
     }
 

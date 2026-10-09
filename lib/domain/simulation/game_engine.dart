@@ -887,9 +887,10 @@ abstract final class GameEngine {
   static const double mineDepositSpawnChancePerMeter = .00045;
   static const int maxLiveDepositsPerFloor = 4;
 
-  /// Gives the new crew a small, guaranteed coal group on its starting floor.
+  /// Gives the new crew four guaranteed coal veins across nearby floors.
   static void ensureOpenMineDeposits(GameState state) {
     final starterFloor = MineBiome.floorAt(GameState.startingDepthMeters);
+    final firstStarterFloor = max(0, starterFloor - 4);
     state.oreDeposits.removeWhere((_, deposit) {
       if (deposit.depleted) return false;
       final spawnDepth =
@@ -907,40 +908,133 @@ abstract final class GameEngine {
           deposit.worldIndex == 0 &&
           deposit.floorIndex != starterFloor &&
           deposit.resourceId == 'coal' &&
-          spawnDepth < mineDepositSpawnDepth;
+          spawnDepth < mineDepositSpawnDepth &&
+          !_isStarterCoalDeposit(
+            deposit,
+            firstStarterFloor: firstStarterFloor,
+            starterFloor: starterFloor,
+          );
       return wrongBiome || duplicateTutorialCoal;
     });
 
-    if (state.activeWorldIndex != 0 ||
-        !state.guidedProgression ||
-        state.initialTutorialComplete ||
-        state.tutorialStep != 0) {
-      return;
-    }
     final starterDepth = GameState.startingDepthMeters;
     if (!MineBiome.containsMineral(starterDepth, 'coal')) return;
 
     const starterCoalVeins = 4;
-    final createdStarterVeins = state.oreDeposits.keys
-        .where((id) => id.startsWith('0:$starterFloor:'))
-        .length;
-    if (createdStarterVeins >= starterCoalVeins) return;
-
     final random = Random(state.seed);
-    for (var vein = createdStarterVeins; vein < starterCoalVeins; vein++) {
-      _createMineDeposit(
+    var starterDeposits =
+        state.oreDeposits.values
+            .where(
+              (deposit) => _isStarterCoalDeposit(
+                deposit,
+                firstStarterFloor: firstStarterFloor,
+                starterFloor: starterFloor,
+              ),
+            )
+            .toList()
+          ..sort((left, right) => left.id.compareTo(right.id));
+    var migratedStarterDeposits = false;
+
+    // Saves from earlier builds have all four tutorial veins on one floor.
+    // Move that set to distinct nearby floors once, preserving mined progress.
+    final starterFloorCounts = <int, int>{};
+    for (final deposit in starterDeposits) {
+      starterFloorCounts.update(
+        deposit.floorIndex,
+        (count) => count + 1,
+        ifAbsent: () => 1,
+      );
+    }
+    if (starterFloorCounts.values.any((count) => count > 1)) {
+      final floorChoices = [
+        for (var floor = firstStarterFloor; floor <= starterFloor; floor++)
+          floor,
+      ]..shuffle(random);
+      final moveCount = min(starterDeposits.length, floorChoices.length);
+      final depositsToMove = starterDeposits.take(moveCount).toList();
+      final targetFloors = floorChoices.take(moveCount).toList();
+      for (final deposit in depositsToMove) {
+        state.oreDeposits.remove(deposit.id);
+      }
+      for (var index = 0; index < depositsToMove.length; index++) {
+        final deposit = depositsToMove[index];
+        final floorIndex = targetFloors[index];
+        final id = _nextMineDepositId(state, 0, floorIndex);
+        state.oreDeposits[id] = OreDepositState(
+          id: id,
+          worldIndex: 0,
+          floorIndex: floorIndex,
+          resourceId: deposit.resourceId,
+          amount: deposit.amount,
+          hitPoints: deposit.hitPoints,
+          damage: deposit.damage,
+          side: deposit.side,
+          pocket: deposit.pocket,
+          spawnDepthMeters: floorIndex * mineFloorMeters.toDouble(),
+        );
+      }
+      starterDeposits = state.oreDeposits.values
+          .where(
+            (deposit) => _isStarterCoalDeposit(
+              deposit,
+              firstStarterFloor: firstStarterFloor,
+              starterFloor: starterFloor,
+            ),
+          )
+          .toList();
+      migratedStarterDeposits = depositsToMove.isNotEmpty;
+    }
+
+    final shouldGenerateStarterVeins =
+        state.activeWorldIndex == 0 &&
+        state.guidedProgression &&
+        !state.initialTutorialComplete &&
+        state.tutorialStep == 0;
+    if (starterDeposits.length >= starterCoalVeins ||
+        !shouldGenerateStarterVeins) {
+      if (migratedStarterDeposits) state.seed = random.nextInt(0x7fffffff);
+      return;
+    }
+    final occupiedFloors = starterDeposits
+        .map((deposit) => deposit.floorIndex)
+        .toSet();
+    final floorChoices = [
+      for (var floor = firstStarterFloor; floor <= starterFloor; floor++) floor,
+    ]..shuffle(random);
+    var createdStarterVeins = starterDeposits.length;
+    for (final floorIndex in floorChoices) {
+      if (createdStarterVeins >= starterCoalVeins) break;
+      if (occupiedFloors.contains(floorIndex)) continue;
+      final created = _createMineDeposit(
         state,
         worldIndex: 0,
-        floorIndex: starterFloor,
-        spawnDepth: starterDepth,
+        floorIndex: floorIndex,
+        spawnDepth: floorIndex * mineFloorMeters.toDouble(),
         resource: ResourceCatalog.byId['coal']!,
         valuePerClick: 2,
         hitPoints: 5,
         random: random,
       );
+      if (created == null) continue;
+      occupiedFloors.add(floorIndex);
+      createdStarterVeins++;
     }
     state.seed = random.nextInt(0x7fffffff);
   }
+
+  static bool _isStarterCoalDeposit(
+    OreDepositState deposit, {
+    required int firstStarterFloor,
+    required int starterFloor,
+  }) =>
+      deposit.worldIndex == 0 &&
+      deposit.resourceId == 'coal' &&
+      deposit.amount == 10 &&
+      deposit.hitPoints == 5 &&
+      deposit.floorIndex >= firstStarterFloor &&
+      deposit.floorIndex <= starterFloor &&
+      (deposit.spawnDepthMeters ?? GameState.startingDepthMeters) <
+          mineDepositSpawnDepth;
 
   /// Probabilistically spawns a mineral deposit while the drill advances.
   /// Resource weights favor the newest mineral unlocked at this depth, with
@@ -1131,6 +1225,22 @@ abstract final class GameEngine {
             total + (rates[resource.id] ?? 0) * resource.baseValue,
       );
 
+  static String _nextMineDepositId(
+    GameState state,
+    int worldIndex,
+    int floorIndex,
+  ) {
+    final prefix = '$worldIndex:$floorIndex:';
+    var nextIndex = 0;
+    for (final id in state.oreDeposits.keys.where(
+      (id) => id.startsWith(prefix),
+    )) {
+      final parsed = int.tryParse(id.substring(prefix.length));
+      if (parsed != null) nextIndex = max(nextIndex, parsed + 1);
+    }
+    return '$prefix$nextIndex';
+  }
+
   static OreDepositState? _createMineDeposit(
     GameState state, {
     required int worldIndex,
@@ -1161,15 +1271,7 @@ abstract final class GameEngine {
     final position =
         availablePositions[random.nextInt(availablePositions.length)];
     final slot = position - 1;
-    final prefix = '$worldIndex:$floorIndex:';
-    var nextIndex = 0;
-    for (final id in state.oreDeposits.keys.where(
-      (id) => id.startsWith(prefix),
-    )) {
-      final parsed = int.tryParse(id.substring(prefix.length));
-      if (parsed != null) nextIndex = max(nextIndex, parsed + 1);
-    }
-    final id = '$prefix$nextIndex';
+    final id = _nextMineDepositId(state, worldIndex, floorIndex);
     final deposit = OreDepositState(
       id: id,
       worldIndex: worldIndex,

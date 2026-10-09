@@ -18,7 +18,8 @@ import 'mr_mine_drill_difficulty.dart';
 import 'buff_lab_definition.dart';
 
 class GameState {
-  static const int currentSchemaVersion = 24;
+  static const int currentSchemaVersion = 26;
+  static const int sharedCargoInventorySchemaVersion = 25;
   static const double startingDepthMeters = 5000;
   static const List<double> worldEntryDepths = [0, 1032000, 1814000];
   static const List<double> autoSellThresholdChoices = [.6, .75, .85, .95];
@@ -68,6 +69,7 @@ class GameState {
     this.resonanceChains = 0,
     this.miningSeconds = 0,
     this.tutorialStep = 0,
+    this.openingComicSeen = true,
     this.coreShards = 0,
     this.prestigeCount = 0,
     this.drillParts = 0,
@@ -115,6 +117,7 @@ class GameState {
     this.drillBitLevel = 1,
     this.drillFanLevel = 1,
     this.drillEngineLevel = 1,
+    this.drillAssemblyQuestProgress = 0,
     this.reactorShutdown = false,
     this.scientistsSacrificedToCore = 0,
     Map<String, int>? inventory,
@@ -308,6 +311,7 @@ class GameState {
   int resonanceChains;
   int miningSeconds;
   int tutorialStep;
+  bool openingComicSeen;
   int coreShards;
   int prestigeCount;
   int drillParts;
@@ -355,6 +359,7 @@ class GameState {
   int drillBitLevel;
   int drillFanLevel;
   int drillEngineLevel;
+  int drillAssemblyQuestProgress;
   bool reactorShutdown;
   int scientistsSacrificedToCore;
   final Map<String, int> inventory;
@@ -422,6 +427,7 @@ class GameState {
       questDepthBaselineMeters: startingDepthMeters,
       questCrewBaselineCount: 0,
       crewCount: 0,
+      openingComicSeen: false,
       cargoCapacity: cargoCapacities.first,
       cargoLevel: 1,
       lastSavedAt: lastSavedAt,
@@ -430,7 +436,8 @@ class GameState {
       worldWorkerLevels: {'0': 0, '1': 0, '2': 0},
       worldDepths: {'0': startingDepthMeters},
       unlockedBuildings: <String>{},
-      knownBlueprintIds: <int>{},
+      // Levels 2–5 for each assembly component are the starter blueprints.
+      knownBlueprintIds: <int>{for (var id = 0; id <= 15; id++) id},
       guidedProgression: true,
     );
     state.seed = seed ?? Random.secure().nextInt(0x7fffffff);
@@ -722,6 +729,7 @@ class GameState {
           ? 1000000000
           : totalSold.toDouble().clamp(0, 1000000000).floor(),
     QuestKind.upgrade => upgrades.values.fold(0, (sum, level) => sum + level),
+    QuestKind.assemblyUpgrade => drillAssemblyQuestProgress,
     QuestKind.chest => chestsOpened,
     QuestKind.cave => cavesCompleted,
     QuestKind.relic => relicsFound,
@@ -767,6 +775,7 @@ class GameState {
       'resonanceChains': resonanceChains,
       'miningSeconds': miningSeconds,
       'tutorialStep': tutorialStep,
+      'openingComicSeen': openingComicSeen,
       'coreShards': coreShards,
       'prestigeCount': prestigeCount,
       'drillParts': drillParts,
@@ -839,6 +848,7 @@ class GameState {
       'drillBitLevel': drillBitLevel,
       'drillFanLevel': drillFanLevel,
       'drillEngineLevel': drillEngineLevel,
+      'drillAssemblyQuestProgress': drillAssemblyQuestProgress,
       'reactorShutdown': reactorShutdown,
       'scientistsSacrificedToCore': scientistsSacrificedToCore,
       'reactorComponents': reactorComponents,
@@ -1003,6 +1013,7 @@ class GameState {
       resonanceChains: readInt('resonanceChains'),
       miningSeconds: readInt('miningSeconds'),
       tutorialStep: readInt('tutorialStep'),
+      openingComicSeen: json['openingComicSeen'] as bool? ?? true,
       coreShards: readInt('coreShards'),
       prestigeCount: readInt('prestigeCount'),
       drillParts: readInt('drillParts'),
@@ -1076,6 +1087,7 @@ class GameState {
       drillBitLevel: readInt('drillBitLevel', 1),
       drillFanLevel: readInt('drillFanLevel', 1),
       drillEngineLevel: readInt('drillEngineLevel', 1),
+      drillAssemblyQuestProgress: readInt('drillAssemblyQuestProgress'),
       reactorShutdown: json['reactorShutdown'] as bool? ?? false,
       scientistsSacrificedToCore: readInt('scientistsSacrificedToCore'),
       reactorComponents: json.containsKey('reactorComponents')
@@ -1134,6 +1146,9 @@ class GameState {
         }
       }
     }
+    // These starter plans should also be present in saves created before the
+    // new-game starter blueprint set was corrected.
+    state.knownBlueprintIds.addAll(List<int>.generate(16, (index) => index));
     state.resonanceProgress = readInt('resonanceProgress');
     state.seed = readInt('seed', 91827);
     state.relicScrap = state.relicScrap.clamp(0, 1000000000).toInt();
@@ -1407,6 +1422,9 @@ class GameState {
     state.drillEngineLevel = state.drillEngineLevel
         .clamp(1, DrillAssemblyCatalog.maxLevel)
         .toInt();
+    state.drillAssemblyQuestProgress = state.drillAssemblyQuestProgress
+        .clamp(0, 1)
+        .toInt();
     state.scientistsSacrificedToCore = state.scientistsSacrificedToCore
         .clamp(0, 1000000)
         .toInt();
@@ -1535,7 +1553,7 @@ class GameState {
     }
     final activeKey = state.activeWorldIndex.toString();
     final hasDepthSnapshots = state.worldDepths.isNotEmpty;
-    if (schema < currentSchemaVersion) {
+    if (schema < sharedCargoInventorySchemaVersion) {
       final combinedInventory = Map<String, int>.from(state.inventory);
       final combinedReserves = Map<String, int>.from(state.reserves);
       for (var world = 0; world < worldEntryDepths.length; world++) {

@@ -4,9 +4,14 @@ import '../../app/game_controller.dart';
 import '../../core/design/palette.dart';
 
 class SettingsDialog extends StatelessWidget {
-  const SettingsDialog({super.key, required this.controller});
+  const SettingsDialog({
+    super.key,
+    required this.controller,
+    this.onReplayOpeningComic,
+  });
 
   final GameController controller;
+  final VoidCallback? onReplayOpeningComic;
 
   @override
   Widget build(BuildContext context) {
@@ -102,6 +107,17 @@ class SettingsDialog extends StatelessWidget {
                         value: state.notificationsEnabled,
                         onChanged: controller.setNotificationsEnabled,
                       ),
+                      if (onReplayOpeningComic != null)
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                            onReplayOpeningComic!.call();
+                          },
+                          icon: const Icon(Icons.auto_stories_rounded),
+                          label: const Text(
+                            'AÇILIŞ ÇİZGİ ROMANINI TEKRAR İZLE',
+                          ),
+                        ),
                       const Divider(height: 20, color: MinePalette.border),
                       OutlinedButton.icon(
                         onPressed: () async {

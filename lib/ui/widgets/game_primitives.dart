@@ -121,7 +121,7 @@ class UpgradeRow extends StatelessWidget {
         (track != 'drill' || state.crewCount > 0) &&
         (track != 'reactor' || state.unlockedBuildings.contains('reactor'));
     final (name, icon) = switch (track) {
-      'drill' => ('Sondaj ucu', Icons.hardware_rounded),
+      'drill' => ('Kazı hızı', Icons.hardware_rounded),
       'workers' => ('İşçi eğitimi', Icons.engineering_rounded),
       'lift' => ('Kuyu asansörü', Icons.elevator_rounded),
       'warehouse' => ('Kargo ambarı', Icons.inventory_2_rounded),

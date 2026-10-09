@@ -178,7 +178,7 @@ class BuildingDialog extends StatelessWidget {
                 track: track,
                 highlighted: _shouldHighlightUpgrade(track, state),
               ),
-            _drillAssemblySection(state),
+            _drillAssemblySection(context, state),
             if (state.unlockedBuildings.contains('elevator')) ...[
               const SizedBox(height: 8),
               _subheading('KUYU ASANSÖRÜ'),
@@ -729,14 +729,75 @@ class BuildingDialog extends StatelessWidget {
     );
   }
 
-  Widget _drillAssemblySection(GameState state) => Column(
+  void _showDrillAssemblyHelp(BuildContext context) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: MinePalette.ink,
+        title: const Text('Sondaj montajı nasıl geliştirilir?'),
+        content: const SingleChildScrollView(
+          child: Text(
+            'Sondaj ucu, soğutma fanı ve sondaj motoru ayrı parçalardır. '
+            'Her kart yalnızca kendi parçasını bir seviye yükseltir.\n\n'
+            '1. Kartta bir sonraki seviyenin şemasını, derinlik şartını, '
+            'kasasını ve cevher tarifini kontrol et. Arşivdeki şema kalıcıdır; '
+            'yükseltirken harcanmaz.\n\n'
+            '2. İlk Lv 2–5 şemaları başlangıçta verilir. Sonrakiler için '
+            'bu bölümde derinlik keşfi kartı çıktığında ŞEMALARI AL’a bas. '
+            'Golem 50 km’de, Gidget 225 km’de, Robot Mk II 1.257 km’de ve '
+            'Robot Mk III 2.039 km’de şema keşfi sunar. Altın sandıklar ve '
+            'gezgin tüccar da şema verebilir.\n\n'
+            '3. Derinlik şartı şimdi bulunduğun yeri değil, ulaştığın en derin '
+            'noktayı kullanır. Kartta Robot Mk II veya Mk III yazıyorsa o binayı '
+            'da açmış olmalısın.\n\n'
+            '4. En az bir madencin olmalı. Cevher tarifindeki miktarlar '
+            'ambarındaki kullanılabilir miktarı gösterir; rezerve ayırdığın '
+            'cevher bu hesaba girmez.\n\n'
+            '5. Karttaki şartlar tamamlanınca kasa düğmesine bas. Parçanın '
+            'seviyesi yükselir ve toplam sondaj gücü (W) '
+            'yeniden hesaplanır. “Kazı hızı” çubuğu '
+            'ayrı bir geliştirmedir.',
+            style: TextStyle(
+              color: MinePalette.cream,
+              fontSize: 12,
+              height: 1.4,
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('ANLADIM'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _drillAssemblySection(BuildContext context, GameState state) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       const SizedBox(height: 7),
-      _subheading('SONDAJ MONTAJI'),
+      Row(
+        children: [
+          Expanded(child: _subheading('SONDAJ MONTAJI')),
+          IconButton(
+            tooltip: 'Montaj geliştirme yardımını aç',
+            visualDensity: VisualDensity.compact,
+            constraints: const BoxConstraints.tightFor(width: 34, height: 34),
+            padding: EdgeInsets.zero,
+            onPressed: () => _showDrillAssemblyHelp(context),
+            icon: const Icon(
+              Icons.help_outline_rounded,
+              color: MinePalette.cyan,
+              size: 19,
+            ),
+          ),
+        ],
+      ),
       _sectionIntro(
         'UÇ • FAN • MOTOR',
-        'Toplam güç, üç parçanın watt değerleri ve çarpanlarıyla hesaplanır. Kazı süresi bulunduğun derinliğin zorluğuna göre değişir; şemalar kasa ve maden ister.',
+        'Üç parçayı ayrı ayrı geliştir. Her kart sıradaki seviye için gereken şemayı, derinliği, kasayı ve cevheri gösterir. Ayrıntı için sağ üstteki ? simgesine dokun.',
       ),
       for (final encounter in GameEngine.blueprintEncounters.entries)
         if (GameEngine.canClaimBlueprintEncounter(state, encounter.key))
@@ -797,11 +858,15 @@ class BuildingDialog extends StatelessWidget {
       _ => '',
     };
     final recipeText = requirements.entries
-        .map(
-          (entry) =>
-              '${entry.value} ${ResourceCatalog.byId[entry.key]?.name ?? entry.key}',
-        )
-        .join(' + ');
+        .map((entry) {
+          final available = (state.amount(entry.key) - state.reserve(entry.key))
+              .clamp(0, 0x7fffffff)
+              .toInt();
+          final resourceName =
+              ResourceCatalog.byId[entry.key]?.name ?? entry.key;
+          return '$resourceName $available/${entry.value}${available >= entry.value ? ' ✓' : ' • eksik'}';
+        })
+        .join(' • ');
     final currentWatts = component.wattsAt(level);
     final nextWatts = level >= DrillAssemblyCatalog.maxLevel
         ? currentWatts
@@ -813,32 +878,64 @@ class BuildingDialog extends StatelessWidget {
     final nextMultiplier = level >= DrillAssemblyCatalog.maxLevel
         ? currentMultiplier
         : DrillAssemblyCatalog.wattMultiplierAt(component.id, nextLevel);
+    final blueprintText = blueprintId == null
+        ? 'Şema gerekmiyor'
+        : 'Şema ${GameEngine.blueprintName(blueprintId)} • ${blueprintLocked ? 'eksik' : 'arşivde'}';
+    final depthText = requiredDepth == 0
+        ? 'Derinlik şartı yok'
+        : 'Derinlik ${(state.deepestMeters / 1000).floor()}/${(requiredDepth / 1000).ceil()} km${depthLocked ? ' • eksik' : ' • tamam'}';
+    final buildingText = requiredBuilding == null
+        ? null
+        : 'Bina $requiredBuildingName • ${buildingLocked ? 'gerekli' : 'açık'}';
+    final cashText = cost <= 0
+        ? 'Kasa gerekmez'
+        : 'Kasa ${_compactCash(cost)} • ${state.canAfford(cost.toDouble()) ? 'hazır' : 'eksik'}';
+    final materialText = requirements.isEmpty
+        ? 'Maden gerekmez'
+        : 'Maden: $recipeText';
+    final crewText = state.crewCount > 0
+        ? 'Madenci hazır'
+        : 'En az 1 madenci gerekli';
+    final description = level >= DrillAssemblyCatalog.maxLevel
+        ? 'Son şema tamamlandı • ${currentWatts.toStringAsFixed(0)} W.'
+        : [
+            'Sonraki seviye Lv $nextLevel',
+            'Güç ${currentWatts.toStringAsFixed(0)} W ×${_compactCash(currentMultiplier)} → ${nextWatts.toStringAsFixed(0)} W ×${_compactCash(nextMultiplier)}',
+            blueprintText,
+            depthText,
+            if (buildingText != null) buildingText,
+            crewText,
+            cashText,
+            materialText,
+          ].join(' • ');
+    final canAfford = state.canAfford(cost.toDouble());
+    final assemblyQuestActive =
+        controller.currentQuest.kind == QuestKind.assemblyUpgrade;
     return ActionTile(
       icon: switch (component.id) {
         'bit' => Icons.hardware_rounded,
         'fan' => Icons.toys_rounded,
         _ => Icons.settings_rounded,
       },
-      title: '${component.name} • Lv $level/${DrillAssemblyCatalog.maxLevel}',
-      description: level >= DrillAssemblyCatalog.maxLevel
-          ? 'Son şema tamamlandı • ${currentWatts.toStringAsFixed(0)} W.'
-          : blueprintLocked
-          ? 'Bu seviyenin montaj şeması henüz arşivde yok.'
-          : depthLocked
-          ? 'Sonraki şema ${requiredDepth ~/ 1000} km derinlikte açılır.'
-          : buildingLocked
-          ? 'Bu şema için $requiredBuildingName bulunmalı.'
-          : '${currentWatts.toStringAsFixed(0)} W ×${_compactCash(currentMultiplier)} → ${nextWatts.toStringAsFixed(0)} W ×${_compactCash(nextMultiplier)}${recipeText.isEmpty ? '' : ' • Tarif: $recipeText'}.',
+      title:
+          'Montaj: ${component.name} • Lv $level/${DrillAssemblyCatalog.maxLevel}',
+      description: description,
       buttonLabel: level >= DrillAssemblyCatalog.maxLevel
           ? 'MAKSİMUM'
           : blueprintLocked
-          ? 'ŞEMA GEREKİYOR'
+          ? 'ŞEMA EKSİK'
           : depthLocked
           ? '${requiredDepth ~/ 1000} KM'
           : buildingLocked
           ? requiredBuildingName.toUpperCase()
+          : state.crewCount <= 0
+          ? 'İŞÇİ GEREKLİ'
+          : !canAfford
+          ? 'KASA EKSİK'
+          : deficits.isNotEmpty
+          ? 'MADEN EKSİK'
           : cost == 0
-          ? 'TARİFİ ÜRET'
+          ? 'GELİŞTİR'
           : '${_compactCash(cost)} KASA',
       enabled:
           level < DrillAssemblyCatalog.maxLevel &&
@@ -846,10 +943,11 @@ class BuildingDialog extends StatelessWidget {
           !depthLocked &&
           !buildingLocked &&
           state.crewCount > 0 &&
-          state.canAfford(cost.toDouble()) &&
+          canAfford &&
           deficits.isEmpty,
       onPressed: () => controller.upgradeDrillAssembly(component.id),
       accent: component.id == 'engine' ? MinePalette.amber : MinePalette.cyan,
+      highlighted: assemblyQuestActive && level < DrillAssemblyCatalog.maxLevel,
     );
   }
 

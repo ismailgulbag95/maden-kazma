@@ -54,6 +54,22 @@ Bilim ekibinin portreleri ve sekiz özel madencinin yetenek portreleri özgün, 
 | Derinlik çekirdeği | Kaynak fedası ve kalıcı meta ilerleme |
 | Yeni dünyalar | Ay ve Titan'a özgü ortamlar, kaynaklar ve muhafızlar |
 
+## Açılış anlatısı
+
+### Hikâye çerçevesi
+
+Oyuncu, terk edilmiş karakolu yeniden açan vardiya şefidir. Başlangıçtaki telsiz sesi merkez operatörüne aittir; yüzü ve geçmişi gösterilmez. Bilim insanı kadrosu 50 km'de açıldığında jeolog sinyali araştırmaya katılır. Mağaralarda bulunan kâşif notları, daha önceki araştırma ekibinin izini taşır.
+
+- **5 km:** İlk kömür damarı bulunduğunda cihaz darbeleri kazma vuruşlarıyla eşleşir; sinyal, oyuncu durduktan sonra da yerin altından gelmeye devam eder.
+- **50 km:** Jeolog, sinyal aralıklarının farklı katmanlarda aynı kaldığını fark eder. İlk kalıntı eski bir araştırma kaydını içerir.
+- **Mağaralar ve 300 km:** Kayıp kâşifin notları, önceki ekibin birden fazla sinyal noktası haritaladığını ve bunların derine doğru birleştiğini gösterir. Yeraltı yerleşkesi araştırmanın devam etmesini sağlar.
+- **501 km:** Derinlik çekirdeği aynı ritimde yanıt verir ve sinyali yüzeye değil, daha uzağa iletir. Bu, kaynağın daha büyük bir yapının parçası olduğuna dair ilk güçlü kanıttır.
+- **Ay ve Titan:** Benzer ritimler Ay'daki kaya ve Titan'daki buz katmanlarında bulunur. Dünya kuyusunun daha geniş bir ağın parçası olabileceği anlaşılır; ağın doğal mı yoksa inşa edilmiş mi olduğu açık bırakılır.
+
+Bu gelişmeler mevcut derinlik ve açılma eşiklerine bağlanır. Ana oyun akışını kesmemek için sonraki bölümler kısa telsiz konuşmaları, kâşif notları ve isteğe bağlı kayıt panelleriyle anlatılır; her içerik bir veya iki cümleyle yeni bir ipucu verir.
+
+Yeni vardiyanın ilk açılışında altı karelik, atlanabilir **Yerin Nabzı** çizgi romanı oynar. Merkez istasyonunun tekrarlayan sinyali, karakolun yeniden açılması, asansörün 5 km'ye inmesi ve ilk kömür damarı gösterilir; son karede titreşimin daha derinden geldiği anlaşılır. Her kare kısa bir geçiş ve hafif yakınlaşmayla yaklaşık 3,8 saniye ekranda kalır. Açılış tamamlanınca veya atlanınca kayıtlı durumu işaretlenir; ayarlardan tekrar izlenebilir. Önceki kayıtlar açılışı görmüş kabul edilir.
+
 Atölyede sondaj ucu, fan ve motor ayrı seviyelerde gelişir; geç Ay safhasında Robot Mk II üst şemaları açar. Reaktör oyuncunun modül yerleşimine göre ısı dengesi kurar ve ileri izotop üretir. Buff Laboratuvarı üç sürekli etkiyi reaktör enerjisi karşılığında çalıştırır. Yönetici yokken çevrimdışı üretim olmaz; üç kademe %25, %50 ve %100 hızla 12, 24 ve 48 saatlik vardiya sağlar.
 
 Tam kilometre taşları ve hedeflenen açılma ritmi [PROGRESSION.md](PROGRESSION.md) içindedir. Ekonomi denklemleri [ECONOMY.md](ECONOMY.md) içindedir.

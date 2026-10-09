@@ -75,6 +75,7 @@ class GameController extends ChangeNotifier {
   bool _lastCargoFull = false;
   bool _saveQueued = false;
   bool _disposed = false;
+  bool _simulationPaused = false;
 
   QuestDefinition get currentQuest => QuestCatalog.all.firstWhere(
     (quest) =>
@@ -85,7 +86,7 @@ class GameController extends ChangeNotifier {
   int get currentQuestProgress =>
       state.progressFor(currentQuest).clamp(0, currentQuest.target).toInt();
 
-  int get readyQuestCount =>
+  int get unclaimedQuestRewardCount =>
       QuestCatalog.all
           .where(
             (quest) =>
@@ -102,6 +103,8 @@ class GameController extends ChangeNotifier {
               !state.claimedQuestIds.contains(QuestCatalog.endgameGoal.id)
           ? 1
           : 0);
+
+  int get readyQuestCount => unclaimedQuestRewardCount;
 
   bool get currentQuestReady =>
       currentQuestProgress >= currentQuest.target &&
@@ -211,13 +214,36 @@ class GameController extends ChangeNotifier {
     _lastCargoFull = state.cargoFull;
     state.lastSavedAt = now;
     _lastTickAt = now;
+    _simulationPaused = !state.openingComicSeen;
     isReady = true;
     if (state.reactorShutdown) {
       unawaited(SoundService.instance.startReactorAlarm());
     }
     notifyListeners();
-    _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
+    _startSimulationTicker();
     unawaited(saveNow());
+  }
+
+  void pauseSimulation() {
+    _simulationPaused = true;
+    _ticker?.cancel();
+    _ticker = null;
+    _lastTickAt = DateTime.now();
+    _tickRemainder = Duration.zero;
+  }
+
+  void resumeSimulation() {
+    if (!_simulationPaused) return;
+    _simulationPaused = false;
+    _lastTickAt = DateTime.now();
+    _tickRemainder = Duration.zero;
+    _startSimulationTicker();
+  }
+
+  void _startSimulationTicker() {
+    if (!isReady || _disposed || _simulationPaused || _ticker != null) return;
+    _lastTickAt = DateTime.now();
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
   }
 
   void reportInitializationFailure(Object error) {
@@ -286,6 +312,12 @@ class GameController extends ChangeNotifier {
     } while (_saveQueued && !_disposed);
     isSaving = false;
     if (!_disposed) notifyListeners();
+  }
+
+  void markOpeningComicSeen() {
+    if (state.openingComicSeen) return;
+    state.openingComicSeen = true;
+    _refreshState();
   }
 
   Future<void> onAppPaused() async {
@@ -380,6 +412,7 @@ class GameController extends ChangeNotifier {
   }
 
   bool upgradeDrillAssembly(String componentId) {
+    final isAssemblyQuest = currentQuest.kind == QuestKind.assemblyUpgrade;
     final currentLevel = GameEngine.drillAssemblyLevel(state, componentId);
     final cost = GameEngine.drillAssemblyUpgradeCost(state, componentId);
     if (!GameEngine.upgradeDrillAssembly(state, componentId)) {
@@ -417,6 +450,7 @@ class GameController extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+    if (isAssemblyQuest) state.drillAssemblyQuestProgress++;
     final name = switch (componentId) {
       'bit' => 'Sondaj ucu',
       'fan' => 'Soğutma fanı',
@@ -1328,6 +1362,9 @@ class GameController extends ChangeNotifier {
     final quest = currentQuest;
     if (!currentQuestReady) return;
     state.claimedQuestIds.add(quest.id);
+    if (quest.kind == QuestKind.assemblyUpgrade) {
+      state.drillAssemblyQuestProgress = 0;
+    }
     final reward =
         (quest.reward *
                 (state.equippedRelics.contains('relic_8')

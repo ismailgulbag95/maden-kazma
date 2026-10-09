@@ -1067,8 +1067,11 @@ class _CompactActionBar extends StatelessWidget {
           child: LayoutBuilder(
             builder: (context, navConstraints) {
               final width = navConstraints.maxWidth;
+              const rightShift = 19.0;
               final centerX =
-                  (width + viewPadding.right - viewPadding.left) / 2;
+                  MediaQuery.sizeOf(context).width / 2 -
+                  viewPadding.left +
+                  rightShift;
               final halfAvailable = math.min(centerX, width - centerX);
               final navWidth = math
                   .min(math.min(width, 560.0), halfAvailable * 2)

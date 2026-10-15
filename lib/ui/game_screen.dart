@@ -49,6 +49,37 @@ class _GameScreenState extends State<GameScreen> {
       if (mounted && widget.controller.state.musicEnabled) {
         unawaited(SoundService.instance.startBgm());
       }
+      _checkOfflineDialog();
+    });
+  }
+
+  void _checkOfflineDialog() {
+    if (_offlineDialogShown ||
+        !widget.controller.isReady ||
+        widget.controller.offlineSeconds < 30) {
+      return;
+    }
+    _offlineDialogShown = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          backgroundColor: MinePalette.panel,
+          title: const Text('Vardiya raporu'),
+          content: Text(
+            'Dönüşünde ekibin ${_number(widget.controller.offlineOreGained)} kaynak çıkardı '
+            've ${widget.controller.offlineDepthGained.toStringAsFixed(0)} m daha ilerledi. '
+            'Süre: ${_duration(widget.controller.offlineSeconds)}.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('DEVAM ET'),
+            ),
+          ],
+        ),
+      );
     });
   }
 
@@ -57,6 +88,7 @@ class _GameScreenState extends State<GameScreen> {
     if (!widget.controller.isReady) return;
     if (!_hasRenderedReadyState) {
       _hasRenderedReadyState = true;
+      _checkOfflineDialog();
       setState(() {});
     }
     final notices = widget.controller.takeNotices();
@@ -186,31 +218,6 @@ class _GameScreenState extends State<GameScreen> {
         ),
       );
     }
-    if (!_offlineDialogShown && widget.controller.offlineSeconds >= 30) {
-      _offlineDialogShown = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        showDialog<void>(
-          context: context,
-          builder: (context) => AlertDialog(
-            backgroundColor: MinePalette.panel,
-            title: const Text('Vardiya raporu'),
-            content: Text(
-              'Dönüşünde ekibin ${_number(widget.controller.offlineOreGained)} kaynak çıkardı '
-              've ${widget.controller.offlineDepthGained.toStringAsFixed(0)} m daha ilerledi. '
-              'Süre: ${_duration(widget.controller.offlineSeconds)}.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('DEVAM ET'),
-              ),
-            ],
-          ),
-        );
-      });
-    }
-
     return Scaffold(
       body: SafeArea(
         bottom: false,
@@ -1023,103 +1030,101 @@ class _CompactActionBar extends StatelessWidget {
   final ValueChanged<String> onUtility;
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, _) {
-      final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
-      final viewPadding = MediaQuery.viewPaddingOf(context);
-      final unclaimedQuestRewards = controller.unclaimedQuestRewardCount;
-      final currentGuideTarget = AdvisorGuideCatalog.currentFor(
-        controller.state,
-      )?.target;
-      final shortcuts = [
-        (Icons.construction_rounded, 'ATÖLYE', 'workshop'),
-        (Icons.inventory_2_rounded, 'AMBAR', 'warehouse'),
-        (Icons.task_alt_rounded, 'GÖREV', 'quests'),
-        controller.state.totalChestsFound > 0
-            ? (
-                Icons.inventory_2_rounded,
-                'SANDIK ${controller.state.totalChestsFound}',
-                'trade',
-              )
-            : (Icons.explore_rounded, 'SEFER', 'expedition'),
-        (Icons.emoji_events_rounded, 'ROZET', 'achievements'),
-      ];
-      return Container(
-        width: double.infinity,
-        height: 74 + bottomInset,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xF0071B24), Color(0xF80B2732)],
-          ),
-          border: const Border(
-            top: BorderSide(color: MinePalette.border, width: 1.3),
-          ),
-          boxShadow: const [
-            BoxShadow(
-              color: Colors.black45,
-              blurRadius: 12,
-              offset: Offset(0, -4),
-            ),
-          ],
+  Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final bottomInset = mediaQuery.viewPadding.bottom;
+    final viewPadding = mediaQuery.viewPadding;
+    final screenWidth = mediaQuery.size.width;
+    final unclaimedQuestRewards = controller.unclaimedQuestRewardCount;
+    final currentGuideTarget = AdvisorGuideCatalog.currentFor(
+      controller.state,
+    )?.target;
+    final shortcuts = [
+      (Icons.construction_rounded, 'ATÖLYE', 'workshop'),
+      (Icons.inventory_2_rounded, 'AMBAR', 'warehouse'),
+      (Icons.task_alt_rounded, 'GÖREV', 'quests'),
+      controller.state.totalChestsFound > 0
+          ? (
+              Icons.inventory_2_rounded,
+              'SANDIK ${controller.state.totalChestsFound}',
+              'trade',
+            )
+          : (Icons.explore_rounded, 'SEFER', 'expedition'),
+      (Icons.emoji_events_rounded, 'ROZET', 'achievements'),
+    ];
+    return Container(
+      width: double.infinity,
+      height: 74 + bottomInset,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xF0071B24), Color(0xF80B2732)],
         ),
-        child: Padding(
-          padding: EdgeInsets.only(bottom: bottomInset),
-          child: LayoutBuilder(
-            builder: (context, navConstraints) {
-              final width = navConstraints.maxWidth;
-              const rightShift = 19.0;
-              final centerX =
-                  MediaQuery.sizeOf(context).width / 2 -
-                  viewPadding.left +
-                  rightShift;
-              final halfAvailable = math.min(centerX, width - centerX);
-              final navWidth = math
-                  .min(math.min(width, 560.0), halfAvailable * 2)
-                  .toDouble();
-              final navLeft = centerX - navWidth / 2;
-              final itemWidth = navWidth / shortcuts.length;
+        border: const Border(
+          top: BorderSide(color: MinePalette.border, width: 1.3),
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black45,
+            blurRadius: 12,
+            offset: Offset(0, -4),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: EdgeInsets.only(bottom: bottomInset),
+        child: LayoutBuilder(
+          builder: (context, navConstraints) {
+            final width = navConstraints.maxWidth;
+            const rightShift = 19.0;
+            final centerX =
+                screenWidth / 2 - viewPadding.left + rightShift;
+            final halfAvailable = math.min(centerX, width - centerX);
+            final navWidth = math
+                .min(math.min(width, 560.0), halfAvailable * 2)
+                .toDouble();
+            final navLeft = centerX - navWidth / 2;
+            final itemWidth = navWidth / shortcuts.length;
 
-              return SizedBox(
-                height: 74,
-                child: Stack(
-                  children: [
-                    for (var index = 0; index < shortcuts.length; index++)
-                      Positioned(
-                        left: navLeft + itemWidth * index,
-                        top: 0,
-                        bottom: 0,
-                        width: itemWidth,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 2,
-                            vertical: 4,
+            return SizedBox(
+              height: 74,
+              child: Stack(
+                children: [
+                  for (var index = 0; index < shortcuts.length; index++)
+                    Positioned(
+                      left: navLeft + itemWidth * index,
+                      top: 0,
+                      bottom: 0,
+                      width: itemWidth,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 2,
+                          vertical: 4,
+                        ),
+                        child: _QuickNav(
+                          icon: shortcuts[index].$1,
+                          label: shortcuts[index].$2,
+                          enabled: controller.state.canOpenBuilding(
+                            shortcuts[index].$3,
                           ),
-                          child: _QuickNav(
-                            icon: shortcuts[index].$1,
-                            label: shortcuts[index].$2,
-                            enabled: controller.state.canOpenBuilding(
-                              shortcuts[index].$3,
-                            ),
-                            badgeCount: shortcuts[index].$3 == 'quests'
-                                ? unclaimedQuestRewards
-                                : 0,
-                            highlighted:
-                                currentGuideTarget == shortcuts[index].$3 ||
-                                (shortcuts[index].$3 == 'quests' &&
-                                    unclaimedQuestRewards > 0),
-                            onTap: () => onUtility(shortcuts[index].$3),
-                          ),
+                          badgeCount: shortcuts[index].$3 == 'quests'
+                              ? unclaimedQuestRewards
+                              : 0,
+                          highlighted:
+                              currentGuideTarget == shortcuts[index].$3 ||
+                              (shortcuts[index].$3 == 'quests' &&
+                                  unclaimedQuestRewards > 0),
+                          onTap: () => onUtility(shortcuts[index].$3),
                         ),
                       ),
-                  ],
-                ),
-              );
-            },
-          ),
+                    ),
+                ],
+              ),
+            );
+          },
         ),
-      );
-    },
-  );
+      ),
+    );
+  }
 }
 
 class _MineEventBanner extends StatelessWidget {
@@ -3883,6 +3888,7 @@ class _MineActionBar extends StatelessWidget {
           ? 63.0
           : 77.0;
       final gap = compact ? 5.0 : 7.0;
+      final unclaimedQuestRewards = controller.unclaimedQuestRewardCount;
       return Container(
         height: 74,
         padding: EdgeInsets.symmetric(
@@ -3914,6 +3920,9 @@ class _MineActionBar extends StatelessWidget {
                   icon: shortcuts[index].$1,
                   label: shortcuts[index].$2,
                   enabled: state.canOpenBuilding(shortcuts[index].$3),
+                  badgeCount: shortcuts[index].$3 == 'quests'
+                      ? unclaimedQuestRewards
+                      : 0,
                   highlighted: guideTarget == shortcuts[index].$3,
                   onTap: () => onUtility(shortcuts[index].$3),
                 ),
@@ -3932,6 +3941,7 @@ class _SquareAction extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.enabled,
+    this.badgeCount = 0,
     this.highlighted = false,
     required this.onTap,
   });
@@ -3939,6 +3949,7 @@ class _SquareAction extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool enabled;
+  final int badgeCount;
   final bool highlighted;
   final VoidCallback onTap;
 
@@ -3946,7 +3957,7 @@ class _SquareAction extends StatelessWidget {
   Widget build(BuildContext context) => Semantics(
     button: enabled,
     enabled: enabled,
-    label: label,
+    label: badgeCount > 0 ? '$label, $badgeCount alınmamış ödül' : label,
     child: SizedBox(
       height: 56,
       child: Material(
@@ -3961,32 +3972,43 @@ class _SquareAction extends StatelessWidget {
               Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: highlighted
-                        ? BoxDecoration(
-                            border: Border.all(
-                              color: MinePalette.amber,
-                              width: 1.5,
-                            ),
-                            borderRadius: BorderRadius.circular(6),
-                            boxShadow: const [
-                              BoxShadow(
-                                color: Color(0x99FFBE3E),
-                                blurRadius: 8,
-                              ),
-                            ],
-                          )
-                        : null,
-                    child: Icon(
-                      enabled ? icon : Icons.lock_outline_rounded,
-                      size: 20,
-                      color: highlighted
-                          ? MinePalette.amber
-                          : enabled
-                          ? MinePalette.cyan
-                          : MinePalette.muted,
-                    ),
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: highlighted
+                            ? BoxDecoration(
+                                border: Border.all(
+                                  color: MinePalette.amber,
+                                  width: 1.5,
+                                ),
+                                borderRadius: BorderRadius.circular(6),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: Color(0x99FFBE3E),
+                                    blurRadius: 8,
+                                  ),
+                                ],
+                              )
+                            : null,
+                        child: Icon(
+                          enabled ? icon : Icons.lock_outline_rounded,
+                          size: 20,
+                          color: highlighted
+                              ? MinePalette.amber
+                              : enabled
+                              ? MinePalette.cyan
+                              : MinePalette.muted,
+                        ),
+                      ),
+                      if (badgeCount > 0)
+                        Positioned(
+                          top: -6,
+                          right: -8,
+                          child: _QuestCountBadge(count: badgeCount),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 2),
                   Flexible(
@@ -4385,13 +4407,13 @@ String _goalRequirementLine(
           final materials = recipe.isEmpty ? '' : ' + $recipe';
           return 'Sondaj ucu: ${_formatCoins(MrMineBigNumber.fromNum(cost))} kasa$materials.';
         case 4:
-          final remaining = (10000 - state.deepestMeters.floor()).clamp(
+          final remaining = (7000 - state.deepestMeters.floor()).clamp(
             0,
-            10000,
+            7000,
           );
           return remaining == 0
-              ? '10 km katı açıldı • görevi tamamlayıp ödülünü al.'
-              : 'Matkap otomatik ilerliyor • $remaining m kaldı • hedef 10 km.';
+              ? '7 km katı açıldı • görevi tamamlayıp ödülünü al.'
+              : 'Matkap otomatik ilerliyor • $remaining m kaldı • hedef 7 km.';
       }
     }
     if (guide.requiredDepthMeters > 0) {

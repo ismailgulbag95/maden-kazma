@@ -123,6 +123,31 @@ class BuildingDialog extends StatelessWidget {
     );
   }
 
+  String _investmentRequirementLine(GameState state) {
+    final minerCost = GameEngine.minerCost(state).round();
+    final drillCost = GameEngine.upgradeCost(state, 'drill');
+    final drillLevel = state.upgradeLevel('drill') + 1;
+    final requirements = GameEngine.upgradeMaterialRequirements(state, 'drill');
+    final materials = requirements.entries
+        .map((entry) {
+          final name = ResourceCatalog.byId[entry.key]?.name ?? entry.key;
+          final available = math.max(
+            0,
+            state.amount(entry.key) - state.reserve(entry.key),
+          );
+          return '$available/${entry.value} $name';
+        })
+        .join(' + ');
+    final materialSuffix = materials.isEmpty ? '' : ' + $materials';
+    final drill = drillCost <= 0
+        ? 'Matkap üst sınırda'
+        : 'Matkap $drillLevel. kademe: ${_compactCash(drillCost.toDouble())} kasa$materialSuffix';
+    final hire = state.activeMinerCount <= 0
+        ? 'önce madenci: ${_compactCash(minerCost.toDouble())} kasa'
+        : 'sonraki madenci: ${_compactCash(minerCost.toDouble())} kasa';
+    return '$drill • $hire';
+  }
+
   Widget _contents(BuildContext context) {
     final state = controller.state;
     if (buildingId == 'warehouse') {
@@ -130,12 +155,60 @@ class BuildingDialog extends StatelessWidget {
     }
     switch (buildingId) {
       case 'workshop':
+        final investmentPlan = _investmentRequirementLine(state);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _sectionIntro(
               'VARDİYA EKİBİ',
               'Madenciler otomatik kazı yapar. Sondaj ucunu güçlendir, takımını büyüt ve derinlik silahını hazırla.',
+            ),
+            Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xE909202A),
+                borderRadius: BorderRadius.circular(9),
+                border: Border.all(
+                  color: MinePalette.amber.withValues(alpha: .5),
+                  width: 1.2,
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.calculate_outlined,
+                    color: MinePalette.amber,
+                    size: 22,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'YATIRIM VE MALİYET HESAPLAYICISI',
+                          style: TextStyle(
+                            color: MinePalette.amber,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: .8,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          investmentPlan,
+                          style: const TextStyle(
+                            color: MinePalette.cream,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
             ActionTile(
               icon: Icons.engineering_rounded,
@@ -903,7 +976,7 @@ class BuildingDialog extends StatelessWidget {
             'Güç ${currentWatts.toStringAsFixed(0)} W ×${_compactCash(currentMultiplier)} → ${nextWatts.toStringAsFixed(0)} W ×${_compactCash(nextMultiplier)}',
             blueprintText,
             depthText,
-            if (buildingText != null) buildingText,
+            ?buildingText,
             crewText,
             cashText,
             materialText,

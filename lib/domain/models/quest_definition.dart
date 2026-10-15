@@ -112,9 +112,9 @@ abstract final class QuestCatalog {
     (
       QuestKind.depth,
       'İlk katman ölçümü',
-      'Matkabı otomatik ilerlet ve 10 km derinliğe ulaş',
+      'Matkabı otomatik ilerlet ve 7 km derinliğe ulaş',
       'metre derinlik',
-      10000,
+      7000,
     ),
   ];
 

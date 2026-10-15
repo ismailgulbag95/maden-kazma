@@ -63,7 +63,7 @@ abstract final class AdvisorGuideCatalog {
     AdvisorGuideDefinition(
       id: 'tutorial_drill',
       title: 'Matkabın ilerlemesini izle',
-      message: 'Sondaj otomatik sürer. 10 km derinliğe ulaştığında bu görev tamamlanır.',
+      message: 'Sondaj otomatik sürer. 7 km derinliğe ulaştığında bu görev tamamlanır.',
       target: 'drill',
       targetLabel: 'OTOMATİK MATKAP',
     ),

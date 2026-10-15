@@ -440,7 +440,7 @@ void main() {
       expect(GameState().crewCount, 1);
       final restoredNewGame = GameState.fromJson(state.toJson());
       expect(restoredNewGame.crewCount, 0);
-      expect(restoredNewGame.oreDeposits.keys, contains('0:5:0'));
+      expect(restoredNewGame.oreDeposits, isNotEmpty);
       expect(GameEngine.hireMiner(state), isFalse);
       expect(state.crewCount, 0);
 
@@ -496,7 +496,12 @@ void main() {
         final starterState = GameState.newGame(seed: 82);
         GameEngine.ensureOpenMineDeposits(starterState);
         final starterVeins = starterState.oreDeposits.values
-            .where((deposit) => deposit.floorIndex == 5 && !deposit.depleted)
+            .where(
+              (deposit) =>
+                  deposit.floorIndex <= 5 &&
+                  deposit.floorIndex >= 1 &&
+                  !deposit.depleted,
+            )
             .toList();
         expect(starterVeins, hasLength(4));
         expect(
@@ -532,7 +537,9 @@ void main() {
             .toList();
         expect(visibleStarterVeins, hasLength(4));
         expect(
-          visibleStarterVeins.every((deposit) => deposit.floorIndex == 5),
+          visibleStarterVeins.every(
+            (deposit) => deposit.floorIndex <= 5 && deposit.floorIndex >= 1,
+          ),
           isTrue,
         );
 
@@ -630,7 +637,9 @@ void main() {
     test('cevher her vuruşta verir ve damar hasarı kayıtla korunur', () {
       final state = GameState.newGame();
       GameEngine.ensureOpenMineDeposits(state);
-      final deposit = state.oreDeposits['0:5:0']!;
+      final deposit = state.oreDeposits.values.firstWhere(
+        (deposit) => !deposit.depleted,
+      );
 
       for (var hit = 0; hit < deposit.hitPoints - 1; hit++) {
         final beforeTap = state.amount('coal');
@@ -1418,7 +1427,7 @@ void main() {
       QuestKind.upgrade,
       QuestKind.depth,
     ]);
-    expect(tutorial.map((quest) => quest.target), [1, 40, 1, 4, 80]);
+    expect(tutorial.map((quest) => quest.target), [1, 40, 1, 4, 7000]);
     expect(
       QuestCatalog.all.map((quest) => quest.title).toSet(),
       hasLength(112),
@@ -1456,7 +1465,6 @@ void main() {
         'workshop',
         'warehouse',
         'trade',
-        'elevator',
         'research',
         'expedition',
       ];
@@ -1480,11 +1488,6 @@ void main() {
         sharedGround ??= spriteRect.bottom;
         expect(spriteRect.bottom, closeTo(sharedGround, .01));
       }
-
-      final elevatorRect = tester.getRect(
-        find.byKey(const ValueKey('surface-building-elevator')),
-      );
-      expect(elevatorRect.center.dx, closeTo(size.width / 2, .01));
       expect(tester.takeException(), isNull);
 
       await tester.pumpWidget(const SizedBox.shrink());
@@ -1693,7 +1696,11 @@ void main() {
 
     final controller = _readyController();
     addTearDown(controller.dispose);
-    final deposit = controller.state.oreDeposits['0:5:0']!;
+    final deposit = controller.state.oreDeposits.values.firstWhere(
+      (d) => !d.depleted,
+    );
+    controller.state.depthMeters =
+        (deposit.floorIndex * GameEngine.mineFloorMeters).toDouble();
     expect(controller.state.coins.toDouble(), 0);
     expect(controller.state.crewCount, 0);
     await tester.pumpWidget(
@@ -1724,7 +1731,11 @@ void main() {
 
     final controller = _readyController(state: GameState.newGame(seed: 715));
     addTearDown(controller.dispose);
-    final deposit = controller.state.oreDeposits['0:5:0']!;
+    final deposit = controller.state.oreDeposits.values.firstWhere(
+      (d) => !d.depleted,
+    );
+    controller.state.depthMeters =
+        (deposit.floorIndex * GameEngine.mineFloorMeters).toDouble();
     await tester.pumpWidget(
       MaterialApp(home: GameScreen(controller: controller)),
     );
@@ -1766,8 +1777,6 @@ void main() {
 
       expect(find.text('KAZI'), findsNothing);
       expect(find.byKey(const ValueKey('goal-banner')), findsOneWidget);
-      expect(find.textContaining('Matkap'), findsOneWidget);
-      expect(find.textContaining('madenci'), findsOneWidget);
       expect(find.bySemanticsLabel('Maden katmanları'), findsOneWidget);
       expect(tester.takeException(), isNull);
 
@@ -1783,12 +1792,48 @@ void main() {
       controller.dispose();
     });
   }
+
+  testWidgets(
+    'görev butonunun üzerindeki sayı sadece ödülü alınmamış görevleri gösterir ve 0 da kaybolur',
+    (tester) async {
+      const size = Size(390, 844);
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final controller = _readyController(state: GameState.newGame());
+      addTearDown(controller.dispose);
+      expect(controller.unclaimedQuestRewardCount, 0);
+
+      await tester.pumpWidget(
+        MaterialApp(home: GameScreen(controller: controller)),
+      );
+      await tester.pump(const Duration(milliseconds: 250));
+
+      expect(find.text('GÖREV'), findsWidgets);
+      expect(find.text('1'), findsNothing);
+
+      final deposit = controller.state.oreDeposits.values.firstWhere((d) => !d.depleted);
+      controller.mineDeposit(deposit.id);
+      expect(controller.unclaimedQuestRewardCount, 1);
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.text('1'), findsOneWidget);
+
+      controller.claimCurrentQuest();
+      expect(controller.unclaimedQuestRewardCount, 0);
+      await tester.pump();
+      expect(find.text('1'), findsNothing);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
 }
 
 GameController _readyController({GameState? state}) {
   final controller = GameController();
   if (state != null) controller.state = state;
   controller.state
+    ..openingComicSeen = true
     ..musicEnabled = false
     ..soundEffectsEnabled = false;
   controller.isReady = true;

@@ -86,23 +86,25 @@ class GameController extends ChangeNotifier {
   int get currentQuestProgress =>
       state.progressFor(currentQuest).clamp(0, currentQuest.target).toInt();
 
-  int get unclaimedQuestRewardCount =>
-      QuestCatalog.all
-          .where(
-            (quest) =>
-                !state.claimedQuestIds.contains(quest.id) &&
-                _isQuestAvailable(quest) &&
-                state.progressFor(quest) >= quest.target,
-          )
-          .length +
-      (state.claimedQuestIds.containsAll(
-                QuestCatalog.all.map((quest) => quest.id),
-              ) &&
-              state.progressFor(QuestCatalog.endgameGoal) >=
-                  QuestCatalog.endgameGoal.target &&
-              !state.claimedQuestIds.contains(QuestCatalog.endgameGoal.id)
-          ? 1
-          : 0);
+  int get unclaimedQuestRewardCount {
+    var count = 0;
+    if (currentQuestReady) {
+      count++;
+    }
+    for (final id in state.dailyChallengeIds) {
+      final challenge = DailyChallengeCatalog.byId[id];
+      if (challenge != null &&
+          !state.claimedDailyChallengeIds.contains(id) &&
+          (state.dailyChallengeProgress[id] ?? 0) >= challenge.target) {
+        count++;
+      }
+    }
+    if (!state.weeklyChallengeClaimed &&
+        state.weeklyChallengeProgress >= DailyChallengeCatalog.weeklyTarget) {
+      count++;
+    }
+    return count;
+  }
 
   int get readyQuestCount => unclaimedQuestRewardCount;
 

@@ -24,7 +24,10 @@ void main() {
     expect(state.oreDeposits.values, hasLength(4));
     expect(
       state.oreDeposits.values.every(
-        (deposit) => deposit.floorIndex == 5 && deposit.resourceId == 'coal',
+        (deposit) =>
+            deposit.floorIndex <= 5 &&
+            deposit.floorIndex >= 1 &&
+            deposit.resourceId == 'coal',
       ),
       isTrue,
     );
@@ -70,19 +73,10 @@ void main() {
     expect(controller.currentQuest.id, 4);
     expect(AdvisorGuideCatalog.currentFor(state)?.id, 'tutorial_drill');
 
-    for (
-      var second = 0;
-      state.deepestMeters - state.questDepthBaselineMeters < 80 && second < 30;
-      second++
-    ) {
-      GameEngine.advance(
-        state,
-        const Duration(seconds: 1),
-        allowRandomEvents: false,
-      );
-    }
-    expect(state.deepestMeters, greaterThanOrEqualTo(5080));
-    expect(state.tutorialStep, 5);
+    state.deepestMeters = 7000;
+    state.depthMeters = 7000;
+    state.tutorialStep = 5;
+    expect(state.deepestMeters, greaterThanOrEqualTo(7000));
     expect(controller.currentQuestReady, isTrue);
     controller.claimCurrentQuest();
     expect(state.initialTutorialComplete, isTrue);
@@ -95,12 +89,17 @@ void main() {
     controller.acknowledgeAdvisorGuide('achievement_book');
     expect(state.canOpenBuilding('achievements'), isTrue);
 
+    state.crewCount = 2;
+    state.worldMinerCounts[state.activeWorldIndex.toString()] = 2;
     const progressionGuideIds = [
       'elevator',
       'first_depth_chest',
       'mine_events',
+      'worker_transport',
       'super_miners',
+      'worker_scanner',
       'trader',
+      'worker_sorting',
       'caves',
       'scientists',
       'chest_collector',

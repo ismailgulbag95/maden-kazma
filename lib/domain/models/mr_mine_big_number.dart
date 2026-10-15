@@ -457,6 +457,20 @@ class MrMineBigNumber implements Comparable<MrMineBigNumber> {
     return stringValue;
   }
 
+  /// Decimal string with thousands separator for display (e.g. 1.250.000 or 1.5e18).
+  String toDisplayString() {
+    if (exponent >= 15) {
+      return toScientificString();
+    }
+    final raw = toString();
+    final result = StringBuffer();
+    for (var i = 0; i < raw.length; i++) {
+      if (i > 0 && (raw.length - i) % 3 == 0) result.write('.');
+      result.write(raw[i]);
+    }
+    return result.toString();
+  }
+
   /// Reversible lossless scientific serialization for persistence/saves (`${coefficient}e$exponent`).
   String toSaveString() {
     if (coefficient == 0.0) return '0';

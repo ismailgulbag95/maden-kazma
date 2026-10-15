@@ -20,6 +20,20 @@ import '../domain/models/drill_assembly_definition.dart';
 import '../domain/models/buff_lab_definition.dart';
 import '../domain/simulation/game_engine.dart';
 import '../services/sound_service.dart';
+import '../services/haptic_service.dart';
+import '../services/notification_service.dart';
+
+class OfflineShiftReport {
+  const OfflineShiftReport({
+    required this.durationSeconds,
+    required this.depthGained,
+    required this.oreGained,
+  });
+
+  final int durationSeconds;
+  final double depthGained;
+  final int oreGained;
+}
 
 String _saleCashLabel(Object value) {
   final big = value is MrMineBigNumber
@@ -71,6 +85,43 @@ class GameController extends ChangeNotifier {
   int offlineSeconds = 0;
   double offlineDepthGained = 0;
   int offlineOreGained = 0;
+  OfflineShiftReport? pendingOfflineReport;
+  DateTime? _frenzyEndTime;
+  final List<DateTime> _recentTaps = [];
+
+  bool get isFrenzyActive =>
+      _frenzyEndTime != null && DateTime.now().isBefore(_frenzyEndTime!);
+
+  double get frenzyRemainingSeconds => isFrenzyActive
+      ? (_frenzyEndTime!.difference(DateTime.now()).inMilliseconds / 1000.0)
+          .clamp(0.0, 10.0)
+      : 0.0;
+
+  void clearOfflineReport() {
+    pendingOfflineReport = null;
+    notifyListeners();
+  }
+
+  void triggerFrenzy([int seconds = 10]) {
+    _frenzyEndTime = DateTime.now().add(Duration(seconds: seconds));
+    HapticService.instance.heavyImpact();
+    if (state.soundEffectsEnabled) {
+      unawaited(SoundService.instance.playChestOpen());
+    }
+    _notices.add('🔥 ÇILGINLIK MODU! $seconds saniye boyunca 2x üretim ve kazı!');
+    notifyListeners();
+  }
+
+  void _recordTapForFrenzy() {
+    final now = DateTime.now();
+    _recentTaps.add(now);
+    _recentTaps.removeWhere((t) => now.difference(t).inMilliseconds > 2500);
+    if (_recentTaps.length >= 7 && !isFrenzyActive) {
+      _recentTaps.clear();
+      triggerFrenzy(10);
+    }
+  }
+
   int _tickCount = 0;
   bool _lastCargoFull = false;
   bool _saveQueued = false;
@@ -144,6 +195,11 @@ class GameController extends ChangeNotifier {
     // Audio is optional; do not make local storage or the audio browser plugin
     // a prerequisite for showing the first playable frame.
     unawaited(SoundService.instance.initialize().catchError((_) {}));
+    unawaited(
+      NotificationService.instance.initialize().then((_) {
+        NotificationService.instance.cancelAll();
+      }).catchError((_) {}),
+    );
     final now = DateTime.now();
     try {
       final rawSave = await _saveStore.load();
@@ -183,6 +239,14 @@ class GameController extends ChangeNotifier {
             offlineSeconds = applied.inSeconds;
             offlineDepthGained = state.deepestMeters - oldDepth;
             offlineOreGained = state.totalMined - oldMined;
+            if (offlineSeconds >= 45 &&
+                (offlineDepthGained > 0 || offlineOreGained > 0)) {
+              pendingOfflineReport = OfflineShiftReport(
+                durationSeconds: offlineSeconds,
+                depthGained: offlineDepthGained,
+                oreGained: offlineOreGained,
+              );
+            }
             _notices.add(
               'Çevrimdışı vardiya tamamlandı: $offlineOreGained cevher, ${offlineDepthGained.toStringAsFixed(0)} m ilerleme.',
             );
@@ -198,6 +262,7 @@ class GameController extends ChangeNotifier {
     }
     GameEngine.prepareChallengeWindows(state, now);
     GameEngine.ensureOpenMineDeposits(state);
+    HapticService.instance.enabled = state.hapticsEnabled;
     unawaited(
       SoundService.instance
           .setMusicEnabled(state.musicEnabled)
@@ -324,10 +389,16 @@ class GameController extends ChangeNotifier {
 
   Future<void> onAppPaused() async {
     await SoundService.instance.stopBgm();
+    await schedulePendingNotifications();
     await saveNow();
   }
 
+  Future<void> onAppResumed() async {
+    await NotificationService.instance.cancelAll();
+  }
+
   bool mine(String resourceId) {
+    _recordTapForFrenzy();
     final previousResonanceChains = state.resonanceChains;
     final success = GameEngine.tapOre(state, resourceId);
     if (!success) {
@@ -335,6 +406,10 @@ class GameController extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+    if (isFrenzyActive) {
+      GameEngine.tapOre(state, resourceId);
+    }
+    HapticService.instance.lightTap();
     if (state.resonanceChains > previousResonanceChains) {
       _notices.add('Katman Rezonansı tamamlandı; üretim beş dakika hızlandı.');
     }
@@ -346,11 +421,20 @@ class GameController extends ChangeNotifier {
   }
 
   bool mineDeposit(String depositId) {
+    final depositBefore = state.oreDeposits[depositId];
     final success = GameEngine.tapMineDeposit(state, depositId);
     if (!success) {
       _notices.add('Bu damar henüz kazılabilir durumda değil.');
       notifyListeners();
       return false;
+    }
+    final depositAfter = state.oreDeposits[depositId];
+    if (depositAfter == null ||
+        depositAfter.depleted ||
+        (depositBefore != null && depositAfter.damage >= depositAfter.hitPoints)) {
+      HapticService.instance.heavyImpact();
+    } else {
+      HapticService.instance.lightTap();
     }
     if (state.soundEffectsEnabled) {
       unawaited(SoundService.instance.playOreCollect());
@@ -871,14 +955,91 @@ class GameController extends ChangeNotifier {
     _refreshState();
   }
 
+  void setHapticsEnabled(bool enabled) {
+    state.hapticsEnabled = enabled;
+    HapticService.instance.enabled = enabled;
+    _refreshState();
+  }
+
+  String exportSaveData() {
+    final jsonStr = jsonEncode(state.toJson());
+    return base64Encode(utf8.encode(jsonStr));
+  }
+
+  bool importSaveData(String rawCode) {
+    try {
+      String jsonStr;
+      final trimmed = rawCode.trim();
+      if (trimmed.startsWith('{')) {
+        jsonStr = trimmed;
+      } else {
+        jsonStr = utf8.decode(base64Decode(trimmed));
+      }
+      final decoded = jsonDecode(jsonStr);
+      if (decoded is! Map) return false;
+      final importedState = GameState.fromJson(
+        Map<String, Object?>.from(decoded),
+      );
+      state = importedState;
+      saveNow();
+      _notices.add('Kayıt başarıyla yüklendi.');
+      notifyListeners();
+      return true;
+    } catch (_) {
+      _notices.add('Geçersiz kayıt verisi.');
+      notifyListeners();
+      return false;
+    }
+  }
+
   void setVisualEffectsEnabled(bool enabled) {
     state.visualEffectsEnabled = enabled;
     _refreshState();
   }
 
-  void setNotificationsEnabled(bool enabled) {
-    state.notificationsEnabled = enabled;
+  Future<void> setNotificationsEnabled(bool enabled) async {
+    if (enabled) {
+      final granted = await NotificationService.instance.requestPermission();
+      state.notificationsEnabled = granted;
+      state.notificationPromptShown = true;
+      if (granted) {
+        await schedulePendingNotifications();
+      }
+    } else {
+      state.notificationsEnabled = false;
+      await NotificationService.instance.cancelAll();
+    }
     _refreshState();
+  }
+
+  Future<void> dismissNotificationPrompt() async {
+    state.notificationPromptShown = true;
+    state.notificationsEnabled = false;
+    _refreshState();
+  }
+
+  bool get shouldPromptNotifications =>
+      !state.notificationPromptShown &&
+      state.tutorialStep >= 5 &&
+      (state.cargoLevel >= 2 || state.deepestMeters >= 60 || state.chestsOpened >= 2);
+
+  Future<void> schedulePendingNotifications() async {
+    if (!state.notificationsEnabled) return;
+
+    if (state.cargoFull) {
+      await NotificationService.instance.scheduleCargoFullNotification(
+        const Duration(minutes: 15),
+      );
+    } else {
+      final ratio = state.cargoRatio;
+      final delay = ratio >= 0.75
+          ? const Duration(minutes: 30)
+          : (ratio >= 0.4 ? const Duration(hours: 1) : const Duration(hours: 2));
+      await NotificationService.instance.scheduleCargoFullNotification(delay);
+    }
+
+    await NotificationService.instance.scheduleDailyDutyNotification();
+    await NotificationService.instance.scheduleInactivityNotification();
   }
 
   void setDebugModeEnabled(bool enabled) {

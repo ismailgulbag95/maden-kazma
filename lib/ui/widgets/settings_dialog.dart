@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../app/game_controller.dart';
 import '../../core/design/palette.dart';
@@ -89,6 +90,14 @@ class SettingsDialog extends StatelessWidget {
                       ),
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
+                        secondary: const Icon(Icons.vibration_rounded),
+                        title: const Text('Titreşim (Haptik)'),
+                        subtitle: const Text('Kazma ve vuruş geribildirimleri'),
+                        value: state.hapticsEnabled,
+                        onChanged: controller.setHapticsEnabled,
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
                         secondary: const Icon(Icons.auto_awesome_rounded),
                         title: const Text('Görsel efektler'),
                         subtitle: const Text(
@@ -102,12 +111,15 @@ class SettingsDialog extends StatelessWidget {
                         secondary: const Icon(
                           Icons.notifications_active_rounded,
                         ),
-                        title: const Text('Bildirimler'),
-                        subtitle: const Text('Oyun içi kısa mesajları göster'),
+                        title: const Text('Maden Telsizi & Bildirimler'),
+                        subtitle: const Text(
+                          'Ambar dolumu, günlük vardiya ve sismik alarmlar',
+                        ),
                         value: state.notificationsEnabled,
-                        onChanged: controller.setNotificationsEnabled,
+                        onChanged: (val) => controller.setNotificationsEnabled(val),
                       ),
-                      if (onReplayOpeningComic != null)
+                      if (onReplayOpeningComic != null) ...[
+                        const SizedBox(height: 6),
                         OutlinedButton.icon(
                           onPressed: () {
                             Navigator.of(context).pop();
@@ -118,18 +130,63 @@ class SettingsDialog extends StatelessWidget {
                             'AÇILIŞ ÇİZGİ ROMANINI TEKRAR İZLE',
                           ),
                         ),
+                      ],
                       const Divider(height: 20, color: MinePalette.border),
-                      OutlinedButton.icon(
-                        onPressed: () async {
-                          await controller.saveNow();
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Oyun kaydedildi.')),
-                            );
-                          }
-                        },
-                        icon: const Icon(Icons.save_rounded),
-                        label: const Text('ŞİMDİ KAYDET'),
+                      const _SettingsSectionTitle('KAYIT YÖNETİMİ'),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () async {
+                                await controller.saveNow();
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Oyun kaydedildi.'),
+                                    ),
+                                  );
+                                }
+                              },
+                              icon: const Icon(Icons.save_rounded, size: 18),
+                              label: const Text('ŞİMDİ KAYDET'),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () {
+                                final exportCode = controller.exportSaveData();
+                                Clipboard.setData(
+                                  ClipboardData(text: exportCode),
+                                );
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Kayıt kodu panoya kopyalandı! Güvenle saklayabilirsiniz.',
+                                    ),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.copy_rounded, size: 18),
+                              label: const Text('KAYDI KOPYALA'),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () => _showImportSaveDialog(context),
+                              icon: const Icon(
+                                Icons.file_upload_rounded,
+                                size: 18,
+                              ),
+                              label: const Text('KAYIT YÜKLE'),
+                            ),
+                          ),
+                        ],
                       ),
                       const Divider(height: 20, color: MinePalette.border),
                       const _SettingsSectionTitle('GELİŞTİRİCİ'),
@@ -223,6 +280,66 @@ class SettingsDialog extends StatelessWidget {
     if (confirmed != true || !context.mounted) return;
     action();
     Navigator.pop(context);
+  }
+
+  Future<void> _showImportSaveDialog(BuildContext context) async {
+    final textController = TextEditingController();
+    try {
+      final imported = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          backgroundColor: MinePalette.panel,
+          title: const Text('Kayıt Kodu Yükle'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Daha önce kopyaladığınız kayıt kodunu veya JSON verisini buraya yapıştırın:',
+                style: TextStyle(fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: textController,
+                maxLines: 4,
+                style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                decoration: const InputDecoration(
+                  hintText: 'Kayıt kodunu yapıştırın...',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('VAZGEÇ'),
+            ),
+            FilledButton.icon(
+              onPressed: () {
+                final text = textController.text.trim();
+                if (text.isEmpty) return;
+                final success = controller.importSaveData(text);
+                Navigator.pop(dialogContext, success);
+              },
+              icon: const Icon(Icons.file_upload_rounded),
+              label: const Text('YÜKLE'),
+            ),
+          ],
+        ),
+      );
+
+      if (imported == true && context.mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Kayıt başarıyla yüklendi ve güncellendi!'),
+          ),
+        );
+      }
+    } finally {
+      textController.dispose();
+    }
   }
 }
 

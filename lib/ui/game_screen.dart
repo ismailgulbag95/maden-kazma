@@ -24,6 +24,11 @@ import 'widgets/game_primitives.dart';
 import 'widgets/loading_screen.dart';
 import 'widgets/opening_comic.dart';
 import 'widgets/settings_dialog.dart';
+import 'widgets/frenzy_overlay.dart';
+import 'widgets/offline_welcome_dialog.dart';
+import 'widgets/flex_card_dialog.dart';
+import 'widgets/mining_particles.dart';
+import 'widgets/notification_permission_dialog.dart';
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key, required this.controller});
@@ -36,6 +41,7 @@ class GameScreen extends StatefulWidget {
 
 class _GameScreenState extends State<GameScreen> {
   bool _offlineDialogShown = false;
+  bool _notificationDialogShown = false;
   bool _hasRenderedReadyState = false;
   bool _showOpeningComic = false;
   String? _activeNotice;
@@ -60,24 +66,44 @@ class _GameScreenState extends State<GameScreen> {
       return;
     }
     _offlineDialogShown = true;
+    final report = widget.controller.pendingOfflineReport ??
+        OfflineShiftReport(
+          durationSeconds: widget.controller.offlineSeconds,
+          depthGained: widget.controller.offlineDepthGained,
+          oreGained: widget.controller.offlineOreGained,
+        );
+    widget.controller.clearOfflineReport();
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       showDialog<void>(
         context: context,
-        builder: (dialogContext) => AlertDialog(
-          backgroundColor: MinePalette.panel,
-          title: const Text('Vardiya raporu'),
-          content: Text(
-            'Dönüşünde ekibin ${_number(widget.controller.offlineOreGained)} kaynak çıkardı '
-            've ${widget.controller.offlineDepthGained.toStringAsFixed(0)} m daha ilerledi. '
-            'Süre: ${_duration(widget.controller.offlineSeconds)}.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('DEVAM ET'),
-            ),
-          ],
+        builder: (dialogContext) => OfflineWelcomeDialog(
+          report: report,
+          onDismiss: () => Navigator.of(dialogContext).pop(),
+        ),
+      );
+    });
+  }
+
+  void _checkNotificationPermissionDialog() {
+    if (_notificationDialogShown ||
+        !widget.controller.isReady ||
+        !widget.controller.shouldPromptNotifications) {
+      return;
+    }
+    _notificationDialogShown = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showDialog<void>(
+        context: context,
+        builder: (dialogContext) => NotificationPermissionDialog(
+          onEnable: () async {
+            await widget.controller.setNotificationsEnabled(true);
+          },
+          onDismiss: () {
+            widget.controller.dismissNotificationPrompt();
+          },
         ),
       );
     });
@@ -89,8 +115,10 @@ class _GameScreenState extends State<GameScreen> {
     if (!_hasRenderedReadyState) {
       _hasRenderedReadyState = true;
       _checkOfflineDialog();
+      _checkNotificationPermissionDialog();
       setState(() {});
     }
+    _checkNotificationPermissionDialog();
     final notices = widget.controller.takeNotices();
     if (notices.isEmpty) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -155,6 +183,15 @@ class _GameScreenState extends State<GameScreen> {
       builder: (context) => SettingsDialog(
         controller: widget.controller,
         onReplayOpeningComic: _replayOpeningComic,
+      ),
+    );
+  }
+
+  void _openFlexCard() {
+    showDialog<void>(
+      context: context,
+      builder: (context) => FlexCardDialog(
+        controller: widget.controller,
       ),
     );
   }
@@ -251,6 +288,7 @@ class _GameScreenState extends State<GameScreen> {
                               widget.controller.setSoundEffectsEnabled(
                                 !widget.controller.state.soundEffectsEnabled,
                               ),
+                          onFlexCard: _openFlexCard,
                         ),
                         Expanded(
                           child: TickerMode(
@@ -322,6 +360,9 @@ class _GameScreenState extends State<GameScreen> {
                         ),
                       ),
                     ),
+                  Positioned.fill(
+                    child: FrenzyOverlay(controller: widget.controller),
+                  ),
                   if (_showOpeningComic ||
                       !widget.controller.state.openingComicSeen)
                     Positioned.fill(
@@ -350,11 +391,13 @@ class _HudBar extends StatelessWidget {
     required this.state,
     required this.onSettings,
     required this.onToggleSound,
+    required this.onFlexCard,
   });
 
   final GameState state;
   final VoidCallback onSettings;
   final VoidCallback onToggleSound;
+  final VoidCallback onFlexCard;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -409,6 +452,16 @@ class _HudBar extends StatelessWidget {
                 child: Row(
                   children: [
                     Expanded(child: _GameTitle(compact: true)),
+                    IconButton(
+                      tooltip: 'Keşif Karnesi',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: onFlexCard,
+                      icon: const Icon(
+                        Icons.military_tech_rounded,
+                        color: MinePalette.amber,
+                        size: 20,
+                      ),
+                    ),
                     IconButton(
                       tooltip: state.soundEffectsEnabled
                           ? 'Ses efektlerini kapat'
@@ -466,6 +519,18 @@ class _HudBar extends StatelessWidget {
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(children: chips),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Keşif Karnesi',
+              visualDensity: compact
+                  ? VisualDensity.compact
+                  : VisualDensity.standard,
+              onPressed: onFlexCard,
+              icon: Icon(
+                Icons.military_tech_rounded,
+                color: MinePalette.amber,
+                size: compact ? 20 : 24,
               ),
             ),
             IconButton(
@@ -3622,6 +3687,7 @@ class _OreNodeState extends State<_OreNode> {
 
   final List<_OreGainPopupHandle> _activePopups = [];
   int _popupSequence = 0;
+  double _tapScale = 1.0;
 
   @override
   void dispose() {
@@ -3633,6 +3699,10 @@ class _OreNodeState extends State<_OreNode> {
   }
 
   void _handleTap() {
+    setState(() => _tapScale = 0.82);
+    Future.delayed(const Duration(milliseconds: 90), () {
+      if (mounted) setState(() => _tapScale = 1.0);
+    });
     final amount = widget.onTap();
     if (amount != null && amount > 0) _showGainPopup(amount);
   }
@@ -3666,40 +3736,53 @@ class _OreNodeState extends State<_OreNode> {
         left: left,
         top: top,
         child: IgnorePointer(
-          child: TweenAnimationBuilder<double>(
-            duration: _popupDuration,
-            tween: Tween(begin: 0, end: 1),
-            builder: (context, progress, child) => Opacity(
-              opacity: (1 - progress).clamp(0.0, 1.0).toDouble(),
-              child: Transform.translate(
-                offset: Offset(0, -18 * progress),
-                child: child,
-              ),
-            ),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xE60A2029),
-                border: Border.all(color: color, width: 1),
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x66000000),
-                    blurRadius: 5,
-                    offset: Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Text(
-                label,
-                style: const TextStyle(
-                  color: MinePalette.cream,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w900,
-                  shadows: [Shadow(color: Colors.black87, blurRadius: 3)],
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned(
+                left: 30,
+                top: 20,
+                child: MiningParticleBurst(
+                  color: color,
+                  particleCount: widget.deposit.depleted ? 16 : 8,
                 ),
               ),
-            ),
+              TweenAnimationBuilder<double>(
+                duration: _popupDuration,
+                tween: Tween(begin: 0, end: 1),
+                builder: (context, progress, child) => Opacity(
+                  opacity: (1 - progress).clamp(0.0, 1.0).toDouble(),
+                  child: Transform.translate(
+                    offset: Offset(0, -22 * progress),
+                    child: child,
+                  ),
+                ),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xE60A2029),
+                    border: Border.all(color: color, width: 1),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x66000000),
+                        blurRadius: 5,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Text(
+                    label,
+                    style: const TextStyle(
+                      color: MinePalette.cream,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                      shadows: [Shadow(color: Colors.black87, blurRadius: 3)],
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -3736,14 +3819,19 @@ class _OreNodeState extends State<_OreNode> {
                   child: SizedBox(
                     width: widget.placement.iconWidth,
                     height: widget.placement.iconHeight,
-                    child: AtlasSprite(
-                      asset: 'resources-treasure-sheet.png',
-                      index: widget.resource.iconIndex,
-                      columns: 4,
-                      rows: 4,
-                      fit: BoxFit.contain,
-                      alignment: Alignment.bottomCenter,
-                      sourceCrop: _oreSpriteCrop(widget.resource.iconIndex),
+                    child: AnimatedScale(
+                      scale: _tapScale,
+                      duration: const Duration(milliseconds: 90),
+                      curve: Curves.easeOutBack,
+                      child: AtlasSprite(
+                        asset: 'resources-treasure-sheet.png',
+                        index: widget.resource.iconIndex,
+                        columns: 4,
+                        rows: 4,
+                        fit: BoxFit.contain,
+                        alignment: Alignment.bottomCenter,
+                        sourceCrop: _oreSpriteCrop(widget.resource.iconIndex),
+                      ),
                     ),
                   ),
                 ),

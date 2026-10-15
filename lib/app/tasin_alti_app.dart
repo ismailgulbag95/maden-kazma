@@ -28,6 +28,7 @@ class _TasinAltiAppState extends State<TasinAltiApp>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(SoundService.instance.startBgm());
+      widget.controller.onAppResumed();
       return;
     }
     if (state == AppLifecycleState.paused ||

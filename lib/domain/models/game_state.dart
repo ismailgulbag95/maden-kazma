@@ -106,8 +106,10 @@ class GameState {
     this.autoSellThreshold = .85,
     this.musicEnabled = true,
     this.soundEffectsEnabled = true,
+    this.hapticsEnabled = true,
     this.visualEffectsEnabled = true,
-    this.notificationsEnabled = true,
+    this.notificationsEnabled = false,
+    this.notificationPromptShown = false,
     this.debugModeEnabled = false,
     this.debugUnlimitedMoney = false,
     this.guidedProgression = false,
@@ -348,8 +350,10 @@ class GameState {
   double autoSellThreshold;
   bool musicEnabled;
   bool soundEffectsEnabled;
+  bool hapticsEnabled;
   bool visualEffectsEnabled;
   bool notificationsEnabled;
+  bool notificationPromptShown;
   bool debugModeEnabled;
   bool debugUnlimitedMoney;
   bool guidedProgression;
@@ -837,8 +841,10 @@ class GameState {
       'autoSellThreshold': autoSellThreshold,
       'musicEnabled': musicEnabled,
       'soundEffectsEnabled': soundEffectsEnabled,
+      'hapticsEnabled': hapticsEnabled,
       'visualEffectsEnabled': visualEffectsEnabled,
       'notificationsEnabled': notificationsEnabled,
+      'notificationPromptShown': notificationPromptShown,
       'debugModeEnabled': debugModeEnabled,
       'debugUnlimitedMoney': debugUnlimitedMoney,
       'guidedProgression': guidedProgression,
@@ -1076,8 +1082,10 @@ class GameState {
       autoSellThreshold: readDouble('autoSellThreshold', .85),
       musicEnabled: json['musicEnabled'] as bool? ?? true,
       soundEffectsEnabled: json['soundEffectsEnabled'] as bool? ?? true,
+      hapticsEnabled: json['hapticsEnabled'] as bool? ?? true,
       visualEffectsEnabled: json['visualEffectsEnabled'] as bool? ?? true,
-      notificationsEnabled: json['notificationsEnabled'] as bool? ?? true,
+      notificationsEnabled: json['notificationsEnabled'] as bool? ?? false,
+      notificationPromptShown: json['notificationPromptShown'] as bool? ?? false,
       debugModeEnabled: json['debugModeEnabled'] as bool? ?? false,
       debugUnlimitedMoney: json['debugUnlimitedMoney'] as bool? ?? false,
       guidedProgression: json['guidedProgression'] as bool? ?? false,

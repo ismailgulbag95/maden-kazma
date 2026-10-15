@@ -1965,7 +1965,7 @@ abstract final class GameEngine {
       if (state.guidedProgression &&
           !state.initialTutorialComplete &&
           state.tutorialStep == 4 &&
-          state.deepestMeters >= 10000) {
+          state.deepestMeters >= 7000) {
         state.tutorialStep = 5;
       }
       final relicPressureResistance = state.equippedRelics.contains('relic_6')
@@ -2020,6 +2020,7 @@ abstract final class GameEngine {
       _advanceReactor(state, events);
       _advanceBuffLab(state, events);
       _advanceOilPump(state);
+      if (state.crusherRepaired) _advanceCrusher(state);
       if (state.unlockedBuildings.contains('chest_collector') &&
           state.miningSeconds % 1800 == 0) {
         if (state.collectorStoredChests < state.chestCollectorCapacity) {
@@ -2129,6 +2130,20 @@ abstract final class GameEngine {
         totalAdded += addedThis;
         if (addedThis > 0) {
           recordDailyProgress(state, 'mine', addedThis, now: now);
+        }
+      } else if (state.crusherRepaired &&
+          resource.kind == ResourceKind.mineral) {
+        if (!state.crusherHopperFull) {
+          final spaceInHopper = max(
+            0,
+            state.crusherHopperCapacity - state.totalRawOreCount,
+          );
+          final toAdd = min(quantity, spaceInHopper);
+          if (toAdd > 0) {
+            state.addRawOre(resource.id, toAdd);
+            totalAdded += toAdd;
+            recordDailyProgress(state, 'mine', toAdd, now: now);
+          }
         }
       } else {
         final added = _addResource(
@@ -2243,19 +2258,31 @@ abstract final class GameEngine {
                 }
               }
             }
-            final added = _addResource(
-              state,
-              finalResource,
-              1,
-              capacityLimited: true,
-            );
-            if (added <= 0) continue;
-            totalAdded += added;
-            minedByResource.update(
-              finalResource.id,
-              (amount) => amount + added,
-              ifAbsent: () => added,
-            );
+            if (state.crusherRepaired &&
+                finalResource.kind == ResourceKind.mineral) {
+              if (state.crusherHopperFull) continue;
+              state.addRawOre(finalResource.id, 1);
+              totalAdded += 1;
+              minedByResource.update(
+                finalResource.id,
+                (amount) => amount + 1,
+                ifAbsent: () => 1,
+              );
+            } else {
+              final added = _addResource(
+                state,
+                finalResource,
+                1,
+                capacityLimited: true,
+              );
+              if (added <= 0) continue;
+              totalAdded += added;
+              minedByResource.update(
+                finalResource.id,
+                (amount) => amount + added,
+                ifAbsent: () => added,
+              );
+            }
           }
         }
       }
@@ -3935,6 +3962,119 @@ abstract final class GameEngine {
     if (state.amount('oil') >= capacity || added < quantity) {
       state.oilPumpProgress = 0;
     }
+  }
+
+  static void _advanceCrusher(GameState state) {
+    if (!state.crusherRepaired) {
+      return; // Onarılmadan veya kilitliyken kırıcı çalışmaz
+    }
+    if (state.cargoFull) return; // Ambar dolunca kırıcı durur
+
+    final speedLvl = state.crusherUpgrades['speed'] ?? 1;
+    final powerLvl = state.crusherUpgrades['power'] ?? 1;
+    final oreLvl = state.crusherUpgrades['ore'] ?? 1;
+    final gearboxLvl = state.crusherUpgrades['gearbox'] ?? 1;
+
+    final depthMeters = max(state.depthMeters, state.deepestMeters);
+    final depthKm = depthMeters / 1000.0;
+    // Derinlere indikçe kırma hızı ve malzeme akış çarpanı artar
+    final depthRateBonus = (1.0 + log(1.0 + depthKm * 0.4) * 0.35).clamp(
+      1.0,
+      4.5,
+    );
+
+    // Başlangıçta merdane yavaş çalışır; hız ve güç yükseltmeleri kapasiteyi
+    // anlamlı biçimde artırır. 7 km civarında başlangıç seviyesi saniyede bir
+    // kaya işler.
+    final crushRatePerSec = max(
+      1,
+      ((speedLvl * 0.5 + powerLvl * 0.35) * depthRateBonus).round(),
+    );
+    final startupBatchSize = max(1, 6 - speedLvl - powerLvl);
+    final yieldMultiplier =
+        (1.0 + (oreLvl - 1) * 0.05 + (gearboxLvl - 1) * 0.02) *
+        (1.0 + (depthKm * 0.005).clamp(0.0, 1.5));
+
+    var remainingToCrush = crushRatePerSec;
+
+    // Taşları önce haznede biriktir. Gerekli eşiğe varana kadar ana maden
+    // hattından gelen kayalar haznede kalır.
+    if (!state.crusherHopperFull) {
+      final oreId = _pickCrusherOreForDepth(depthKm, state.crusherLevel);
+      final freeHopperSpace = max(
+        0,
+        state.crusherHopperCapacity - state.totalRawOreCount,
+      );
+      state.addRawOre(oreId, min(crushRatePerSec, freeHopperSpace));
+    }
+    if (state.totalRawOreCount < startupBatchSize) return;
+
+    // 1. Önce haznede madencilerden gelen ham parçaları kır
+    if (state.rawOreInventory.isNotEmpty) {
+      final keys = state.rawOreInventory.keys.toList();
+      for (final oreId in keys) {
+        if (state.cargoFull) break;
+        if (remainingToCrush <= 0) break;
+        final available = state.rawOreInventory[oreId] ?? 0;
+        if (available <= 0) continue;
+        final toProcess = min(available, remainingToCrush);
+        final yieldResult = state.crushRawOre(
+          oreId: oreId,
+          amount: toProcess,
+          yieldMultiplier: yieldMultiplier,
+        );
+        if (yieldResult <= 0) break;
+        remainingToCrush -= toProcess;
+      }
+    }
+  }
+
+  static String _pickCrusherOreForDepth(double depthKm, int crusherLevel) {
+    final rand = Random();
+    if (depthKm >= 120.0 || crusherLevel >= 40) {
+      final roll = rand.nextDouble();
+      if (roll < 0.40) return 'painite';
+      if (roll < 0.70) return 'coltan';
+      if (roll < 0.90) return 'diamond';
+      return 'platinum';
+    }
+    if (depthKm >= 80.0 || crusherLevel >= 30) {
+      final roll = rand.nextDouble();
+      if (roll < 0.40) return 'coltan';
+      if (roll < 0.70) return 'diamond';
+      if (roll < 0.90) return 'platinum';
+      return 'gold';
+    }
+    if (depthKm >= 40.0 || crusherLevel >= 22) {
+      final roll = rand.nextDouble();
+      if (roll < 0.45) return 'diamond';
+      if (roll < 0.75) return 'platinum';
+      if (roll < 0.92) return 'gold';
+      return 'silver';
+    }
+    if (depthKm >= 20.0 || crusherLevel >= 16) {
+      final roll = rand.nextDouble();
+      if (roll < 0.45) return 'platinum';
+      if (roll < 0.75) return 'gold';
+      if (roll < 0.92) return 'silver';
+      return 'copper';
+    }
+    if (depthKm >= 8.0 || crusherLevel >= 10) {
+      final roll = rand.nextDouble();
+      if (roll < 0.50) return 'gold';
+      if (roll < 0.80) return 'silver';
+      return 'copper';
+    }
+    if (depthKm >= 3.0 || crusherLevel >= 5) {
+      final roll = rand.nextDouble();
+      if (roll < 0.55) return 'silver';
+      if (roll < 0.85) return 'copper';
+      return 'coal';
+    }
+    if (depthKm >= 0.5 || crusherLevel >= 2) {
+      return rand.nextDouble() < 0.65 ? 'copper' : 'coal';
+    }
+    return 'coal';
   }
 
   static void _advanceReactor(GameState state, List<String> events) {

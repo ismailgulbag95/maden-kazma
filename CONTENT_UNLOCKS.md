@@ -5,6 +5,7 @@ Derinlik eşikleri metre cinsindedir. Dünya, Ay ve Titan cevher açılımları 
 | Derinlik | Kilit / olay | Oyuncuya açılan eylem |
 |---:|---|---|
 | 5.000 m | İlk vardiya | Dört garantili kömür damarını beşer kez vur; cevheri satıp ilk madenciyi işe al |
+| 7.000 m | Yıkık taş kırma istasyonu | 7 km görevi otomatik tamamlanır; açılan kattaki istasyonu 50 kasaya onar, ardından istasyona dokunarak kırıcı animasyonunu aç |
 | 100 m'den sonra | Olasılıklı cevher doğumu | Derinlikte açılmış minerallerden biri, son 100 m içinde ve rastgele kaya cebinde belirir; her başarılı vuruş cevher verir, beşinci vuruşta tükenir |
 | Her 1.000 m | Yeni kuyu satırı | Derinlik eşiğinde yeni satır ve işçi yuvaları açılır; katlar baştan yığınla doldurulmaz |
 | 10.000 m | Uzman madenciler | Jeolog, sondaj mühendisi, kâşif veya muhafız uzmanı seç |

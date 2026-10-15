@@ -18,9 +18,12 @@ import 'mr_mine_drill_difficulty.dart';
 import 'buff_lab_definition.dart';
 
 class GameState {
-  static const int currentSchemaVersion = 26;
+  static const int currentSchemaVersion = 27;
   static const int sharedCargoInventorySchemaVersion = 25;
   static const double startingDepthMeters = 5000;
+  static const int crusherStationFloorDepthMeters = 7000;
+  static const int crusherStationDiscoveryDepthMeters =
+      crusherStationFloorDepthMeters + 1000;
   static const List<double> worldEntryDepths = [0, 1032000, 1814000];
   static const List<double> autoSellThresholdChoices = [.6, .75, .85, .95];
   static const List<double> cargoCapacities = [
@@ -173,8 +176,16 @@ class GameState {
     this.weeklyChallengeClaimed = false,
     this.activeMineEventId,
     this.nextMineEventAtSeconds = 120,
+    this.crusherLevel = 1,
+    this.crusherXp = 0,
+    this.totalOreCrushed = 0,
+    this.crusherRepaired = false,
+    Map<String, int>? crusherUpgrades,
+    Map<String, int>? rawOreInventory,
   }) : inventory = inventory ?? {'coal': 0, 'copper': 0},
        reserves = reserves ?? {},
+       rawOreInventory = rawOreInventory ?? {},
+       crusherUpgrades = crusherUpgrades ?? starterCrusherUpgrades(),
        upgrades =
            upgrades ??
            {
@@ -203,6 +214,7 @@ class GameState {
              'workshop',
              'warehouse',
              'trade',
+             'crusher',
              'research',
              'expedition',
            },
@@ -419,6 +431,15 @@ class GameState {
   final Map<String, double> productionRemainders;
   final Map<String, int> specialists;
   int seed = 91827;
+  int crusherLevel;
+  int crusherXp;
+  int totalOreCrushed;
+  bool crusherRepaired;
+  static const int crusherRepairCost = 50;
+  bool get crusherStationDiscovered =>
+      deepestMeters >= crusherStationDiscoveryDepthMeters;
+  final Map<String, int> crusherUpgrades;
+  final Map<String, int> rawOreInventory;
 
   /// Creates the actual first-shift state without changing fixture defaults.
   /// `GameState()` remains useful for tests and restored legacy data.
@@ -482,9 +503,83 @@ class GameState {
       'research' => 'scientists',
       'expedition' => 'caves',
       'boss' => 'armory',
+      'crusher' => 'crusher',
       _ => id,
     };
+    if (buildingId == 'crusher') return true;
     return unlockedBuildings.contains(buildingId);
+  }
+
+  static Map<String, int> starterCrusherUpgrades() => {
+    'speed': 1,
+    'power': 1,
+    'gravity': 1,
+    'gearbox': 1,
+    'feed': 1,
+    'teeth': 1,
+    'ore': 1,
+    'storage': 1,
+  };
+
+  int get crusherHopperCapacity =>
+      (100 + (crusherUpgrades['storage'] ?? 1) * 50).toInt();
+
+  int get totalRawOreCount =>
+      rawOreInventory.values.fold(0, (sum, count) => sum + count);
+
+  bool get crusherHopperFull => totalRawOreCount >= crusherHopperCapacity;
+
+  void addRawOre(String oreId, int amount) {
+    if (amount <= 0) return;
+    rawOreInventory[oreId] = (rawOreInventory[oreId] ?? 0) + amount;
+  }
+
+  int crushRawOre({
+    required String oreId,
+    required int amount,
+    double yieldMultiplier = 1.0,
+    bool allowWithoutRawOre = false,
+  }) {
+    final available = rawOreInventory[oreId] ?? 0;
+    if (available <= 0 && !allowWithoutRawOre) return 0;
+    if (cargoFull) return 0;
+
+    final toCrush = available > 0 ? min(available, amount) : amount;
+    final rawYield = max(1, (toCrush * yieldMultiplier).round());
+    final resource = ResourceCatalog.byId[oreId];
+    final carriesWeight = resource?.countsTowardsCapacityAndValue ?? true;
+    final weight = resource != null ? max(1, resource.weight) : 1;
+
+    int yieldAmount = rawYield;
+    if (carriesWeight) {
+      final remainingCap = effectiveCargoCapacity - cargoUsed;
+      if (remainingCap < weight) return 0;
+      final maxFit = (remainingCap / weight).floor();
+      yieldAmount = min(rawYield, maxFit);
+    }
+    if (yieldAmount <= 0) return 0;
+
+    if (available > 0) {
+      rawOreInventory[oreId] = available - toCrush;
+      if (rawOreInventory[oreId]! <= 0) {
+        rawOreInventory.remove(oreId);
+      }
+    }
+
+    inventory[oreId] = (inventory[oreId] ?? 0) + yieldAmount;
+    if (carriesWeight) {
+      cargoUsed += yieldAmount * weight;
+    }
+    totalMined += yieldAmount;
+    totalOreCrushed += toCrush;
+    crusherXp += toCrush * 2;
+
+    final xpGoal = 100 + crusherLevel * 150;
+    if (crusherXp >= xpGoal) {
+      crusherXp -= xpGoal;
+      crusherLevel++;
+    }
+    return yieldAmount;
   }
 
   int get chestCollectorCapacity => 5 + chestCollectorLevel * 2;
@@ -892,6 +987,12 @@ class GameState {
           entry.key: entry.value.toJson(),
       },
       'workerRolePriority': workerRolePriority,
+      'crusherLevel': crusherLevel,
+      'crusherXp': crusherXp,
+      'totalOreCrushed': totalOreCrushed,
+      'crusherRepaired': crusherRepaired,
+      'crusherUpgrades': crusherUpgrades,
+      'rawOreInventory': rawOreInventory,
       'seed': seed,
     };
   }
@@ -1085,7 +1186,8 @@ class GameState {
       hapticsEnabled: json['hapticsEnabled'] as bool? ?? true,
       visualEffectsEnabled: json['visualEffectsEnabled'] as bool? ?? true,
       notificationsEnabled: json['notificationsEnabled'] as bool? ?? false,
-      notificationPromptShown: json['notificationPromptShown'] as bool? ?? false,
+      notificationPromptShown:
+          json['notificationPromptShown'] as bool? ?? false,
       debugModeEnabled: json['debugModeEnabled'] as bool? ?? false,
       debugUnlimitedMoney: json['debugUnlimitedMoney'] as bool? ?? false,
       guidedProgression: json['guidedProgression'] as bool? ?? false,
@@ -1138,6 +1240,12 @@ class GameState {
       oreVeinDamage: readIntMap('oreVeinDamage'),
       oreDeposits: readOreDeposits(),
       workerRolePriority: readStringList('workerRolePriority'),
+      crusherLevel: readInt('crusherLevel', 1),
+      crusherXp: readInt('crusherXp', 0),
+      totalOreCrushed: readInt('totalOreCrushed', 0),
+      crusherRepaired: json['crusherRepaired'] as bool? ?? false,
+      crusherUpgrades: readIntMap('crusherUpgrades'),
+      rawOreInventory: readIntMap('rawOreInventory'),
     );
     if (!json.containsKey('knownBlueprintIds')) {
       final legacyLevels = <String, int>{

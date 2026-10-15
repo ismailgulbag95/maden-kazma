@@ -28,6 +28,7 @@ import 'widgets/frenzy_overlay.dart';
 import 'widgets/offline_welcome_dialog.dart';
 import 'widgets/flex_card_dialog.dart';
 import 'widgets/mining_particles.dart';
+import '../crusher/crusher_view.dart';
 import 'widgets/notification_permission_dialog.dart';
 
 class GameScreen extends StatefulWidget {
@@ -66,7 +67,8 @@ class _GameScreenState extends State<GameScreen> {
       return;
     }
     _offlineDialogShown = true;
-    final report = widget.controller.pendingOfflineReport ??
+    final report =
+        widget.controller.pendingOfflineReport ??
         OfflineShiftReport(
           durationSeconds: widget.controller.offlineSeconds,
           depthGained: widget.controller.offlineDepthGained,
@@ -131,7 +133,57 @@ class _GameScreenState extends State<GameScreen> {
     });
   }
 
+  void _openCrusher() {
+    if (!widget.controller.state.crusherStationDiscovered ||
+        !widget.controller.state.crusherRepaired) {
+      widget.controller.showNotice(
+        '7 km’deki taş kırma istasyonunu önce onar.',
+      );
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CrusherView(controller: widget.controller),
+      ),
+    );
+  }
+
+  Future<void> _useCrusherStation() async {
+    final state = widget.controller.state;
+    if (state.crusherRepaired) {
+      _openCrusher();
+      return;
+    }
+    final repair = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Yıkık taş kırma istasyonu'),
+        content: const Text(
+          '7 km katında eski bir taş kırma hattı bulundu. '
+          'Dişli ve konveyörü onarıp cevher akışını yeniden başlat.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            onPressed: state.canAfford(GameState.crusherRepairCost)
+                ? () => Navigator.pop(dialogContext, true)
+                : null,
+            child: const Text('Onar · 50 kasa'),
+          ),
+        ],
+      ),
+    );
+    if (repair == true && mounted) widget.controller.repairCrusherStation();
+  }
+
   void _openBuilding(String id) {
+    if (id == 'crusher') {
+      _openCrusher();
+      return;
+    }
     if (!widget.controller.state.canOpenBuilding(id)) {
       widget.controller.showNotice(_lockedBuildingMessage());
       return;
@@ -144,6 +196,10 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _openUtilities(String panel) {
+    if (panel == 'crusher') {
+      _openCrusher();
+      return;
+    }
     if (!widget.controller.state.canOpenBuilding(panel)) {
       widget.controller.showNotice(_lockedBuildingMessage());
       return;
@@ -190,9 +246,7 @@ class _GameScreenState extends State<GameScreen> {
   void _openFlexCard() {
     showDialog<void>(
       context: context,
-      builder: (context) => FlexCardDialog(
-        controller: widget.controller,
-      ),
+      builder: (context) => FlexCardDialog(controller: widget.controller),
     );
   }
 
@@ -289,6 +343,9 @@ class _GameScreenState extends State<GameScreen> {
                                 !widget.controller.state.soundEffectsEnabled,
                               ),
                           onFlexCard: _openFlexCard,
+                          onOpenCrusher: widget.controller.state.crusherRepaired
+                              ? _openCrusher
+                              : null,
                         ),
                         Expanded(
                           child: TickerMode(
@@ -297,12 +354,14 @@ class _GameScreenState extends State<GameScreen> {
                             child: compact
                                 ? _CompactGameLayout(
                                     controller: widget.controller,
+                                    onCrusherStation: _useCrusherStation,
                                     onBuilding: _openBuilding,
                                     onUtility: _openUtilities,
                                     onAdvisorGuide: _openAdvisorGuide,
                                   )
                                 : _WideGameLayout(
                                     controller: widget.controller,
+                                    onCrusherStation: _useCrusherStation,
                                     onBuilding: _openBuilding,
                                     onUtility: _openUtilities,
                                     onAdvisorGuide: _openAdvisorGuide,
@@ -392,12 +451,14 @@ class _HudBar extends StatelessWidget {
     required this.onSettings,
     required this.onToggleSound,
     required this.onFlexCard,
+    this.onOpenCrusher,
   });
 
   final GameState state;
   final VoidCallback onSettings;
   final VoidCallback onToggleSound;
   final VoidCallback onFlexCard;
+  final VoidCallback? onOpenCrusher;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -452,6 +513,29 @@ class _HudBar extends StatelessWidget {
                 child: Row(
                   children: [
                     Expanded(child: _GameTitle(compact: true)),
+                    if (onOpenCrusher != null)
+                      IconButton(
+                        tooltip: 'Kırma & Ayrıştırma Tesisi',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: onOpenCrusher,
+                        icon: Badge(
+                          isLabelVisible: state.totalRawOreCount > 0,
+                          label: Text(
+                            '${state.totalRawOreCount}',
+                            style: const TextStyle(
+                              fontSize: 8,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          backgroundColor: const Color(0xffc8ef70),
+                          textColor: const Color(0xff122005),
+                          child: const Icon(
+                            Icons.precision_manufacturing_rounded,
+                            color: Color(0xffc8ef70),
+                            size: 20,
+                          ),
+                        ),
+                      ),
                     IconButton(
                       tooltip: 'Keşif Karnesi',
                       visualDensity: VisualDensity.compact,
@@ -521,6 +605,31 @@ class _HudBar extends StatelessWidget {
                 child: Row(children: chips),
               ),
             ),
+            if (onOpenCrusher != null)
+              IconButton(
+                tooltip: 'Kırma & Ayrıştırma Tesisi',
+                visualDensity: compact
+                    ? VisualDensity.compact
+                    : VisualDensity.standard,
+                onPressed: onOpenCrusher,
+                icon: Badge(
+                  isLabelVisible: state.totalRawOreCount > 0,
+                  label: Text(
+                    '${state.totalRawOreCount}',
+                    style: const TextStyle(
+                      fontSize: 8,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  backgroundColor: const Color(0xffc8ef70),
+                  textColor: const Color(0xff122005),
+                  child: Icon(
+                    Icons.precision_manufacturing_rounded,
+                    color: const Color(0xffc8ef70),
+                    size: compact ? 20 : 24,
+                  ),
+                ),
+              ),
             IconButton(
               tooltip: 'Keşif Karnesi',
               visualDensity: compact
@@ -767,12 +876,14 @@ class _CargoHudChipState extends State<_CargoHudChip>
 class _WideGameLayout extends StatelessWidget {
   const _WideGameLayout({
     required this.controller,
+    required this.onCrusherStation,
     required this.onBuilding,
     required this.onUtility,
     required this.onAdvisorGuide,
   });
 
   final GameController controller;
+  final VoidCallback onCrusherStation;
   final ValueChanged<String> onBuilding;
   final ValueChanged<String> onUtility;
   final ValueChanged<AdvisorGuideDefinition> onAdvisorGuide;
@@ -797,7 +908,12 @@ class _WideGameLayout extends StatelessWidget {
               onOpenTarget: onAdvisorGuide,
               onOpenUtility: onUtility,
             ),
-            Expanded(child: _MineShaftView(controller: controller)),
+            Expanded(
+              child: _MineShaftView(
+                controller: controller,
+                onCrusherStation: onCrusherStation,
+              ),
+            ),
             SizedBox(
               height: 74,
               child: _MineActionBar(
@@ -819,12 +935,14 @@ class _WideGameLayout extends StatelessWidget {
 class _CompactGameLayout extends StatelessWidget {
   const _CompactGameLayout({
     required this.controller,
+    required this.onCrusherStation,
     required this.onBuilding,
     required this.onUtility,
     required this.onAdvisorGuide,
   });
 
   final GameController controller;
+  final VoidCallback onCrusherStation;
   final ValueChanged<String> onBuilding;
   final ValueChanged<String> onUtility;
   final ValueChanged<AdvisorGuideDefinition> onAdvisorGuide;
@@ -836,7 +954,10 @@ class _CompactGameLayout extends StatelessWidget {
         state: controller.state,
         onBuilding: onBuilding,
       );
-      final mine = _MineShaftView(controller: controller);
+      final mine = _MineShaftView(
+        controller: controller,
+        onCrusherStation: onCrusherStation,
+      );
       final mineEventBanner = _MineEventBanner(
         state: controller.state,
         onUtility: onUtility,
@@ -1101,9 +1222,8 @@ class _CompactActionBar extends StatelessWidget {
     final viewPadding = mediaQuery.viewPadding;
     final screenWidth = mediaQuery.size.width;
     final unclaimedQuestRewards = controller.unclaimedQuestRewardCount;
-    final currentGuideTarget = AdvisorGuideCatalog.currentFor(
-      controller.state,
-    )?.target;
+    final currentGuideTarget = AdvisorGuideCatalog.currentFor(controller.state)
+        ?.target;
     final shortcuts = [
       (Icons.construction_rounded, 'ATÖLYE', 'workshop'),
       (Icons.inventory_2_rounded, 'AMBAR', 'warehouse'),
@@ -1141,8 +1261,7 @@ class _CompactActionBar extends StatelessWidget {
           builder: (context, navConstraints) {
             final width = navConstraints.maxWidth;
             const rightShift = 19.0;
-            final centerX =
-                screenWidth / 2 - viewPadding.left + rightShift;
+            final centerX = screenWidth / 2 - viewPadding.left + rightShift;
             final halfAvailable = math.min(centerX, width - centerX);
             final navWidth = math
                 .min(math.min(width, 560.0), halfAvailable * 2)
@@ -2129,9 +2248,13 @@ class _QuestDock extends StatelessWidget {
 }
 
 class _MineShaftView extends StatefulWidget {
-  const _MineShaftView({required this.controller});
+  const _MineShaftView({
+    required this.controller,
+    required this.onCrusherStation,
+  });
 
   final GameController controller;
+  final VoidCallback onCrusherStation;
 
   @override
   State<_MineShaftView> createState() => _MineShaftViewState();
@@ -2237,12 +2360,14 @@ class _MineShaftViewState extends State<_MineShaftView> {
                         height: floorHeight,
                         child: _MineWorld(
                           controller: controller,
+                          onCrusherStation: widget.onCrusherStation,
                           width: width,
                           height: floorHeight,
                           narrow: narrow,
                           floorIndex: floorIndex,
                           isActiveFloor: floorIndex == drillingFloor,
                           isDiscoveredFloor: floorIndex < discoveredFloorCount,
+                          isFullyDugFloor: floorIndex < drillingFloor - 1,
                         ),
                       );
                     },
@@ -2386,21 +2511,25 @@ class _MineShaftViewState extends State<_MineShaftView> {
 class _MineWorld extends StatelessWidget {
   const _MineWorld({
     required this.controller,
+    required this.onCrusherStation,
     required this.width,
     required this.height,
     required this.narrow,
     required this.floorIndex,
     required this.isActiveFloor,
     required this.isDiscoveredFloor,
+    required this.isFullyDugFloor,
   });
 
   final GameController controller;
+  final VoidCallback onCrusherStation;
   final double width;
   final double height;
   final bool narrow;
   final int floorIndex;
   final bool isActiveFloor;
   final bool isDiscoveredFloor;
+  final bool isFullyDugFloor;
 
   @override
   Widget build(BuildContext context) {
@@ -2539,7 +2668,8 @@ class _MineWorld extends StatelessWidget {
         Positioned.fill(
           child: CustomPaint(painter: _ShaftPainter(variant: minorVariant)),
         ),
-        if (isActiveFloor)
+        if (isActiveFloor ||
+            (worldIndex == 0 && floorIndex == 6 && isFullyDugFloor))
           Positioned(
             left: 0,
             right: 0,
@@ -2613,6 +2743,18 @@ class _MineWorld extends StatelessWidget {
                 ),
               ),
             ),
+        if (worldIndex == 0 &&
+            floorIndex == 6 &&
+            isDiscoveredFloor &&
+            isFullyDugFloor)
+          ..._crusherStationPositions(
+            width: width,
+            height: height,
+            shaftWidth: shaftWidth,
+            edgeInset: edgeRockWidth,
+            repaired: state.crusherRepaired,
+            onTap: onCrusherStation,
+          ),
         if (isActiveFloor)
           Positioned(
             left: (width - rigWidth) / 2,
@@ -2668,6 +2810,154 @@ class _MineWorld extends StatelessWidget {
       ],
     );
   }
+}
+
+class _CrusherStation extends StatefulWidget {
+  const _CrusherStation({
+    required this.repaired,
+    required this.onTap,
+    required this.width,
+    required this.height,
+    required this.mirrored,
+    required this.side,
+  });
+
+  final bool repaired;
+  final VoidCallback onTap;
+  final double width;
+  final double height;
+  final bool mirrored;
+  final String side;
+
+  @override
+  State<_CrusherStation> createState() => _CrusherStationState();
+}
+
+class _CrusherStationState extends State<_CrusherStation>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _gear;
+
+  @override
+  void initState() {
+    super.initState();
+    _gear = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 4),
+    );
+    if (widget.repaired) _gear.repeat();
+  }
+
+  @override
+  void didUpdateWidget(covariant _CrusherStation oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.repaired == widget.repaired) return;
+    if (widget.repaired) {
+      _gear.repeat();
+    } else {
+      _gear.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _gear.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: widget.repaired
+        ? '${widget.side} onarılmış taş kırma istasyonu, kırıcıyı aç'
+        : '${widget.side} yıkık taş kırma istasyonu, 50 kasaya onar',
+    child: Transform.flip(
+      flipX: widget.mirrored,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          key: ValueKey('crusher-station-7km-${widget.side}'),
+          onTap: widget.onTap,
+          child: SizedBox(
+            width: widget.width,
+            height: widget.height,
+            child: LayoutBuilder(
+              builder: (context, constraints) => Stack(
+                alignment: Alignment.center,
+                children: [
+                  Image.asset(
+                    widget.repaired
+                        ? 'assets/packs/crusher-station-repaired.png'
+                        : 'assets/packs/crusher-station-ruined.png',
+                    fit: BoxFit.contain,
+                    width: constraints.maxWidth,
+                    height: constraints.maxHeight,
+                    filterQuality: FilterQuality.none,
+                  ),
+                  if (widget.repaired)
+                    Positioned(
+                      left: constraints.maxWidth * .09,
+                      top: constraints.maxHeight * .28,
+                      width: constraints.maxHeight * .48,
+                      height: constraints.maxHeight * .48,
+                      child: RotationTransition(
+                        turns: _gear,
+                        child: Image.asset(
+                          'assets/packs/crusher-station-gear.png',
+                          filterQuality: FilterQuality.none,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+List<Widget> _crusherStationPositions({
+  required double width,
+  required double height,
+  required double shaftWidth,
+  required double edgeInset,
+  required bool repaired,
+  required VoidCallback onTap,
+}) {
+  const shaftGap = 4.0;
+  final sideSpace = (width - shaftWidth) / 2 - edgeInset - shaftGap;
+  final size = math.max(
+    0.0,
+    math.min(132.0, math.min(width * .29, math.min(height * .56, sideSpace))),
+  );
+  final shaftLeft = (width - shaftWidth) / 2;
+  return [
+    Positioned(
+      left: shaftLeft - shaftGap - size,
+      bottom: 0,
+      child: _CrusherStation(
+        repaired: repaired,
+        onTap: onTap,
+        width: size,
+        height: size,
+        mirrored: false,
+        side: 'Sol',
+      ),
+    ),
+    Positioned(
+      left: shaftLeft + shaftWidth + shaftGap,
+      bottom: 0,
+      child: _CrusherStation(
+        repaired: repaired,
+        onTap: onTap,
+        width: size,
+        height: size,
+        mirrored: true,
+        side: 'Sağ',
+      ),
+    ),
+  ];
 }
 
 class _MineFloorCountdown extends StatelessWidget {
@@ -3758,7 +4048,10 @@ class _OreNodeState extends State<_OreNode> {
                   ),
                 ),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xE60A2029),
                     border: Border.all(color: color, width: 1),
@@ -4495,12 +4788,9 @@ String _goalRequirementLine(
           final materials = recipe.isEmpty ? '' : ' + $recipe';
           return 'Sondaj ucu: ${_formatCoins(MrMineBigNumber.fromNum(cost))} kasa$materials.';
         case 4:
-          final remaining = (7000 - state.deepestMeters.floor()).clamp(
-            0,
-            7000,
-          );
+          final remaining = (7000 - state.deepestMeters.floor()).clamp(0, 7000);
           return remaining == 0
-              ? '7 km katı açıldı • görevi tamamlayıp ödülünü al.'
+              ? '7 km görevi tamamlandı • yıkık taş kırma istasyonunu onar.'
               : 'Matkap otomatik ilerliyor • $remaining m kaldı • hedef 7 km.';
       }
     }

@@ -6,6 +6,7 @@ Derinlik değerleri metre cinsindendir. `1 km = 1.000 m`. Süre sütunu denge he
 |---:|---:|---|---|---|
 | 5 km | Başlangıç | 0 kasa, 0 madenci; dört garantili 5 vuruşluk kömür damarı | Kömür çıkarıp satarak ilk işe alım parasını biriktir | Başlangıç seviyesi |
 | 5 km | İlk satıştan sonra | İlk madenci 50 kasa; ilk on ekip maliyeti kaynak tablosunu izler | Gelirin ne kadarını ekibe ayırmalı? | Başlangıç seviyesi |
+| 7 km | İlk vardiyanın sonu | Terk edilmiş taş kırma istasyonu ve otomatik görev ödülü | İstasyonu 50 kasaya onarıp kırma hattını çalıştırmalı mı? | Başlangıç seviyesi |
 | 1 km | 3–5 dk hedefi | Eşik açılınca yeni kuyu satırı ve işçi yuvaları; yığınlar derinlik ilerleyişinde daha seyrek rastgele doğar | Kargo, sondaj ve ekip arasında yatırım | 3–5 seviye |
 | 10 km | 10–15 dk | Yetenekli uzmanlar ve belirgin yeni kat biyomu | Hangi uzmanı büyütmeli? | 6–10 seviye |
 | 15 km | 15–20 dk | Tüccar hattı | Kaynak takası mı doğrudan satış mı? | 8–12 seviye |

@@ -94,7 +94,7 @@ class GameController extends ChangeNotifier {
 
   double get frenzyRemainingSeconds => isFrenzyActive
       ? (_frenzyEndTime!.difference(DateTime.now()).inMilliseconds / 1000.0)
-          .clamp(0.0, 10.0)
+            .clamp(0.0, 10.0)
       : 0.0;
 
   void clearOfflineReport() {
@@ -108,7 +108,9 @@ class GameController extends ChangeNotifier {
     if (state.soundEffectsEnabled) {
       unawaited(SoundService.instance.playChestOpen());
     }
-    _notices.add('🔥 ÇILGINLIK MODU! $seconds saniye boyunca 2x üretim ve kazı!');
+    _notices.add(
+      '🔥 ÇILGINLIK MODU! $seconds saniye boyunca 2x üretim ve kazı!',
+    );
     notifyListeners();
   }
 
@@ -196,9 +198,12 @@ class GameController extends ChangeNotifier {
     // a prerequisite for showing the first playable frame.
     unawaited(SoundService.instance.initialize().catchError((_) {}));
     unawaited(
-      NotificationService.instance.initialize().then((_) {
-        NotificationService.instance.cancelAll();
-      }).catchError((_) {}),
+      NotificationService.instance
+          .initialize()
+          .then((_) {
+            NotificationService.instance.cancelAll();
+          })
+          .catchError((_) {}),
     );
     final now = DateTime.now();
     try {
@@ -262,6 +267,7 @@ class GameController extends ChangeNotifier {
     }
     GameEngine.prepareChallengeWindows(state, now);
     GameEngine.ensureOpenMineDeposits(state);
+    _completeSevenKmQuest();
     HapticService.instance.enabled = state.hapticsEnabled;
     unawaited(
       SoundService.instance
@@ -339,6 +345,7 @@ class GameController extends ChangeNotifier {
       Duration(seconds: wholeSeconds),
       now: now,
     );
+    _completeSevenKmQuest();
     if (state.reactorShutdown != reactorWasShutdown) {
       if (state.reactorShutdown) {
         unawaited(SoundService.instance.startReactorAlarm());
@@ -431,7 +438,8 @@ class GameController extends ChangeNotifier {
     final depositAfter = state.oreDeposits[depositId];
     if (depositAfter == null ||
         depositAfter.depleted ||
-        (depositBefore != null && depositAfter.damage >= depositAfter.hitPoints)) {
+        (depositBefore != null &&
+            depositAfter.damage >= depositAfter.hitPoints)) {
       HapticService.instance.heavyImpact();
     } else {
       HapticService.instance.lightTap();
@@ -1021,7 +1029,9 @@ class GameController extends ChangeNotifier {
   bool get shouldPromptNotifications =>
       !state.notificationPromptShown &&
       state.tutorialStep >= 5 &&
-      (state.cargoLevel >= 2 || state.deepestMeters >= 60 || state.chestsOpened >= 2);
+      (state.cargoLevel >= 2 ||
+          state.deepestMeters >= 60 ||
+          state.chestsOpened >= 2);
 
   Future<void> schedulePendingNotifications() async {
     if (!state.notificationsEnabled) return;
@@ -1034,7 +1044,9 @@ class GameController extends ChangeNotifier {
       final ratio = state.cargoRatio;
       final delay = ratio >= 0.75
           ? const Duration(minutes: 30)
-          : (ratio >= 0.4 ? const Duration(hours: 1) : const Duration(hours: 2));
+          : (ratio >= 0.4
+                ? const Duration(hours: 1)
+                : const Duration(hours: 2));
       await NotificationService.instance.scheduleCargoFullNotification(delay);
     }
 
@@ -1548,6 +1560,44 @@ class GameController extends ChangeNotifier {
     }
     _notices.add('Görev tamamlandı: +$reward kasa.');
     _refreshState();
+  }
+
+  void _completeSevenKmQuest() {
+    if (state.deepestMeters < 7000 || !state.claimedQuestIds.add(4)) return;
+    final quest = QuestCatalog.all[4];
+    final reward =
+        (quest.reward *
+                (state.equippedRelics.contains('relic_8')
+                    ? 1 + .1 * state.relicLevel('relic_8')
+                    : 1))
+            .round();
+    state.addCoins(reward);
+    state.inventory['ticket'] = state.amount('ticket') + 1;
+    state.relicScrap++;
+    state.workerScrap++;
+    if (state.initialTutorialComplete) {
+      GameEngine.completeStarterTutorial(state, _notices);
+    }
+    _notices.add(
+      '7 km görevi tamamlandı: +$reward kasa. Yıkık taş kırma istasyonu bulundu!',
+    );
+  }
+
+  bool repairCrusherStation() {
+    if (!state.crusherStationDiscovered || state.crusherRepaired) return false;
+    if (!state.spendCoins(GameState.crusherRepairCost)) {
+      _notices.add(
+        'Taş kırma istasyonunu onarmak için ${GameState.crusherRepairCost} kasa gerekir.',
+      );
+      notifyListeners();
+      return false;
+    }
+    state.crusherRepaired = true;
+    _notices.add(
+      'Taş kırma istasyonu onarıldı. Kırıcıyı açmak için istasyona dokun.',
+    );
+    _refreshState();
+    return true;
   }
 
   void acknowledgeAdvisorGuide(String guideId) {

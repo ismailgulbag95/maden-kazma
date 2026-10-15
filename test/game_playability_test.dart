@@ -1461,13 +1461,7 @@ void main() {
         findsNothing,
       );
 
-      const ids = [
-        'workshop',
-        'warehouse',
-        'trade',
-        'research',
-        'expedition',
-      ];
+      const ids = ['workshop', 'warehouse', 'trade', 'research', 'expedition'];
       final layerRect = tester.getRect(buildingLayer);
       double? sharedGround;
       for (final id in ids) {
@@ -1494,6 +1488,50 @@ void main() {
       controller.dispose();
     },
   );
+
+  testWidgets('7 km istasyon çifti ancak 8 km katı açılınca zeminde görünür', (
+    tester,
+  ) async {
+    const size = Size(390, 844);
+    tester.view.physicalSize = size;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final state = GameState.newGame(seed: 721)
+      ..openingComicSeen = true
+      ..depthMeters = 7999
+      ..deepestMeters = 7999;
+    final controller = _readyController(state: state);
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(home: GameScreen(controller: controller)),
+    );
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(find.byKey(const ValueKey('crusher-station-7km-Sol')), findsNothing);
+    expect(find.byKey(const ValueKey('crusher-station-7km-Sağ')), findsNothing);
+
+    state
+      ..depthMeters = 8000
+      ..deepestMeters = 8000;
+    controller.notifyListeners();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    final floor = find.byKey(const ValueKey('mine-floor-0-6'));
+    final leftStation = find.byKey(const ValueKey('crusher-station-7km-Sol'));
+    final rightStation = find.byKey(const ValueKey('crusher-station-7km-Sağ'));
+    expect(leftStation, findsOneWidget);
+    expect(rightStation, findsOneWidget);
+
+    final floorRect = tester.getRect(floor);
+    final leftRect = tester.getRect(leftStation);
+    final rightRect = tester.getRect(rightStation);
+    expect(leftRect.bottom, closeTo(floorRect.bottom, .01));
+    expect(rightRect.bottom, closeTo(floorRect.bottom, .01));
+    expect(leftRect.center.dx, lessThan(floorRect.center.dx));
+    expect(rightRect.center.dx, greaterThan(floorRect.center.dx));
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('cevher damarları kaya ceplerinde ve kuyu dışında durur', (
     tester,
@@ -1813,7 +1851,9 @@ void main() {
       expect(find.text('GÖREV'), findsWidgets);
       expect(find.text('1'), findsNothing);
 
-      final deposit = controller.state.oreDeposits.values.firstWhere((d) => !d.depleted);
+      final deposit = controller.state.oreDeposits.values.firstWhere(
+        (d) => !d.depleted,
+      );
       controller.mineDeposit(deposit.id);
       expect(controller.unclaimedQuestRewardCount, 1);
       await tester.pump(const Duration(milliseconds: 100));

@@ -112,7 +112,7 @@ abstract final class QuestCatalog {
     (
       QuestKind.depth,
       'İlk katman ölçümü',
-      'Matkabı otomatik ilerlet ve 7 km derinliğe ulaş',
+      'Matkabı 7 km derinliğe ilerlet ve terk edilmiş taş kırma istasyonunu bul',
       'metre derinlik',
       7000,
     ),

@@ -287,15 +287,13 @@ void main() {
       expect(overSpent, isFalse);
       expect(state.coins, MrMineBigNumber.fromString('3.5e400'));
 
-      // debug money overrides affordability and spending
-      state.debugModeEnabled = true;
-      state.debugUnlimitedMoney = true;
-      expect(state.canAfford(MrMineBigNumber.fromString('1.0e500')), isTrue);
-      expect(state.spendCoins(MrMineBigNumber.fromString('1.0e500')), isTrue);
+      // No debug override can bypass the player's balance.
+      expect(state.canAfford(MrMineBigNumber.fromString('1.0e500')), isFalse);
+      expect(state.spendCoins(MrMineBigNumber.fromString('1.0e500')), isFalse);
       expect(
         state.coins,
         MrMineBigNumber.fromString('3.5e400'),
-      ); // unmodified in debug mode
+      );
     });
 
     test('save migration reads legacy numeric coins and new string coins without data loss', () {

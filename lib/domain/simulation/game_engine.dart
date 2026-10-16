@@ -886,6 +886,8 @@ abstract final class GameEngine {
   static const int mineDepositSpawnDepth = 100000;
   static const double mineDepositSpawnChancePerMeter = .00045;
   static const int maxLiveDepositsPerFloor = 4;
+  static const int maxRandomDepositSpawnFloors = 15;
+  static const int timedOreDepositIntervalSeconds = 3 * 60;
 
   /// Gives the new crew four guaranteed coal veins across nearby floors.
   static void ensureOpenMineDeposits(GameState state) {
@@ -901,13 +903,15 @@ abstract final class GameEngine {
           MineBiome.worldAt(spawnDepth) != deposit.worldIndex ||
           !MineBiome.containsMineral(spawnDepth, deposit.resourceId);
       // Older builds reran the tutorial guarantee at the player's current
-      // depth, leaving four tutorial coal veins on every floor they crossed.
-      // Natural veins do not spawn before 100 km, so remove those stale
-      // duplicates from existing saves while keeping the original starter set.
+      // depth, leaving its fixed 10-unit coal veins on every floor they
+      // crossed. Remove those stale tutorial-shaped copies but keep timed
+      // discoveries and the original starter set.
       final duplicateTutorialCoal =
           deposit.worldIndex == 0 &&
           deposit.floorIndex != starterFloor &&
           deposit.resourceId == 'coal' &&
+          deposit.amount == 10 &&
+          deposit.hitPoints == 5 &&
           spawnDepth < mineDepositSpawnDepth &&
           !_isStarterCoalDeposit(
             deposit,
@@ -1062,13 +1066,22 @@ abstract final class GameEngine {
         .clamp(0, GameState.worldEntryDepths.length - 1)
         .toInt();
     final worldStart = GameState.worldEntryDepths[worldIndex];
-    final lowerBound = max(worldStart, state.depthMeters - 100000);
-    final possibleDepths = max(1, (state.depthMeters - lowerBound).floor() + 1);
-    final spawnDepth = max(
-      worldStart,
-      state.depthMeters - random.nextInt(possibleDepths),
+    final allowedFloors = _deepestOpenMineDepositFloors(state)
+        .where((floor) => floor.$1 == worldIndex)
+        .where(
+          (floor) =>
+              worldStart + floor.$2 * mineFloorMeters <= state.depthMeters,
+        )
+        .toList(growable: false);
+    if (allowedFloors.isEmpty) return false;
+    final (_, floorIndex) = allowedFloors[random.nextInt(allowedFloors.length)];
+    final floorStart = (worldStart + floorIndex * mineFloorMeters).round();
+    final floorEnd = min(
+      floorStart + mineFloorMeters - 1,
+      state.depthMeters.floor(),
     );
-    final floorIndex = ((spawnDepth - worldStart) / mineFloorMeters).floor();
+    final spawnDepth = (floorStart + random.nextInt(floorEnd - floorStart + 1))
+        .toDouble();
     final activeInFloor = state.oreDeposits.values
         .where(
           (deposit) =>
@@ -1114,6 +1127,126 @@ abstract final class GameEngine {
     if (MineBiome.worldAt(depth) != worldIndex) return null;
     return MineBiome.dominantMineral(depth);
   }
+
+  /// Places one weighted mineral deposit after each three minutes of active
+  /// play. The timer does not advance during the controller's offline pass.
+  static bool _spawnTimedMineDeposit(GameState state, Random random) {
+    final openFloors = _deepestOpenMineDepositFloors(state);
+    final liveCountsByFloor = <(int, int), int>{};
+    for (final deposit in state.oreDeposits.values) {
+      if (!deposit.depleted) {
+        final key = (deposit.worldIndex, deposit.floorIndex);
+        liveCountsByFloor.update(key, (count) => count + 1, ifAbsent: () => 1);
+      }
+    }
+    openFloors.removeWhere(
+      (floor) => (liveCountsByFloor[floor] ?? 0) >= maxLiveDepositsPerFloor,
+    );
+    if (openFloors.isEmpty) return false;
+
+    final (worldIndex, floorIndex) =
+        openFloors[random.nextInt(openFloors.length)];
+    final worldStart = GameState.worldEntryDepths[worldIndex];
+    final spawnDepth = worldStart + floorIndex * mineFloorMeters.toDouble();
+    final absoluteFloor = (spawnDepth / mineFloorMeters).floor();
+    final resource = _weightedMineralAtFloor(absoluteFloor, random);
+    if (resource == null) return false;
+
+    // A few hits keep the find collectible without handing out an
+    // economy-breaking pile in the deepest worlds.
+    final depthKm = max(1, (spawnDepth / mineFloorMeters).floor());
+    final valuePerClick = (2 + log(depthKm + 1)).round().clamp(2, 20).toInt();
+    return _createMineDeposit(
+          state,
+          worldIndex: worldIndex,
+          floorIndex: floorIndex,
+          spawnDepth: spawnDepth,
+          resource: resource,
+          valuePerClick: valuePerClick,
+          hitPoints: 5,
+          random: random,
+        ) !=
+        null;
+  }
+
+  /// Returns the deepest opened mineral floors across all worlds. Timed and
+  /// drill-roll deposits share this gate so older shafts cannot keep producing
+  /// manually collectible finds after the player has progressed deeper.
+  static List<(int, int)> _deepestOpenMineDepositFloors(GameState state) {
+    final openFloors = <(int, int, int)>[];
+    for (
+      var worldIndex = 0;
+      worldIndex < GameState.worldEntryDepths.length;
+      worldIndex++
+    ) {
+      final worldStart = GameState.worldEntryDepths[worldIndex];
+      if (state.deepestMeters < worldStart) continue;
+
+      final worldKey = worldIndex.toString();
+      final savedWorldDepth = state.worldDepths[worldKey] ?? worldStart;
+      final reachedDepth = worldIndex == state.activeWorldIndex
+          ? max(state.depthMeters, savedWorldDepth)
+          : savedWorldDepth;
+      final openDepth = min(state.deepestMeters, reachedDepth);
+      if (openDepth < worldStart) continue;
+
+      final firstAbsoluteFloor = (worldStart / mineFloorMeters).floor();
+      final maxLocalFloor = min(
+        ((openDepth - worldStart) / mineFloorMeters).floor(),
+        MrMineLevelTable.rows.length - firstAbsoluteFloor - 1,
+      );
+      for (var floorIndex = 0; floorIndex <= maxLocalFloor; floorIndex++) {
+        final absoluteFloor = firstAbsoluteFloor + floorIndex;
+        openFloors.add((absoluteFloor, worldIndex, floorIndex));
+      }
+    }
+
+    openFloors.sort((left, right) => left.$1.compareTo(right.$1));
+    final firstAllowedIndex = max(
+      0,
+      openFloors.length - maxRandomDepositSpawnFloors,
+    );
+    return [
+      for (final floor in openFloors.skip(firstAllowedIndex))
+        if (_floorHasMineral(floor.$1)) (floor.$2, floor.$3),
+    ];
+  }
+
+  static ResourceDefinition? _weightedMineralAtFloor(
+    int absoluteFloor,
+    Random random,
+  ) {
+    if (absoluteFloor < 0 || absoluteFloor >= MrMineLevelTable.rows.length) {
+      return null;
+    }
+    final candidates = <(ResourceDefinition, double)>[];
+    for (final entry in MrMineLevelTable.rows[absoluteFloor].entries) {
+      final resource = ResourceCatalog.byId[entry.key];
+      if (resource?.kind == ResourceKind.mineral && entry.value > 0) {
+        candidates.add((resource!, entry.value));
+      }
+    }
+    if (candidates.isEmpty) return null;
+
+    final totalWeight = candidates.fold<double>(
+      0,
+      (total, candidate) => total + candidate.$2,
+    );
+    var roll = random.nextDouble() * totalWeight;
+    for (final candidate in candidates) {
+      roll -= candidate.$2;
+      if (roll < 0) return candidate.$1;
+    }
+    return candidates.last.$1;
+  }
+
+  static bool _floorHasMineral(int absoluteFloor) =>
+      absoluteFloor >= 0 &&
+      absoluteFloor < MrMineLevelTable.rows.length &&
+      MrMineLevelTable.rows[absoluteFloor].entries.any((entry) {
+        final resource = ResourceCatalog.byId[entry.key];
+        return entry.value > 0 && resource?.kind == ResourceKind.mineral;
+      });
 
   static Map<String, double> _expectedOpenShaftRates(GameState state) {
     final rates = <String, double>{};
@@ -1962,6 +2095,17 @@ abstract final class GameEngine {
         recordDailyProgress(state, 'depth', metersAdvanced, now: currentTime);
       }
       state.deepestMeters = max(state.deepestMeters, state.depthMeters);
+      if (allowRandomEvents) {
+        if (state.oreDepositSpawnProgressSeconds <
+            timedOreDepositIntervalSeconds) {
+          state.oreDepositSpawnProgressSeconds++;
+        }
+        if (state.oreDepositSpawnProgressSeconds >=
+                timedOreDepositIntervalSeconds &&
+            _spawnTimedMineDeposit(state, random)) {
+          state.oreDepositSpawnProgressSeconds = 0;
+        }
+      }
       if (state.guidedProgression &&
           !state.initialTutorialComplete &&
           state.tutorialStep == 4 &&
@@ -1999,9 +2143,7 @@ abstract final class GameEngine {
           events.add('Otomatik satış +$revenue kasa');
         }
       }
-      if ((!state.guidedProgression ||
-              state.initialTutorialComplete ||
-              state.debugModeEnabled) &&
+      if ((!state.guidedProgression || state.initialTutorialComplete) &&
           producedThisSecond > 0 &&
           random.nextInt(
                 max(
@@ -2020,7 +2162,7 @@ abstract final class GameEngine {
       _advanceReactor(state, events);
       _advanceBuffLab(state, events);
       _advanceOilPump(state);
-      if (state.crusherRepaired) _advanceCrusher(state);
+      if (state.crusherRepaired) _advanceCrusher(state, random);
       if (state.unlockedBuildings.contains('chest_collector') &&
           state.miningSeconds % 1800 == 0) {
         if (state.collectorStoredChests < state.chestCollectorCapacity) {
@@ -2036,9 +2178,7 @@ abstract final class GameEngine {
       _advanceGemCrafting(state, events);
       _unlockMilestones(state, events);
       if (allowRandomEvents &&
-          (!state.guidedProgression ||
-              state.initialTutorialComplete ||
-              state.debugModeEnabled) &&
+          (!state.guidedProgression || state.initialTutorialComplete) &&
           state.activeMineEventId == null &&
           state.miningSeconds >= state.nextMineEventAtSeconds) {
         final event =
@@ -2328,33 +2468,6 @@ abstract final class GameEngine {
     return true;
   }
 
-  static void debugJumpToEnd(GameState state) {
-    final finalDepth = MrMineLevelTable.rows.length * mineFloorMeters - 1.0;
-    state.storeActiveWorldSnapshot();
-    state
-      ..deepestMeters = finalDepth
-      ..activeWorldIndex = 2
-      ..depthMeters = finalDepth
-      ..tutorialStep = max(state.tutorialStep, 5);
-    state.worldDepths
-      ..['0'] = MrMineProgression.earthEndMeters - 1
-      ..['1'] = MrMineProgression.moonEndMeters - 1
-      ..['2'] = finalDepth;
-    state.worldPressures.putIfAbsent('0', () => 14);
-    state.worldPressures.putIfAbsent('1', () => 14);
-    state.worldPressures.putIfAbsent('2', () => 14);
-    state.pressure = state.worldPressures['2']!;
-    state.worldMinerCounts.putIfAbsent('2', () => 1);
-    state.worldWorkerLevels.putIfAbsent('2', () => 0);
-    state.crewCount = state.worldMinerCounts['2']!;
-    state.upgrades['workers'] = state.worldWorkerLevels['2']!;
-    state.unlockedBuildings.addAll(milestoneBuildings.values);
-    state.discoveredEncounters.addAll(
-      hiddenEncounters.values.map((encounter) => encounter.$1),
-    );
-    ensureOpenMineDeposits(state);
-  }
-
   static bool tapOre(GameState state, String resourceId, {DateTime? now}) {
     ensureOpenMineDeposits(state);
     final worldIndex = state.activeWorldIndex;
@@ -2424,7 +2537,6 @@ abstract final class GameEngine {
   static bool buyUpgrade(GameState state, String track) {
     if (track == 'drill' && state.activeMinerCount == 0) return false;
     if (state.guidedProgression &&
-        !state.debugModeEnabled &&
         !state.initialTutorialComplete &&
         state.tutorialStep < 3) {
       return false;
@@ -2511,7 +2623,6 @@ abstract final class GameEngine {
 
   static bool hireMiner(GameState state) {
     if (state.guidedProgression &&
-        !state.debugModeEnabled &&
         !state.initialTutorialComplete &&
         state.tutorialStep != 2) {
       return false;
@@ -3841,9 +3952,7 @@ abstract final class GameEngine {
   }
 
   static void _unlockMilestones(GameState state, List<String> events) {
-    if (state.guidedProgression &&
-        !state.debugModeEnabled &&
-        !state.initialTutorialComplete) {
+    if (state.guidedProgression && !state.initialTutorialComplete) {
       return;
     }
     if (state.deepestMeters >= 1032000) {
@@ -3865,7 +3974,6 @@ abstract final class GameEngine {
       final depth = double.parse(entry.key);
       final guideAcknowledged =
           !state.guidedProgression ||
-          state.debugModeEnabled ||
           state.completedAdvisorGuideIds.contains(entry.value);
       if (state.deepestMeters >= depth &&
           guideAcknowledged &&
@@ -3964,7 +4072,7 @@ abstract final class GameEngine {
     }
   }
 
-  static void _advanceCrusher(GameState state) {
+  static void _advanceCrusher(GameState state, Random random) {
     if (!state.crusherRepaired) {
       return; // Onarılmadan veya kilitliyken kırıcı çalışmaz
     }
@@ -3983,12 +4091,11 @@ abstract final class GameEngine {
       4.5,
     );
 
-    // Başlangıçta merdane yavaş çalışır; hız ve güç yükseltmeleri kapasiteyi
-    // anlamlı biçimde artırır. 7 km civarında başlangıç seviyesi saniyede bir
-    // kaya işler.
+    // Keep the starter line deliberate while giving the repaired 7 km station
+    // a small throughput bump. Speed and power upgrades continue to scale it.
     final crushRatePerSec = max(
       1,
-      ((speedLvl * 0.5 + powerLvl * 0.35) * depthRateBonus).round(),
+      ((speedLvl * 0.8 + powerLvl * 0.65) * depthRateBonus).round(),
     );
     final startupBatchSize = max(1, 6 - speedLvl - powerLvl);
     final yieldMultiplier =
@@ -4000,7 +4107,7 @@ abstract final class GameEngine {
     // Taşları önce haznede biriktir. Gerekli eşiğe varana kadar ana maden
     // hattından gelen kayalar haznede kalır.
     if (!state.crusherHopperFull) {
-      final oreId = _pickCrusherOreForDepth(depthKm, state.crusherLevel);
+      final oreId = GameState.pickCrusherMaterialAtDepth(depthMeters, random);
       final freeHopperSpace = max(
         0,
         state.crusherHopperCapacity - state.totalRawOreCount,
@@ -4027,54 +4134,6 @@ abstract final class GameEngine {
         remainingToCrush -= toProcess;
       }
     }
-  }
-
-  static String _pickCrusherOreForDepth(double depthKm, int crusherLevel) {
-    final rand = Random();
-    if (depthKm >= 120.0 || crusherLevel >= 40) {
-      final roll = rand.nextDouble();
-      if (roll < 0.40) return 'painite';
-      if (roll < 0.70) return 'coltan';
-      if (roll < 0.90) return 'diamond';
-      return 'platinum';
-    }
-    if (depthKm >= 80.0 || crusherLevel >= 30) {
-      final roll = rand.nextDouble();
-      if (roll < 0.40) return 'coltan';
-      if (roll < 0.70) return 'diamond';
-      if (roll < 0.90) return 'platinum';
-      return 'gold';
-    }
-    if (depthKm >= 40.0 || crusherLevel >= 22) {
-      final roll = rand.nextDouble();
-      if (roll < 0.45) return 'diamond';
-      if (roll < 0.75) return 'platinum';
-      if (roll < 0.92) return 'gold';
-      return 'silver';
-    }
-    if (depthKm >= 20.0 || crusherLevel >= 16) {
-      final roll = rand.nextDouble();
-      if (roll < 0.45) return 'platinum';
-      if (roll < 0.75) return 'gold';
-      if (roll < 0.92) return 'silver';
-      return 'copper';
-    }
-    if (depthKm >= 8.0 || crusherLevel >= 10) {
-      final roll = rand.nextDouble();
-      if (roll < 0.50) return 'gold';
-      if (roll < 0.80) return 'silver';
-      return 'copper';
-    }
-    if (depthKm >= 3.0 || crusherLevel >= 5) {
-      final roll = rand.nextDouble();
-      if (roll < 0.55) return 'silver';
-      if (roll < 0.85) return 'copper';
-      return 'coal';
-    }
-    if (depthKm >= 0.5 || crusherLevel >= 2) {
-      return rand.nextDouble() < 0.65 ? 'copper' : 'coal';
-    }
-    return 'coal';
   }
 
   static void _advanceReactor(GameState state, List<String> events) {

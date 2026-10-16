@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/design/palette.dart';
+import '../../crusher/localization.dart';
+import '../../services/sound_service.dart';
 
 class OpeningComicOverlay extends StatefulWidget {
   const OpeningComicOverlay({super.key, required this.onFinish});
@@ -182,7 +184,8 @@ class _OpeningComicOverlayState extends State<OpeningComicOverlay> {
         _buildPanel(
           panelWidth,
           frameIndex: _frameIndex,
-          semanticLabel: '${beat.title}. ${beat.caption}',
+          semanticLabel:
+              '${context.gameText(beat.title)}. ${context.gameText(beat.caption)}',
           motionKey: 'story-$_frameIndex',
         ),
         const SizedBox(height: 14),
@@ -203,7 +206,7 @@ class _OpeningComicOverlayState extends State<OpeningComicOverlay> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    beat.title,
+                    context.gameText(beat.title),
                     style: const TextStyle(
                       color: MinePalette.amber,
                       fontSize: 10,
@@ -213,7 +216,7 @@ class _OpeningComicOverlayState extends State<OpeningComicOverlay> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    beat.caption,
+                    context.gameText(beat.caption),
                     style: const TextStyle(
                       color: MinePalette.cream,
                       fontSize: 16,
@@ -237,8 +240,9 @@ class _OpeningComicOverlayState extends State<OpeningComicOverlay> {
       _buildPanel(
         panelWidth,
         frameIndex: _beats.length - 1,
-        semanticLabel:
-            'Vardiya başlangıcı. Kuyunun verdiği cevabın peşine düş.',
+        semanticLabel: context.gameText(
+          'Vardiya başlangıcı. Kuyunun verdiği cevabın peşine düş.',
+        ),
         motionKey: 'start-page',
       ),
       const SizedBox(height: 14),
@@ -254,8 +258,8 @@ class _OpeningComicOverlayState extends State<OpeningComicOverlay> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'VARDİYA 01  •  5.000 M',
+              Text(
+                context.gameText('VARDİYA 01  •  5.000 M'),
                 style: TextStyle(
                   color: MinePalette.amber,
                   fontSize: 10,
@@ -264,8 +268,8 @@ class _OpeningComicOverlayState extends State<OpeningComicOverlay> {
                 ),
               ),
               const SizedBox(height: 7),
-              const Text(
-                'Önce yükü çıkar. Sonra defterdeki notu çöz.',
+              Text(
+                context.gameText('Önce yükü çıkar. Sonra defterdeki notu çöz.'),
                 style: TextStyle(
                   color: MinePalette.cream,
                   fontSize: 20,
@@ -274,8 +278,10 @@ class _OpeningComicOverlayState extends State<OpeningComicOverlay> {
                 ),
               ),
               const SizedBox(height: 7),
-              const Text(
-                'İlk kömürü çıkar, kargoyu yüzeye ulaştır ve kazancını matkabı geliştirmek için kullan. Rehber drone darbelerin izini kat kat takip edecek.',
+              Text(
+                context.gameText(
+                  'İlk kömürü çıkar, kargoyu yüzeye ulaştır ve kazancını matkabı geliştirmek için kullan. Rehber drone darbelerin izini kat kat takip edecek.',
+                ),
                 style: TextStyle(
                   color: MinePalette.muted,
                   fontSize: 14,
@@ -295,7 +301,9 @@ class _OpeningComicOverlayState extends State<OpeningComicOverlay> {
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      'Asansör defterindeki not: “Dönüşte yükü almayın.”',
+                      context.gameText(
+                        'Asansör defterindeki not: “Dönüşte yükü almayın.”',
+                      ),
                       style: TextStyle(
                         color: MinePalette.cream.withValues(alpha: .88),
                         fontSize: 12,
@@ -375,8 +383,8 @@ class _OpeningComicOverlayState extends State<OpeningComicOverlay> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'KUYU DEFTERİ',
+              Text(
+                context.gameText('KUYU DEFTERİ'),
                 style: TextStyle(
                   color: MinePalette.cream,
                   fontSize: 15,
@@ -386,8 +394,14 @@ class _OpeningComicOverlayState extends State<OpeningComicOverlay> {
               ),
               Text(
                 _showStartPage
-                    ? 'VARDİYA BAŞLANGICI'
-                    : 'KUYU GÜNLÜĞÜ • SAHNE ${_frameIndex + 1} / ${_beats.length}',
+                    ? context.gameText('VARDİYA BAŞLANGICI')
+                    : context.gameText(
+                        'KUYU GÜNLÜĞÜ • SAHNE {scene} / {total}',
+                        values: {
+                          'scene': _frameIndex + 1,
+                          'total': _beats.length,
+                        },
+                      ),
                 style: const TextStyle(
                   color: MinePalette.muted,
                   fontSize: 9,
@@ -400,9 +414,9 @@ class _OpeningComicOverlayState extends State<OpeningComicOverlay> {
         ),
         if (!_showStartPage)
           TextButton.icon(
-            onPressed: _openStartPage,
+            onPressed: withButtonTapSound(_openStartPage),
             icon: const Icon(Icons.skip_next_rounded, size: 18),
-            label: const Text('ÖYKÜYÜ GEÇ'),
+            label: Text(context.gameText('ÖYKÜYÜ GEÇ')),
             style: TextButton.styleFrom(
               foregroundColor: MinePalette.cream,
               visualDensity: VisualDensity.compact,
@@ -467,7 +481,7 @@ class _OpeningComicOverlayState extends State<OpeningComicOverlay> {
                   width: 104,
                   height: 48,
                   child: OutlinedButton.icon(
-                    onPressed: canGoBack ? _goBack : null,
+                    onPressed: withButtonTapSound(canGoBack ? _goBack : null),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: MinePalette.cream,
                       side: const BorderSide(color: MinePalette.border),
@@ -476,7 +490,7 @@ class _OpeningComicOverlayState extends State<OpeningComicOverlay> {
                       ),
                     ),
                     icon: const Icon(Icons.arrow_back_rounded, size: 17),
-                    label: const Text('GERİ'),
+                    label: Text(context.gameText('GERİ')),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -484,11 +498,13 @@ class _OpeningComicOverlayState extends State<OpeningComicOverlay> {
                   child: SizedBox(
                     height: 48,
                     child: FilledButton.icon(
-                      onPressed: _showStartPage
-                          ? _finish
-                          : isLastStoryScene
-                          ? _openStartPage
-                          : _advance,
+                      onPressed: withButtonTapSound(
+                        _showStartPage
+                            ? _finish
+                            : isLastStoryScene
+                            ? _openStartPage
+                            : _advance,
+                      ),
                       style: FilledButton.styleFrom(
                         backgroundColor: MinePalette.amber,
                         foregroundColor: MinePalette.ink,
@@ -503,10 +519,10 @@ class _OpeningComicOverlayState extends State<OpeningComicOverlay> {
                       ),
                       label: Text(
                         _showStartPage
-                            ? 'MACERAYA BAŞLA'
+                            ? context.gameText('MACERAYA BAŞLA')
                             : isLastStoryScene
-                            ? 'VARDİYAYI DEVRAL'
-                            : 'SONRAKİ SAHNE',
+                            ? context.gameText('VARDİYAYI DEVRAL')
+                            : context.gameText('SONRAKİ SAHNE'),
                         style: const TextStyle(fontWeight: FontWeight.w900),
                       ),
                     ),

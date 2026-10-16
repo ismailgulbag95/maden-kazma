@@ -10,6 +10,7 @@ import 'crusher_scene_host_stub.dart'
     as scene_host;
 import 'crusher_engine.dart';
 import 'localization.dart';
+import '../services/sound_service.dart';
 
 class CrusherScene extends StatefulWidget {
   const CrusherScene({super.key, required this.game, this.compact = false});
@@ -36,7 +37,7 @@ class _CrusherSceneState extends State<CrusherScene> {
     if (rockId == null) return;
     game.manualPress(rockId: rockId);
     if (!kIsWeb && game.hapticsEnabled) HapticFeedback.lightImpact();
-    if (!kIsWeb && game.soundEnabled) SystemSound.play(SystemSoundType.click);
+    if (game.soundEnabled) unawaited(SoundService.instance.playButtonTap());
     _holdTimer?.cancel();
     _holdTimer = Timer.periodic(
       const Duration(milliseconds: 180),
@@ -62,123 +63,158 @@ class _CrusherSceneState extends State<CrusherScene> {
             game: game,
             onPointer: _onSceneMessage,
           ),
-          Positioned(
-            top: compact ? 8 : 14,
-            left: compact ? 8 : 15,
-            child: _GlassLabel(
-              icon: Icons.settings_input_component_rounded,
-              label: gameText(
-                game.language,
-                compact ? 'machineShort' : 'machine',
-              ),
-            ),
-          ),
-          if (game.isHalted)
-            Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                decoration: BoxDecoration(
-                  color: const Color(0xeb1f0a0a),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xffff4444), width: 1.5),
-                  boxShadow: const [
-                    BoxShadow(color: Colors.black87, blurRadius: 18, offset: Offset(0, 4)),
-                  ],
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.pause_circle_filled_rounded, color: Color(0xffff5555), size: 24),
-                    SizedBox(width: 10),
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'AMBAR DOLU',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1.0,
-                            color: Color(0xffffdddd),
-                          ),
-                        ),
-                        Text(
-                          'Kırıcı durduruldu · Satış yapın',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xffffaaaa),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          if (!compact)
-            Positioned(
-              bottom: 14,
-              right: 15,
-              child: _AutoBadge(rpm: game.rpm, language: game.language),
-            ),
-          Positioned(
-            top: compact ? 45 : 56,
-            left: compact ? 8 : 15,
-            child: _GlassLabel(
-              icon: game.specialRockActive
-                  ? Icons.auto_awesome_rounded
-                  : Icons.diamond_outlined,
-              label: game.specialRockActive
-                  ? gameText(game.language, 'specialStone')
-                  : '${gameText(game.language, 'currentOre')}: ${gameText(game.language, game.currentMaterial.id).toUpperCase()} ',
-              accent: game.specialRockActive
-                  ? const Color(0xffffd46a)
-                  : game.currentMaterial.glow,
-            ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: compact ? 8 : 13,
-            child: Center(
-              child: _TouchHint(language: game.language, compact: compact),
-            ),
-          ),
-          if (game.messageLife > 0 && game.messageKey != null)
-            Positioned(
-              left: 0,
-              right: 0,
-              top: 0,
-              bottom: 0,
-              child: IgnorePointer(
-                child: Center(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 180),
-                    child: _GamePopup(
-                      key: ValueKey(game.messageId),
-                      game: game,
-                    ),
-                  ),
-                ),
-              ),
-            ),
+          CrusherSceneHud(game: game, compact: compact),
         ],
       ),
     );
   }
 }
 
+class CrusherSceneHud extends StatelessWidget {
+  const CrusherSceneHud({super.key, required this.game, this.compact = false});
+
+  final CrusherGame game;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final language = game.language;
+    final mostValuableOre = game.mostValuableRawOre;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (game.isHalted)
+          Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xeb1f0a0a),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xffff4444), width: 1.5),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Colors.black87,
+                    blurRadius: 18,
+                    offset: Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.pause_circle_filled_rounded,
+                    color: Color(0xffff5555),
+                    size: 24,
+                  ),
+                  const SizedBox(width: 10),
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        gameText(language, 'AMBAR DOLU'),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.0,
+                          color: Color(0xffffdddd),
+                        ),
+                      ),
+                      Text(
+                        gameText(language, 'Kırıcı durduruldu · Satış yapın'),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xffffaaaa),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        Positioned(
+          top: 8,
+          left: 8,
+          right: 8,
+          child: _GlassLabel(
+            icon: Icons.diamond_outlined,
+            label:
+                '${gameText(game.language, 'mostValuableOre')}: '
+                '${mostValuableOre == null ? gameText(language, 'noOre') : gameUppercase(language, gameText(language, mostValuableOre.id))}',
+            accent: mostValuableOre?.glow ?? const Color(0xffcbd5e1),
+            compact: compact,
+          ),
+        ),
+        Positioned(
+          left: 8,
+          right: 8,
+          bottom: 8,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final tight = compact || constraints.maxWidth < 380;
+              return Row(
+                children: [
+                  Expanded(
+                    child: _TouchHint(language: language, compact: tight),
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    fit: FlexFit.loose,
+                    child: _AutoBadge(
+                      rpm: game.rpm,
+                      language: language,
+                      compact: tight,
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+        if (game.messageLife > 0 && game.messageKey != null)
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            bottom: 0,
+            child: IgnorePointer(
+              child: Center(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 180),
+                  child: CrusherPopup(
+                    key: ValueKey(game.messageId),
+                    game: game,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 class _GlassLabel extends StatelessWidget {
-  const _GlassLabel({required this.icon, required this.label, this.accent});
+  const _GlassLabel({
+    required this.icon,
+    required this.label,
+    this.accent,
+    this.compact = false,
+  });
   final IconData icon;
   final String label;
   final Color? accent;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+    padding: EdgeInsets.symmetric(
+      horizontal: compact ? 8 : 11,
+      vertical: compact ? 6 : 8,
+    ),
     decoration: BoxDecoration(
       color: const Color(0xd9141c28),
       border: Border.all(color: Colors.white.withValues(alpha: .1)),
@@ -189,15 +225,17 @@ class _GlassLabel extends StatelessWidget {
       children: [
         Icon(icon, size: 14, color: accent ?? const Color(0xffcced78)),
         const SizedBox(width: 7),
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: Color(0xffdce3ec),
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-            letterSpacing: .65,
+        Flexible(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: const Color(0xffdce3ec),
+              fontSize: compact ? 9 : 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: compact ? .15 : .65,
+            ),
           ),
         ),
       ],
@@ -206,13 +244,21 @@ class _GlassLabel extends StatelessWidget {
 }
 
 class _AutoBadge extends StatelessWidget {
-  const _AutoBadge({required this.rpm, required this.language});
+  const _AutoBadge({
+    required this.rpm,
+    required this.language,
+    this.compact = false,
+  });
   final int rpm;
   final String language;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+    padding: EdgeInsets.symmetric(
+      horizontal: compact ? 7 : 10,
+      vertical: compact ? 6 : 7,
+    ),
     decoration: BoxDecoration(
       color: const Color(0xd9141c28),
       border: Border.all(color: const Color(0xffc7ed6f).withValues(alpha: .28)),
@@ -221,32 +267,18 @@ class _AutoBadge extends StatelessWidget {
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          width: 6,
-          height: 6,
-          decoration: const BoxDecoration(
-            color: Color(0xffc7ed6f),
-            shape: BoxShape.circle,
-            boxShadow: [BoxShadow(color: Color(0xffc7ed6f), blurRadius: 7)],
-          ),
-        ),
-        const SizedBox(width: 7),
-        Text(
-          gameText(language, 'automatic'),
-          style: const TextStyle(
-            color: Color(0xffd8e4ba),
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-            letterSpacing: .8,
-          ),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          '$rpm ${gameText(language, 'rpmUnit')}',
-          style: const TextStyle(
-            color: Color(0xff8e9aab),
-            fontSize: 11,
-            fontFamily: 'monospace',
+        Flexible(
+          child: Text(
+            gameText(language, 'crusherRpm', {'rpm': rpm}),
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: const Color(0xffd8e4ba),
+              fontSize: compact ? 9 : 11,
+              fontWeight: FontWeight.w800,
+              fontFamily: 'monospace',
+            ),
           ),
         ),
       ],
@@ -261,8 +293,10 @@ class _TouchHint extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-    constraints: BoxConstraints(maxWidth: compact ? 310 : double.infinity),
+    padding: EdgeInsets.symmetric(
+      horizontal: compact ? 8 : 13,
+      vertical: compact ? 6 : 8,
+    ),
     decoration: BoxDecoration(
       color: const Color(0xcd121a25),
       border: Border.all(color: Colors.white.withValues(alpha: .12)),
@@ -273,20 +307,20 @@ class _TouchHint extends StatelessWidget {
       children: [
         Icon(
           Icons.touch_app_rounded,
-          size: compact ? 13 : 14,
+          size: compact ? 12 : 14,
           color: const Color(0xffc8ef70),
         ),
-        const SizedBox(width: 7),
+        SizedBox(width: compact ? 4 : 7),
         Flexible(
           child: Text(
             gameText(language, 'tap'),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
+            style: TextStyle(
               color: Color(0xffe3e9ef),
-              fontSize: 11,
+              fontSize: compact ? 9 : 11,
               fontWeight: FontWeight.w800,
-              letterSpacing: .5,
+              letterSpacing: compact ? .1 : .5,
             ),
           ),
         ),
@@ -295,16 +329,16 @@ class _TouchHint extends StatelessWidget {
   );
 }
 
-class _GamePopup extends StatelessWidget {
-  const _GamePopup({super.key, required this.game});
+class CrusherPopup extends StatelessWidget {
+  const CrusherPopup({super.key, required this.game});
   final CrusherGame game;
 
   @override
   Widget build(BuildContext context) {
     final key = game.messageKey!;
+    if (key == 'crushed') return const SizedBox.shrink();
     final text = switch (key) {
-      'crushed' => '+${game.messageAmount} Ambara Eklendi',
-      'cargoFull' => 'AMBAR DOLU! KIRICI DURDU',
+      'cargoFull' => gameText(game.language, 'AMBAR DOLU! KIRICI DURDU'),
       'newLevel' => '${gameText(game.language, key)}  ${game.messageAmount}',
       'missionDone' =>
         '${gameText(game.language, key)}  +${game.messageAmount} ◉',
@@ -318,7 +352,6 @@ class _GamePopup extends StatelessWidget {
     };
     final positive = key != 'notEnough' && key != 'cargoFull';
     return Container(
-      key: key == 'crushed' ? ValueKey('${game.messageId}-coin') : null,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
         color: const Color(0xe816202d),

@@ -3,6 +3,9 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'support/localized_test_app.dart';
+
 import 'package:tasin_alti/app/game_controller.dart';
 import 'package:tasin_alti/data/save_store.dart';
 import 'package:tasin_alti/domain/models/game_state.dart';
@@ -1232,6 +1235,9 @@ void main() {
     addTearDown(controller.dispose);
     await tester.pumpWidget(
       MaterialApp(
+        locale: const Locale('tr'),
+        supportedLocales: testSupportedLocales,
+        localizationsDelegates: testLocalizationDelegates,
         home: Scaffold(
           body: BuildingDialog(
             controller: controller,
@@ -1274,6 +1280,9 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
+        locale: const Locale('tr'),
+        supportedLocales: testSupportedLocales,
+        localizationsDelegates: testLocalizationDelegates,
         home: Scaffold(
           body: BuildingDialog(controller: controller, buildingId: 'research'),
         ),
@@ -1308,6 +1317,9 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
+        locale: const Locale('tr'),
+        supportedLocales: testSupportedLocales,
+        localizationsDelegates: testLocalizationDelegates,
         home: Scaffold(
           body: BuildingDialog(controller: controller, buildingId: 'workshop'),
         ),
@@ -1333,6 +1345,9 @@ void main() {
         addTearDown(controller.dispose);
         await tester.pumpWidget(
           MaterialApp(
+            locale: const Locale('tr'),
+            supportedLocales: testSupportedLocales,
+            localizationsDelegates: testLocalizationDelegates,
             home: Scaffold(
               body: BuildingDialog(
                 controller: controller,
@@ -1368,6 +1383,9 @@ void main() {
         addTearDown(controller.dispose);
         await tester.pumpWidget(
           MaterialApp(
+            locale: const Locale('tr'),
+            supportedLocales: testSupportedLocales,
+            localizationsDelegates: testLocalizationDelegates,
             home: Scaffold(
               body: BuildingDialog(
                 controller: controller,
@@ -1398,7 +1416,12 @@ void main() {
         controller.state.activeMineEventId = 'merchant';
         addTearDown(controller.dispose);
         await tester.pumpWidget(
-          MaterialApp(home: GameScreen(controller: controller)),
+          MaterialApp(
+            locale: const Locale('tr'),
+            supportedLocales: testSupportedLocales,
+            localizationsDelegates: testLocalizationDelegates,
+            home: GameScreen(controller: controller),
+          ),
         );
         await tester.pump(const Duration(milliseconds: 250));
 
@@ -1448,7 +1471,12 @@ void main() {
 
       final controller = _readyController(state: GameState());
       await tester.pumpWidget(
-        MaterialApp(home: GameScreen(controller: controller)),
+        MaterialApp(
+          locale: const Locale('tr'),
+          supportedLocales: testSupportedLocales,
+          localizationsDelegates: testLocalizationDelegates,
+          home: GameScreen(controller: controller),
+        ),
       );
       await tester.pump(const Duration(milliseconds: 250));
 
@@ -1500,12 +1528,19 @@ void main() {
     final state = GameState.newGame(seed: 721)
       ..openingComicSeen = true
       ..depthMeters = 7999
-      ..deepestMeters = 7999;
+      ..deepestMeters = 7999
+      ..crewCount = 2
+      ..worldMinerCounts['0'] = 2;
     final controller = _readyController(state: state);
     addTearDown(controller.dispose);
 
     await tester.pumpWidget(
-      MaterialApp(home: GameScreen(controller: controller)),
+      MaterialApp(
+        locale: const Locale('tr'),
+        supportedLocales: testSupportedLocales,
+        localizationsDelegates: testLocalizationDelegates,
+        home: GameScreen(controller: controller),
+      ),
     );
     await tester.pump(const Duration(milliseconds: 250));
     expect(find.byKey(const ValueKey('crusher-station-7km-Sol')), findsNothing);
@@ -1518,18 +1553,57 @@ void main() {
     await tester.pump(const Duration(milliseconds: 250));
 
     final floor = find.byKey(const ValueKey('mine-floor-0-6'));
+    final stationBackground = find.byKey(
+      const ValueKey('mine-crusher-station-background'),
+    );
     final leftStation = find.byKey(const ValueKey('crusher-station-7km-Sol'));
     final rightStation = find.byKey(const ValueKey('crusher-station-7km-Sağ'));
+    expect(stationBackground, findsOneWidget);
     expect(leftStation, findsOneWidget);
     expect(rightStation, findsOneWidget);
+
+    final stationWorkers = find.descendant(
+      of: floor,
+      matching: find.byWidgetPredicate((widget) {
+        final key = widget.key;
+        return key is ValueKey<String> &&
+            key.value.startsWith('mine-worker-6-');
+      }),
+    );
+    expect(stationWorkers, findsNothing);
+
+    final oldRubbleAssets = find.descendant(
+      of: floor,
+      matching: find.byWidgetPredicate((widget) {
+        if (widget is! Image || widget.image is! AssetImage) return false;
+        return (widget.image as AssetImage).assetName.endsWith(
+          'mine-dug-ground-cap.png',
+        );
+      }),
+    );
+    expect(oldRubbleAssets, findsNothing);
 
     final floorRect = tester.getRect(floor);
     final leftRect = tester.getRect(leftStation);
     final rightRect = tester.getRect(rightStation);
-    expect(leftRect.bottom, closeTo(floorRect.bottom, .01));
-    expect(rightRect.bottom, closeTo(floorRect.bottom, .01));
+    expect(leftRect.top, greaterThanOrEqualTo(floorRect.top));
+    expect(rightRect.top, greaterThanOrEqualTo(floorRect.top));
+    expect(leftRect.bottom, lessThanOrEqualTo(floorRect.bottom));
+    expect(rightRect.bottom, lessThanOrEqualTo(floorRect.bottom));
     expect(leftRect.center.dx, lessThan(floorRect.center.dx));
     expect(rightRect.center.dx, greaterThan(floorRect.center.dx));
+
+    state
+      ..depthMeters = 9000
+      ..deepestMeters = 9000;
+    controller.notifyListeners();
+    await tester.pump();
+    for (var frame = 0; frame < 15; frame++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.byKey(const ValueKey('deep-drill-rig-9')), findsOneWidget);
+    expect(stationBackground, findsOneWidget);
+    expect(stationWorkers, findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -1569,7 +1643,12 @@ void main() {
           });
     addTearDown(controller.dispose);
     await tester.pumpWidget(
-      MaterialApp(home: GameScreen(controller: controller)),
+      MaterialApp(
+        locale: const Locale('tr'),
+        supportedLocales: testSupportedLocales,
+        localizationsDelegates: testLocalizationDelegates,
+        home: GameScreen(controller: controller),
+      ),
     );
     await tester.pump(const Duration(milliseconds: 300));
 
@@ -1658,7 +1737,12 @@ void main() {
       final controller = _readyController(state: state);
 
       await tester.pumpWidget(
-        MaterialApp(home: GameScreen(controller: controller)),
+        MaterialApp(
+          locale: const Locale('tr'),
+          supportedLocales: testSupportedLocales,
+          localizationsDelegates: testLocalizationDelegates,
+          home: GameScreen(controller: controller),
+        ),
       );
       await tester.pump(const Duration(milliseconds: 250));
 
@@ -1742,7 +1826,12 @@ void main() {
     expect(controller.state.coins.toDouble(), 0);
     expect(controller.state.crewCount, 0);
     await tester.pumpWidget(
-      MaterialApp(home: GameScreen(controller: controller)),
+      MaterialApp(
+        locale: const Locale('tr'),
+        supportedLocales: testSupportedLocales,
+        localizationsDelegates: testLocalizationDelegates,
+        home: GameScreen(controller: controller),
+      ),
     );
     await tester.pump(const Duration(milliseconds: 250));
 
@@ -1775,7 +1864,12 @@ void main() {
     controller.state.depthMeters =
         (deposit.floorIndex * GameEngine.mineFloorMeters).toDouble();
     await tester.pumpWidget(
-      MaterialApp(home: GameScreen(controller: controller)),
+      MaterialApp(
+        locale: const Locale('tr'),
+        supportedLocales: testSupportedLocales,
+        localizationsDelegates: testLocalizationDelegates,
+        home: GameScreen(controller: controller),
+      ),
     );
     await tester.pump(const Duration(milliseconds: 250));
 
@@ -1809,7 +1903,12 @@ void main() {
 
       final controller = _readyController();
       await tester.pumpWidget(
-        MaterialApp(home: GameScreen(controller: controller)),
+        MaterialApp(
+          locale: const Locale('tr'),
+          supportedLocales: testSupportedLocales,
+          localizationsDelegates: testLocalizationDelegates,
+          home: GameScreen(controller: controller),
+        ),
       );
       await tester.pump(const Duration(milliseconds: 250));
 
@@ -1844,7 +1943,12 @@ void main() {
       expect(controller.unclaimedQuestRewardCount, 0);
 
       await tester.pumpWidget(
-        MaterialApp(home: GameScreen(controller: controller)),
+        MaterialApp(
+          locale: const Locale('tr'),
+          supportedLocales: testSupportedLocales,
+          localizationsDelegates: testLocalizationDelegates,
+          home: GameScreen(controller: controller),
+        ),
       );
       await tester.pump(const Duration(milliseconds: 250));
 

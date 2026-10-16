@@ -3,13 +3,12 @@ import 'package:flutter/services.dart';
 
 import '../../app/game_controller.dart';
 import '../../core/design/palette.dart';
+import '../../crusher/localization.dart';
 import '../../services/haptic_service.dart';
+import '../../services/sound_service.dart';
 
 class FlexCardDialog extends StatelessWidget {
-  const FlexCardDialog({
-    super.key,
-    required this.controller,
-  });
+  const FlexCardDialog({super.key, required this.controller});
 
   final GameController controller;
 
@@ -37,24 +36,33 @@ class FlexCardDialog extends StatelessWidget {
   String _buildShareText(BuildContext context) {
     final state = controller.state;
     final depthKm = (state.deepestMeters / 1000).toStringAsFixed(1);
-    final title = _getPlayerTitle(state.deepestMeters);
-    final world = _getWorldName(state.currentWorldIndex);
+    final title = context.gameText(_getPlayerTitle(state.deepestMeters));
+    final world = context.gameText(_getWorldName(state.currentWorldIndex));
 
-    return '⛏️ TAŞIN ALTI — KEŞİF KARNESİ\n'
-        '🎖️ Unvan: $title\n'
-        '📍 Konum: $world\n'
-        '📏 En Derin Nokta: $depthKm km\n'
-        '📦 Toplam Çıkarılan: ${state.totalMined} cevher\n'
-        '💎 Kasa: ${state.coins.toDisplayString()}\n\n'
-        'Yerin altındaki gizemi çözebilir misin? #TasinAlti #MobileGaming';
+    return context.gameText(
+      '⛏️ TAŞIN ALTI — KEŞİF KARNESİ\n'
+      '🎖️ Unvan: {title}\n'
+      '📍 Konum: {world}\n'
+      '📏 En Derin Nokta: {depth} km\n'
+      '📦 Toplam Çıkarılan: {mined} cevher\n'
+      '💎 Kasa: {coins}\n\n'
+      'Yerin altındaki gizemi çözebilir misin? #TasinAlti #MobileGaming',
+      values: {
+        'title': title,
+        'world': world,
+        'depth': depthKm,
+        'mined': state.totalMined,
+        'coins': state.coins.toDisplayString(),
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final state = controller.state;
     final depthKm = (state.deepestMeters / 1000).toStringAsFixed(1);
-    final title = _getPlayerTitle(state.deepestMeters);
-    final world = _getWorldName(state.currentWorldIndex);
+    final title = context.gameText(_getPlayerTitle(state.deepestMeters));
+    final world = context.gameText(_getWorldName(state.currentWorldIndex));
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -84,156 +92,165 @@ class FlexCardDialog extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 // Header Badge
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: MinePalette.amber.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: MinePalette.amber),
-                    ),
-                    child: const Text(
-                      'KEŞİF KARNESİ',
-                      style: TextStyle(
-                        color: MinePalette.amber,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 1,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: MinePalette.amber.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: MinePalette.amber),
+                      ),
+                      child: Text(
+                        context.gameText('KEŞİF KARNESİ'),
+                        style: TextStyle(
+                          color: MinePalette.amber,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1,
+                        ),
                       ),
                     ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded, color: MinePalette.cream),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-
-              // Title & Avatar icon
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: const Color(0xFF1B4052),
-                  border: Border.all(color: MinePalette.cyan, width: 2),
-                ),
-                child: const Icon(
-                  Icons.military_tech_rounded,
-                  color: MinePalette.amber,
-                  size: 38,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: MinePalette.cream,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                world,
-                style: const TextStyle(
-                  color: MinePalette.cyan,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 18),
-
-              // Stats Grid
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.35),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: MinePalette.border),
-                ),
-                child: Column(
-                  children: [
-                    _FlexStatRow(
-                      label: 'En Derin Nokta',
-                      value: '$depthKm km',
-                      icon: Icons.south_rounded,
-                      color: const Color(0xFF64FFDA),
-                    ),
-                    const Divider(color: MinePalette.border, height: 14),
-                    _FlexStatRow(
-                      label: 'Toplam Çıkarılan',
-                      value: '${state.totalMined} Cevher',
-                      icon: Icons.terrain_rounded,
-                      color: MinePalette.amber,
-                    ),
-                    const Divider(color: MinePalette.border, height: 14),
-                    _FlexStatRow(
-                      label: 'Maden Kasası',
-                      value: state.coins.toDisplayString(),
-                      icon: Icons.monetization_on_rounded,
-                      color: const Color(0xFFFFD54F),
-                    ),
-                    const Divider(color: MinePalette.border, height: 14),
-                    _FlexStatRow(
-                      label: 'Bilim Ekibi',
-                      value: '${state.scientistRoster.length} Uzman',
-                      icon: Icons.science_rounded,
-                      color: const Color(0xFF80D8FF),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: MinePalette.cream,
+                      ),
+                      onPressed: withButtonTapSound(
+                        () => Navigator.pop(context),
+                      ),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 20),
+                const SizedBox(height: 12),
 
-              // Share / Copy Button
-              SizedBox(
-                width: double.infinity,
-                height: 46,
-                child: FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: MinePalette.amber,
-                    foregroundColor: MinePalette.ink,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
+                // Title & Avatar icon
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFF1B4052),
+                    border: Border.all(color: MinePalette.cyan, width: 2),
                   ),
-                  onPressed: () {
-                    HapticService.instance.mediumImpact();
-                    final shareText = _buildShareText(context);
-                    Clipboard.setData(ClipboardData(text: shareText));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Keşif karnesi panoya kopyalandı! Arkadaşlarınla paylaşabilirsin.'),
-                        duration: Duration(seconds: 3),
+                  child: const Icon(
+                    Icons.military_tech_rounded,
+                    color: MinePalette.amber,
+                    size: 38,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: MinePalette.cream,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  world,
+                  style: const TextStyle(
+                    color: MinePalette.cyan,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 18),
+
+                // Stats Grid
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.35),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: MinePalette.border),
+                  ),
+                  child: Column(
+                    children: [
+                      _FlexStatRow(
+                        label: context.gameText('En Derin Nokta'),
+                        value: '$depthKm km',
+                        icon: Icons.south_rounded,
+                        color: const Color(0xFF64FFDA),
                       ),
-                    );
-                  },
-                  icon: const Icon(Icons.share_rounded),
-                  label: const Text(
-                    'KARNEYİ KOPYALA / PAYLAŞ',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.6,
+                      const Divider(color: MinePalette.border, height: 14),
+                      _FlexStatRow(
+                        label: context.gameText('Toplam Çıkarılan'),
+                        value: '${state.totalMined} ${context.gameText('Cevher')}',
+                        icon: Icons.terrain_rounded,
+                        color: MinePalette.amber,
+                      ),
+                      const Divider(color: MinePalette.border, height: 14),
+                      _FlexStatRow(
+                        label: context.gameText('Maden Kasası'),
+                        value: state.coins.toDisplayString(),
+                        icon: Icons.monetization_on_rounded,
+                        color: const Color(0xFFFFD54F),
+                      ),
+                      const Divider(color: MinePalette.border, height: 14),
+                      _FlexStatRow(
+                        label: context.gameText('Bilim Ekibi'),
+                        value: '${state.scientistRoster.length} ${context.gameText('Uzman')}',
+                        icon: Icons.science_rounded,
+                        color: const Color(0xFF80D8FF),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Share / Copy Button
+                SizedBox(
+                  width: double.infinity,
+                  height: 46,
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: MinePalette.amber,
+                      foregroundColor: MinePalette.ink,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    onPressed: withButtonTapSound(() {
+                      HapticService.instance.mediumImpact();
+                      final shareText = _buildShareText(context);
+                      Clipboard.setData(ClipboardData(text: shareText));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            context.gameText(
+                              'Keşif karnesi panoya kopyalandı! Arkadaşlarınla paylaşabilirsin.',
+                            ),
+                          ),
+                          duration: Duration(seconds: 3),
+                        ),
+                      );
+                    }),
+                    icon: const Icon(Icons.share_rounded),
+                    label: Text(
+                      context.gameText('KARNEYİ KOPYALA / PAYLAŞ'),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.6,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 }
 
 class _FlexStatRow extends StatelessWidget {

@@ -24,6 +24,7 @@ Map<String, Object?> crusherSceneSnapshot(CrusherGame game) => {
       .map(
         (rock) => <String, Object?>{
           'id': rock.seed,
+          'oreId': rock.material.id,
           'x': rock.x,
           'y': rock.y,
           'z': rock.z,
@@ -50,9 +51,20 @@ Map<String, Object?> crusherSceneSnapshot(CrusherGame game) => {
           'x': particle.x,
           'y': particle.y,
           'z': particle.z,
+          'vx': particle.vx,
+          'vy': particle.vy,
+          'vz': particle.vz,
           'size': particle.size,
           'life': particle.life,
+          'kind': particle.kind.name,
           'color': crusherColorHex(particle.color),
+          'rotation': particle.rotation,
+          'vRotation': particle.vRotation,
+          'isProminent': particle.isProminent,
+          'approachingRollerGap': particle.approachingRollerGap,
+          'fallingThroughRollerGap': particle.fallingThroughRollerGap,
+          'onOutputConveyor': particle.onOutputConveyor,
+          'conveyorTargetX': particle.conveyorTargetX,
         },
       )
       .toList(growable: false),

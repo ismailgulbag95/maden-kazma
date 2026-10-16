@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/game_controller.dart';
 import '../../core/design/palette.dart';
+import '../../crusher/localization.dart';
 
 class FrenzyOverlay extends StatefulWidget {
   const FrenzyOverlay({
@@ -119,7 +120,12 @@ class _FrenzyOverlayState extends State<FrenzyOverlay>
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          'ÇILGINLIK 2X  •  ${remaining.toStringAsFixed(1)}s',
+                          context.gameText(
+                            'ÇILGINLIK 2X  •  {seconds}s',
+                            values: {
+                              'seconds': remaining.toStringAsFixed(1),
+                            },
+                          ),
                           style: const TextStyle(
                             color: MinePalette.cream,
                             fontSize: 12,

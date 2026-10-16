@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../app/game_controller.dart';
 import '../domain/models/game_state.dart';
+import '../services/sound_service.dart';
 import 'crusher_engine.dart';
+import 'localization.dart';
 import 'crusher_scene.dart';
 
 class CrusherView extends StatefulWidget {
@@ -83,6 +85,7 @@ class _CrusherViewState extends State<CrusherView> {
   }
 
   PreferredSizeWidget _buildHeader(GameState state) {
+    final compact = MediaQuery.sizeOf(context).width < 560;
     return AppBar(
       backgroundColor: const Color(0xff121a24),
       elevation: 0,
@@ -92,7 +95,7 @@ class _CrusherViewState extends State<CrusherView> {
           color: Color(0xffccd7e6),
           size: 18,
         ),
-        onPressed: () => Navigator.of(context).pop(),
+        onPressed: withButtonTapSound(() => Navigator.of(context).pop()),
       ),
       title: Row(
         mainAxisSize: MainAxisSize.min,
@@ -103,31 +106,37 @@ class _CrusherViewState extends State<CrusherView> {
             size: 16,
           ),
           const SizedBox(width: 6),
-          const Text(
-            'KIRICI',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w900,
-              letterSpacing: .8,
-              color: Color(0xfff0f4f8),
-            ),
-          ),
-          const SizedBox(width: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-            decoration: BoxDecoration(
-              color: const Color(0xff223247),
-              borderRadius: BorderRadius.circular(4),
-            ),
+          Flexible(
             child: Text(
-              'LV.${_game.level}',
-              style: const TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.w800,
-                color: Color(0xffc8ef70),
+              context.gameText('KIRICI'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+                letterSpacing: .8,
+                color: Color(0xfff0f4f8),
               ),
             ),
           ),
+          if (!compact) ...[
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+              decoration: BoxDecoration(
+                color: const Color(0xff223247),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                'LV.${_game.level}',
+                style: const TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xffc8ef70),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
       actions: [
@@ -222,128 +231,9 @@ class _CrusherViewState extends State<CrusherView> {
   }
 
   Widget _buildWarehouseStatusBar(GameState state) {
-    final cargoUsed = state.cargoUsed.toInt();
-    final cargoCap = state.effectiveCargoCapacity.toInt();
-    final isFull = state.cargoFull;
-    final ratio = state.cargoRatio.clamp(0.0, 1.0);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: isFull ? const Color(0xff2a1111) : const Color(0xff141d28),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: isFull ? const Color(0xffff4444) : const Color(0xff223042),
-          width: isFull ? 1.5 : 1.0,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    isFull
-                        ? Icons.warning_amber_rounded
-                        : Icons.warehouse_rounded,
-                    size: 15,
-                    color: isFull
-                        ? const Color(0xffff6852)
-                        : const Color(0xff9cb1cc),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    isFull
-                        ? 'AMBAR DOLU (KIRICI DURDURULDU):'
-                        : 'Ambar Kapasitesi (Çıkış):',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: isFull
-                          ? const Color(0xffff8b7a)
-                          : const Color(0xffd0dbe6),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    '$cargoUsed / $cargoCap kg',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      color: isFull
-                          ? const Color(0xffff4d4d)
-                          : const Color(0xff8bc34a),
-                    ),
-                  ),
-                ],
-              ),
-              if (isFull || cargoUsed > 0)
-                InkWell(
-                  onTap: () {
-                    widget.controller.sellAll();
-                  },
-                  borderRadius: BorderRadius.circular(6),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isFull
-                          ? const Color(0xffff4444)
-                          : const Color(0xff1d402b),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                        color: isFull
-                            ? const Color(0xffff8b7a)
-                            : const Color(0xff3fa366),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.sell_rounded,
-                          size: 12,
-                          color: Colors.white,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          isFull ? 'TÜMÜNÜ SAT & ÇALIŞTIR' : 'Tümünü Sat',
-                          style: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: ratio,
-              minHeight: 6,
-              backgroundColor: const Color(0xff1d2938),
-              valueColor: AlwaysStoppedAnimation(
-                isFull
-                    ? const Color(0xffff3b30)
-                    : (ratio > 0.85
-                          ? const Color(0xffffa726)
-                          : const Color(0xff8bc34a)),
-              ),
-            ),
-          ),
-        ],
-      ),
+    return CrusherCargoStatusBar(
+      state: state,
+      onSell: widget.controller.sellAll,
     );
   }
 
@@ -374,8 +264,8 @@ class _CrusherViewState extends State<CrusherView> {
                     color: Color(0xff9cb1cc),
                   ),
                   const SizedBox(width: 6),
-                  const Text(
-                    'Kırıcı Giriş Haznesi:',
+                  Text(
+                    context.gameText('Kırıcı Giriş Haznesi:'),
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
@@ -384,7 +274,10 @@ class _CrusherViewState extends State<CrusherView> {
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    '$rawCount / $hopperCap Ham Parça',
+                    context.gameText(
+                      '{count} / {capacity} Ham Parça',
+                      values: {'count': rawCount, 'capacity': hopperCap},
+                    ),
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
@@ -396,7 +289,13 @@ class _CrusherViewState extends State<CrusherView> {
                 ],
               ),
               Text(
-                'Oto Kırma: ${(_game.speedLevel * 1.5 + _game.powerLevel * 0.8).toStringAsFixed(1)}/sn',
+                context.gameText(
+                  'Oto Kırma: {rate}/sn',
+                  values: {
+                    'rate': (_game.speedLevel * 1.5 + _game.powerLevel * 0.8)
+                        .toStringAsFixed(1),
+                  },
+                ),
                 style: const TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w600,
@@ -439,7 +338,7 @@ class _CrusherViewState extends State<CrusherView> {
                             color: const Color(0xff1a2636),
                             borderRadius: BorderRadius.circular(6),
                             border: Border.all(
-                              color: mat.color.withOpacity(.5),
+                              color: mat.color.withValues(alpha: .5),
                             ),
                           ),
                           child: Row(
@@ -455,7 +354,7 @@ class _CrusherViewState extends State<CrusherView> {
                               ),
                               const SizedBox(width: 5),
                               Text(
-                                '${mat.name}: ${entry.value}',
+                                '${context.gameText(mat.name)}: ${entry.value}',
                                 style: const TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w700,
@@ -480,10 +379,10 @@ class _CrusherViewState extends State<CrusherView> {
       child: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         children: [
-          const Padding(
+          Padding(
             padding: EdgeInsets.symmetric(horizontal: 4, vertical: 6),
             child: Text(
-              'MAKİNE & AYRIŞTIRMA GELİŞTİRMELERİ',
+              context.gameText('MAKİNE & AYRIŞTIRMA GELİŞTİRMELERİ'),
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w900,
@@ -572,9 +471,9 @@ class _CrusherViewState extends State<CrusherView> {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: color.withOpacity(.12),
+              color: color.withValues(alpha: .12),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: color.withOpacity(.3)),
+              border: Border.all(color: color.withValues(alpha: .3)),
             ),
             child: Icon(icon, color: color, size: 20),
           ),
@@ -585,12 +484,16 @@ class _CrusherViewState extends State<CrusherView> {
               children: [
                 Row(
                   children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xffedf2f7),
+                    Flexible(
+                      child: Text(
+                        context.gameText(title),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xffedf2f7),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 6),
@@ -604,7 +507,7 @@ class _CrusherViewState extends State<CrusherView> {
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
-                        'Sv. $level',
+                        context.gameText('Sv. {level}', values: {'level': level}),
                         style: TextStyle(
                           fontSize: 9,
                           fontWeight: FontWeight.w700,
@@ -616,10 +519,10 @@ class _CrusherViewState extends State<CrusherView> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  subtitle,
+                  context.gameText(subtitle),
                   style: TextStyle(
                     fontSize: 10,
-                    color: Colors.white.withOpacity(.55),
+                    color: Colors.white.withValues(alpha: .55),
                   ),
                 ),
               ],
@@ -627,7 +530,9 @@ class _CrusherViewState extends State<CrusherView> {
           ),
           const SizedBox(width: 8),
           ElevatedButton(
-            onPressed: canAfford ? () => _game.buyUpgrade(id) : null,
+            onPressed: withButtonTapSound(
+              canAfford ? () => _game.buyUpgrade(id) : null,
+            ),
             style: ElevatedButton.styleFrom(
               backgroundColor: canAfford
                   ? const Color(0xffc8ef70)
@@ -647,8 +552,8 @@ class _CrusherViewState extends State<CrusherView> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
-                  'YÜKSELT',
+                Text(
+                  context.gameText('YÜKSELT'),
                   style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900),
                 ),
                 Text(
@@ -663,6 +568,163 @@ class _CrusherViewState extends State<CrusherView> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class CrusherCargoStatusBar extends StatelessWidget {
+  const CrusherCargoStatusBar({
+    super.key,
+    required this.state,
+    required this.onSell,
+  });
+
+  final GameState state;
+  final VoidCallback onSell;
+
+  @override
+  Widget build(BuildContext context) {
+    final cargoUsed = state.cargoUsed.toInt();
+    final cargoCap = state.effectiveCargoCapacity.toInt();
+    final isFull = state.cargoFull;
+    final ratio = state.cargoRatio.clamp(0.0, 1.0);
+    final label = context.gameText(
+      isFull ? 'AMBAR DOLU (KIRICI DURDURULDU):' : 'Ambar Kapasitesi (Çıkış):',
+    );
+    final amount = Text(
+      '$cargoUsed / $cargoCap kg',
+      key: const ValueKey('crusher-cargo-amount'),
+      style: TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w800,
+        color: isFull ? const Color(0xffff4d4d) : const Color(0xff8bc34a),
+      ),
+    );
+    final sellButton = (isFull || cargoUsed > 0)
+        ? InkWell(
+            key: const ValueKey('crusher-cargo-sell-action'),
+            onTap: withButtonTapSound(onSell),
+            borderRadius: BorderRadius.circular(6),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: isFull
+                    ? const Color(0xffff4444)
+                    : const Color(0xff1d402b),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                  color: isFull
+                      ? const Color(0xffff8b7a)
+                      : const Color(0xff3fa366),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.sell_rounded, size: 12, color: Colors.white),
+                  const SizedBox(width: 4),
+                  Text(
+                    context.gameText(
+                      isFull ? 'TÜMÜNÜ SAT & ÇALIŞTIR' : 'Tümünü Sat',
+                    ),
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+        : null;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 560;
+        final status = Row(
+          children: [
+            Icon(
+              isFull ? Icons.warning_amber_rounded : Icons.warehouse_rounded,
+              size: 15,
+              color: isFull ? const Color(0xffff6852) : const Color(0xff9cb1cc),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                label,
+                softWrap: true,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: isFull
+                      ? const Color(0xffff8b7a)
+                      : const Color(0xffd0dbe6),
+                ),
+              ),
+            ),
+          ],
+        );
+
+        return Container(
+          key: const ValueKey('crusher-cargo-status-bar'),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: isFull ? const Color(0xff2a1111) : const Color(0xff141d28),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isFull ? const Color(0xffff4444) : const Color(0xff223042),
+              width: isFull ? 1.5 : 1.0,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (compact) ...[
+                status,
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Expanded(child: amount),
+                    if (sellButton != null) ...[
+                      const SizedBox(width: 6),
+                      sellButton,
+                    ],
+                  ],
+                ),
+              ] else
+                Row(
+                  children: [
+                    Expanded(child: status),
+                    const SizedBox(width: 8),
+                    amount,
+                    if (sellButton != null) ...[
+                      const SizedBox(width: 8),
+                      sellButton,
+                    ],
+                  ],
+                ),
+              const SizedBox(height: 6),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: ratio,
+                  minHeight: 6,
+                  backgroundColor: const Color(0xff1d2938),
+                  valueColor: AlwaysStoppedAnimation(
+                    isFull
+                        ? const Color(0xffff3b30)
+                        : (ratio > 0.85
+                              ? const Color(0xffffa726)
+                              : const Color(0xff8bc34a)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

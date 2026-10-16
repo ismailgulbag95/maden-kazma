@@ -360,7 +360,7 @@ abstract final class AdvisorGuideCatalog {
   };
 
   static AdvisorGuideDefinition? currentFor(GameState state) {
-    if (!state.guidedProgression || state.debugModeEnabled) return null;
+    if (!state.guidedProgression) return null;
     if (!state.initialTutorialComplete) {
       final index = List<int>.generate(_tutorial.length, (id) => id).firstWhere(
         (id) => !state.claimedQuestIds.contains(id),

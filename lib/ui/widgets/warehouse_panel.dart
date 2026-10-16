@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/game_controller.dart';
 import '../../core/design/palette.dart';
+import '../../crusher/localization.dart';
 import '../../domain/models/cargo_equipment.dart';
 import '../../domain/models/drill_assembly_definition.dart';
 import '../../domain/models/game_state.dart';
@@ -9,6 +10,7 @@ import '../../domain/models/mr_mine_level_table.dart';
 import '../../domain/models/mr_mine_progression.dart';
 import '../../domain/models/resource_definition.dart';
 import '../../domain/simulation/game_engine.dart';
+import '../../services/sound_service.dart';
 import 'atlas_sprite.dart';
 import 'game_primitives.dart';
 
@@ -38,21 +40,22 @@ class _WarehousePanelState extends State<WarehousePanel> {
     final cargoBlueprintId = nextCargo == null
         ? null
         : DrillAssemblyCatalog.blueprintIdFor('cargo', nextCargo.level);
-    final cargoBlueprintKnown = cargoBlueprintId == null ||
+    final cargoBlueprintKnown =
+        cargoBlueprintId == null ||
         state.knownBlueprintIds.contains(cargoBlueprintId);
     final deficits = GameEngine.cargoUpgradeDeficits(state);
     final deficitLabel = deficits.entries
         .map(
           (entry) =>
-              '${entry.value} ${ResourceCatalog.byId[entry.key]?.name ?? entry.key}',
+              '${entry.value} ${context.gameText(ResourceCatalog.byId[entry.key]?.name ?? entry.key)}',
         )
         .join(' • ');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text(
-          'ORTAK AMBAR',
+        Text(
+          context.gameText('ORTAK AMBAR'),
           style: TextStyle(
             color: MinePalette.cyan,
             fontSize: 11,
@@ -62,7 +65,9 @@ class _WarehousePanelState extends State<WarehousePanel> {
         ),
         const SizedBox(height: 4),
         Text(
-          'Dünya, Ay ve Titan kaynakları aynı kapasiteyi kullanır. Üretim doluluk sınırında durur; sondaj ilerlemeyi sürdürür.',
+          context.gameText(
+            'Dünya, Ay ve Titan kaynakları aynı kapasiteyi kullanır. Üretim doluluk sınırında durur; sondaj ilerlemeyi sürdürür.',
+          ),
           style: const TextStyle(color: MinePalette.muted, fontSize: 10),
         ),
         const SizedBox(height: 10),
@@ -84,9 +89,9 @@ class _WarehousePanelState extends State<WarehousePanel> {
                     size: 18,
                   ),
                   const SizedBox(width: 7),
-                  const Expanded(
+                  Expanded(
                     child: Text(
-                      'Kargo kapasitesi',
+                      context.gameText('Kargo kapasitesi'),
                       style: TextStyle(fontWeight: FontWeight.w900),
                     ),
                   ),
@@ -113,7 +118,13 @@ class _WarehousePanelState extends State<WarehousePanel> {
               ),
               const SizedBox(height: 4),
               Text(
-                '${_cargoName(state.cargoLevel)} • seviye ${state.cargoLevel}/16',
+                context.gameText(
+                  '{name} • seviye {level}/16',
+                  values: {
+                    'name': context.gameText(_cargoName(state.cargoLevel)),
+                    'level': state.cargoLevel,
+                  },
+                ),
                 style: const TextStyle(color: MinePalette.muted, fontSize: 9),
               ),
             ],
@@ -123,14 +134,32 @@ class _WarehousePanelState extends State<WarehousePanel> {
         if (nextCargo != null)
           ActionTile(
             icon: Icons.upgrade_rounded,
-            title: 'Kargo donanımını yükselt • ${nextCargo.name}',
-            description:
-                'Kapasite ${_quantity(state.cargoCapacity.round())} → ${_quantity(nextCargo.capacity.round())}.'
-                '${cargoBlueprintKnown ? '' : ' Önce montaj şemasını keşfet.'}'
-                '${deficitLabel.isEmpty ? '' : ' Eksik cevher: $deficitLabel.'}',
+            title: context.gameText(
+              'Kargo donanımını yükselt • {name}',
+              values: {'name': context.gameText(nextCargo.name)},
+            ),
+            description: [
+              context.gameText(
+                'Kapasite {current} → {next}.',
+                values: {
+                  'current': _quantity(state.cargoCapacity.round()),
+                  'next': _quantity(nextCargo.capacity.round()),
+                },
+              ),
+              if (!cargoBlueprintKnown)
+                context.gameText('Önce montaj şemasını keşfet.'),
+              if (deficitLabel.isNotEmpty)
+                context.gameText(
+                  'Eksik cevher: {deficits}.',
+                  values: {'deficits': deficitLabel},
+                ),
+            ].join(' '),
             buttonLabel: cargoBlueprintKnown
-                ? '${_quantity(nextCargo.cashCost)} KASA'
-                : 'ŞEMA GEREKİYOR',
+                ? context.gameText(
+                    '{cost} KASA',
+                    values: {'cost': _quantity(nextCargo.cashCost)},
+                  )
+                : context.gameText('ŞEMA GEREKİYOR'),
             enabled: GameEngine.canUpgradeCargo(state),
             onPressed: () {
               if (!widget.controller.upgradeCargo()) return;
@@ -138,32 +167,41 @@ class _WarehousePanelState extends State<WarehousePanel> {
             accent: MinePalette.amber,
           )
         else
-          const _InventoryHint('Kargo kapasitesinin son seviyesine ulaştın.'),
+          _InventoryHint(
+            context.gameText('Kargo kapasitesinin son seviyesine ulaştın.'),
+          ),
         const SizedBox(height: 10),
         SegmentedButton<bool>(
           showSelectedIcon: false,
-          segments: const [
+          segments: [
             ButtonSegment<bool>(
               value: false,
-              label: Text('MADEN SAT'),
+              label: Text(context.gameText('MADEN SAT')),
               icon: Icon(Icons.landscape_rounded),
             ),
             ButtonSegment<bool>(
               value: true,
-              label: Text('İZOTOP SAT'),
+              label: Text(context.gameText('İZOTOP SAT')),
               icon: Icon(Icons.science_rounded),
             ),
           ],
           selected: {_isotopeTab},
-          onSelectionChanged: (selection) =>
-              setState(() => _isotopeTab = selection.first),
+          onSelectionChanged: withButtonTapSoundValue(
+            (selection) => setState(() => _isotopeTab = selection.first),
+          ),
         ),
         const SizedBox(height: 7),
         Row(
           children: [
             Expanded(
               child: Text(
-                '${_worldName(world)} • ${resources.length} kaynak',
+                context.gameText(
+                  '{world} • {count} kaynak',
+                  values: {
+                    'world': context.gameText(_worldName(world)),
+                    'count': resources.length,
+                  },
+                ),
                 style: const TextStyle(
                   color: MinePalette.muted,
                   fontSize: 10,
@@ -172,32 +210,35 @@ class _WarehousePanelState extends State<WarehousePanel> {
               ),
             ),
             TextButton.icon(
-              onPressed:
-                  resources.any(
-                    (item) =>
-                        state.amount(item.resource.id) >
-                        state.reserve(item.resource.id),
-                  )
-                  ? () => widget.controller.sellAll(
-                      worldIndex: world,
-                      isotopesOnly: _isotopeTab,
+              onPressed: withButtonTapSound(
+                resources.any(
+                      (item) =>
+                          state.amount(item.resource.id) >
+                          state.reserve(item.resource.id),
                     )
-                  : null,
+                    ? () => widget.controller.sellAll(
+                        worldIndex: world,
+                        isotopesOnly: _isotopeTab,
+                      )
+                    : null,
+              ),
               icon: const Icon(Icons.point_of_sale_rounded, size: 17),
-              label: const Text('HEPSİNİ SAT'),
+              label: Text(context.gameText('HEPSİNİ SAT')),
             ),
           ],
         ),
-        const Text(
-          'Kilit, seçilen en az miktarı tekli ve toplu satışta korur.',
+        Text(
+          context.gameText(
+            'Kilit, seçilen en az miktarı tekli ve toplu satışta korur.',
+          ),
           style: TextStyle(color: MinePalette.muted, fontSize: 9),
         ),
         const SizedBox(height: 5),
         if (resources.isEmpty)
           _InventoryHint(
             _isotopeTab
-                ? 'Bu dünyada henüz izotop açılmadı.'
-                : 'Henüz satılabilir maden açılmadı.',
+                ? context.gameText('Bu dünyada henüz izotop açılmadı.')
+                : context.gameText('Henüz satılabilir maden açılmadı.'),
           )
         else
           for (final item in resources)
@@ -347,7 +388,7 @@ class _WarehouseResourceRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  revealed ? resource.name : '???',
+                  revealed ? context.gameText(resource.name) : '???',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -358,7 +399,10 @@ class _WarehouseResourceRow extends StatelessWidget {
                 ),
                 Text(
                   revealed
-                      ? '\$${_unitPrice(resource.baseValue)} / birim'
+                      ? context.gameText(
+                          '{price} / birim',
+                          values: {'price': '\$${_unitPrice(resource.baseValue)}'},
+                        )
                       : '—',
                   style: const TextStyle(color: MinePalette.muted, fontSize: 8),
                 ),
@@ -375,13 +419,15 @@ class _WarehouseResourceRow extends StatelessWidget {
           ),
           IconButton(
             tooltip: reserve > 0
-                ? 'Satış kilidini düzenle'
-                : 'Stok kilidi ekle',
+              ? context.gameText('Satış kilidini düzenle')
+              : context.gameText('Stok kilidi ekle'),
             visualDensity: VisualDensity.compact,
             constraints: const BoxConstraints.tightFor(width: 38, height: 40),
-            onPressed: revealed && amount > 0
-                ? () => _editReserve(context, amount, reserve)
-                : null,
+            onPressed: withButtonTapSound(
+              revealed && amount > 0
+                  ? () => _editReserve(context, amount, reserve)
+                  : null,
+            ),
             icon: Icon(
               reserve > 0 ? Icons.lock_rounded : Icons.lock_open_rounded,
               color: reserve > 0 ? MinePalette.amber : MinePalette.muted,
@@ -392,12 +438,14 @@ class _WarehouseResourceRow extends StatelessWidget {
             width: 58,
             height: 34,
             child: FilledButton(
-              onPressed: revealed && available > 0
-                  ? () => controller.sell(resource.id, quantity: available)
-                  : null,
+              onPressed: withButtonTapSound(
+                revealed && available > 0
+                    ? () => controller.sell(resource.id, quantity: available)
+                    : null,
+              ),
               style: FilledButton.styleFrom(padding: EdgeInsets.zero),
-              child: const Text(
-                'SAT',
+              child: Text(
+                context.gameText('SAT'),
                 style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900),
               ),
             ),
@@ -417,28 +465,38 @@ class _WarehouseResourceRow extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: MinePalette.panel,
-        title: Text('${resource.name} • satış kilidi'),
+        title: Text(
+          context.gameText(
+            '{name} • satış kilidi',
+            values: {'name': context.gameText(resource.name)},
+          ),
+        ),
         content: TextField(
           controller: input,
           autofocus: true,
           keyboardType: TextInputType.number,
           decoration: InputDecoration(
-            labelText: 'Satıştan korunacak miktar',
-            helperText: 'Sahip olunan miktar: $owned',
+            labelText: context.gameText('Satıştan korunacak miktar'),
+            helperText: context.gameText(
+              'Sahip olunan miktar: {owned}',
+              values: {'owned': owned},
+            ),
             suffixText: '/ $owned',
           ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('İPTAL'),
+            onPressed: withButtonTapSound(() => Navigator.pop(context)),
+            child: Text(context.gameText('İPTAL')),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(
-              context,
-              int.tryParse(input.text.trim())?.clamp(0, owned).toInt() ?? 0,
+            onPressed: withButtonTapSound(
+              () => Navigator.pop(
+                context,
+                int.tryParse(input.text.trim())?.clamp(0, owned).toInt() ?? 0,
+              ),
             ),
-            child: const Text('UYGULA'),
+            child: Text(context.gameText('UYGULA')),
           ),
         ],
       ),

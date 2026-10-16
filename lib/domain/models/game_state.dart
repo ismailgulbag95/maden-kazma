@@ -15,10 +15,12 @@ import 'ore_deposit.dart';
 import 'reactor_definition.dart';
 import 'drill_assembly_definition.dart';
 import 'mr_mine_drill_difficulty.dart';
+import 'mr_mine_level_table.dart';
+import 'mr_mine_progression.dart';
 import 'buff_lab_definition.dart';
 
 class GameState {
-  static const int currentSchemaVersion = 27;
+  static const int currentSchemaVersion = 29;
   static const int sharedCargoInventorySchemaVersion = 25;
   static const double startingDepthMeters = 5000;
   static const int crusherStationFloorDepthMeters = 7000;
@@ -71,6 +73,7 @@ class GameState {
     this.bossesDefeated = 0,
     this.resonanceChains = 0,
     this.miningSeconds = 0,
+    this.oreDepositSpawnProgressSeconds = 0,
     this.tutorialStep = 0,
     this.openingComicSeen = true,
     this.coreShards = 0,
@@ -113,8 +116,7 @@ class GameState {
     this.visualEffectsEnabled = true,
     this.notificationsEnabled = false,
     this.notificationPromptShown = false,
-    this.debugModeEnabled = false,
-    this.debugUnlimitedMoney = false,
+    this.languageCode = 'tr',
     this.guidedProgression = false,
     this.managerLevel = 0,
     this.oilPumpLevel = 1,
@@ -324,6 +326,7 @@ class GameState {
   int bossesDefeated;
   int resonanceChains;
   int miningSeconds;
+  int oreDepositSpawnProgressSeconds;
   int tutorialStep;
   bool openingComicSeen;
   int coreShards;
@@ -366,8 +369,7 @@ class GameState {
   bool visualEffectsEnabled;
   bool notificationsEnabled;
   bool notificationPromptShown;
-  bool debugModeEnabled;
-  bool debugUnlimitedMoney;
+  String languageCode;
   bool guidedProgression;
   int managerLevel;
   int oilPumpLevel;
@@ -477,7 +479,7 @@ class GameState {
           const [0, 1, 2, 3, 4].every(claimedQuestIds.contains));
 
   bool canOpenBuilding(String id) {
-    if (!guidedProgression || debugModeEnabled) return true;
+    if (!guidedProgression) return true;
     if (id == 'quests') {
       return !initialTutorialComplete ||
           completedAdvisorGuideIds.contains('ongoing_quests');
@@ -525,13 +527,104 @@ class GameState {
       (100 + (crusherUpgrades['storage'] ?? 1) * 50).toInt();
 
   int get totalRawOreCount =>
-      rawOreInventory.values.fold(0, (sum, count) => sum + count);
+      rawOreInventory.values.fold(0, (sum, count) => sum + max(0, count));
 
   bool get crusherHopperFull => totalRawOreCount >= crusherHopperCapacity;
 
   void addRawOre(String oreId, int amount) {
     if (amount <= 0) return;
-    rawOreInventory[oreId] = (rawOreInventory[oreId] ?? 0) + amount;
+    final room = max(0, crusherHopperCapacity - totalRawOreCount);
+    final accepted = min(amount, room);
+    if (accepted <= 0) return;
+    rawOreInventory[oreId] = (rawOreInventory[oreId] ?? 0) + accepted;
+  }
+
+  static Map<String, double> crusherMaterialWeightsAtDepth(double depthMeters) {
+    if (!depthMeters.isFinite) return const {'coal': 1};
+
+    final worldIndex =
+        MrMineProgression.worldAtDepth(depthMeters) ??
+        (depthMeters < MrMineProgression.moonStartMeters
+            ? 0
+            : depthMeters < MrMineProgression.titanStartMeters
+            ? 1
+            : 2);
+    final (worldStart, worldEnd) = switch (worldIndex) {
+      0 => (0.0, MrMineProgression.earthEndMeters - 1.0),
+      1 => (
+        MrMineProgression.moonStartMeters.toDouble(),
+        MrMineProgression.moonEndMeters - 1.0,
+      ),
+      _ => (
+        MrMineProgression.titanStartMeters.toDouble(),
+        MrMineLevelTable.rows.length * 1000.0 - 1.0,
+      ),
+    };
+    final boundedDepth = depthMeters.clamp(worldStart, worldEnd).toDouble();
+    final weights = <String, double>{};
+    final progressionBands = MrMineProgression.minerals
+        .where((band) => band.worldIndex == worldIndex)
+        .toList(growable: false);
+    final depthKm = boundedDepth / 1000;
+    for (var index = 0; index < progressionBands.length; index++) {
+      final band = progressionBands[index];
+      if (band.firstDepthMeters > boundedDepth) continue;
+
+      final richDuration = max(
+        1000,
+        band.richFromMeters - band.firstDepthMeters,
+      );
+      final maturity =
+          .2 +
+          .8 *
+              ((boundedDepth - band.firstDepthMeters) / richDuration).clamp(
+                0.0,
+                1.0,
+              );
+      final deepValueShift = pow(1 + depthKm / 20, index * .35).toDouble();
+      weights[band.resourceId] = (maturity * deepValueShift) / (index + 1);
+    }
+    if (weights.isEmpty) {
+      if (progressionBands.isNotEmpty) {
+        weights[progressionBands.first.resourceId] = 1;
+      }
+    }
+    return weights.isEmpty ? const {'coal': 1} : Map.unmodifiable(weights);
+  }
+
+  static String pickCrusherMaterialAtDepth(
+    double depthMeters,
+    Random random, {
+    Map<String, int>? stockedOre,
+  }) {
+    var weights = crusherMaterialWeightsAtDepth(depthMeters);
+    if (stockedOre != null && stockedOre.isNotEmpty) {
+      final stockedWeights = <String, double>{};
+      for (final band in MrMineProgression.minerals) {
+        final count = max(0, stockedOre[band.resourceId] ?? 0);
+        if (count > 0) {
+          stockedWeights[band.resourceId] =
+              (weights[band.resourceId] ?? 1) * count;
+        }
+      }
+      for (final entry in stockedOre.entries) {
+        if (entry.value > 0 && !stockedWeights.containsKey(entry.key)) {
+          stockedWeights[entry.key] = entry.value.toDouble();
+        }
+      }
+      if (stockedWeights.isNotEmpty) weights = stockedWeights;
+    }
+
+    final totalWeight = weights.values.fold<double>(
+      0,
+      (sum, weight) => sum + weight,
+    );
+    var roll = random.nextDouble() * totalWeight;
+    for (final entry in weights.entries) {
+      roll -= entry.value;
+      if (roll < 0) return entry.key;
+    }
+    return weights.keys.first;
   }
 
   int crushRawOre({
@@ -544,18 +637,23 @@ class GameState {
     if (available <= 0 && !allowWithoutRawOre) return 0;
     if (cargoFull) return 0;
 
-    final toCrush = available > 0 ? min(available, amount) : amount;
-    final rawYield = max(1, (toCrush * yieldMultiplier).round());
+    var toCrush = available > 0 ? min(available, amount) : amount;
+    if (toCrush <= 0) return 0;
     final resource = ResourceCatalog.byId[oreId];
     final carriesWeight = resource?.countsTowardsCapacityAndValue ?? true;
     final weight = resource != null ? max(1, resource.weight) : 1;
 
-    int yieldAmount = rawYield;
+    int yieldAmount;
     if (carriesWeight) {
       final remainingCap = effectiveCargoCapacity - cargoUsed;
       if (remainingCap < weight) return 0;
       final maxFit = (remainingCap / weight).floor();
+      if (maxFit <= 0) return 0;
+      toCrush = min(toCrush, maxFit);
+      final rawYield = max(1, (toCrush * yieldMultiplier).round());
       yieldAmount = min(rawYield, maxFit);
+    } else {
+      yieldAmount = max(1, (toCrush * yieldMultiplier).round());
     }
     if (yieldAmount <= 0) return 0;
 
@@ -692,11 +790,8 @@ class GameState {
           : 1) *
       (equippedGems.contains('sapphire') ? 1.1 : 1);
 
-  bool get debugMoneyEnabled => debugModeEnabled && debugUnlimitedMoney;
-
   /// Checks if player can afford [cost], accepting [MrMineBigNumber] or [num].
   bool canAfford(Object cost) {
-    if (debugMoneyEnabled) return true;
     final price = cost is MrMineBigNumber
         ? cost
         : (cost is num ? MrMineBigNumber.fromNum(cost) : MrMineBigNumber.zero);
@@ -715,9 +810,8 @@ class GameState {
   }
 
   /// Spends [cost] from [coins], accepting [MrMineBigNumber] or [num].
-  /// Returns `true` if successful or debug money enabled.
+  /// Returns `true` when the available balance covers [cost].
   bool spendCoins(Object cost) {
-    if (debugMoneyEnabled) return true;
     final price = cost is MrMineBigNumber
         ? cost
         : (cost is num ? MrMineBigNumber.fromNum(cost) : MrMineBigNumber.zero);
@@ -743,7 +837,7 @@ class GameState {
     if (!const {'transport', 'scanner', 'sorting'}.contains(role)) {
       return false;
     }
-    if (!guidedProgression || debugModeEnabled) return true;
+    if (!guidedProgression) return true;
     if ((workerAssignments[role] ?? 0) > 0) return true;
     return completedAdvisorGuideIds.contains('worker_role_$role');
   }
@@ -873,6 +967,7 @@ class GameState {
       'bossesDefeated': bossesDefeated,
       'resonanceChains': resonanceChains,
       'miningSeconds': miningSeconds,
+      'oreDepositSpawnProgressSeconds': oreDepositSpawnProgressSeconds,
       'tutorialStep': tutorialStep,
       'openingComicSeen': openingComicSeen,
       'coreShards': coreShards,
@@ -940,8 +1035,7 @@ class GameState {
       'visualEffectsEnabled': visualEffectsEnabled,
       'notificationsEnabled': notificationsEnabled,
       'notificationPromptShown': notificationPromptShown,
-      'debugModeEnabled': debugModeEnabled,
-      'debugUnlimitedMoney': debugUnlimitedMoney,
+      'languageCode': languageCode,
       'guidedProgression': guidedProgression,
       'managerLevel': managerLevel,
       'oilPumpLevel': oilPumpLevel,
@@ -1119,6 +1213,7 @@ class GameState {
       bossesDefeated: readInt('bossesDefeated'),
       resonanceChains: readInt('resonanceChains'),
       miningSeconds: readInt('miningSeconds'),
+      oreDepositSpawnProgressSeconds: readInt('oreDepositSpawnProgressSeconds'),
       tutorialStep: readInt('tutorialStep'),
       openingComicSeen: json['openingComicSeen'] as bool? ?? true,
       coreShards: readInt('coreShards'),
@@ -1188,8 +1283,7 @@ class GameState {
       notificationsEnabled: json['notificationsEnabled'] as bool? ?? false,
       notificationPromptShown:
           json['notificationPromptShown'] as bool? ?? false,
-      debugModeEnabled: json['debugModeEnabled'] as bool? ?? false,
-      debugUnlimitedMoney: json['debugUnlimitedMoney'] as bool? ?? false,
+      languageCode: json['languageCode'] == 'en' ? 'en' : 'tr',
       guidedProgression: json['guidedProgression'] as bool? ?? false,
       managerLevel: readInt('managerLevel'),
       oilPumpLevel: readInt('oilPumpLevel', 1),
@@ -1267,6 +1361,9 @@ class GameState {
     state.knownBlueprintIds.addAll(List<int>.generate(16, (index) => index));
     state.resonanceProgress = readInt('resonanceProgress');
     state.seed = readInt('seed', 91827);
+    state.oreDepositSpawnProgressSeconds = state.oreDepositSpawnProgressSeconds
+        .clamp(0, 180)
+        .toInt();
     state.relicScrap = state.relicScrap.clamp(0, 1000000000).toInt();
     if (state.inventory.isEmpty) state.inventory['coal'] = 0;
     if (state.upgrades.isEmpty) {

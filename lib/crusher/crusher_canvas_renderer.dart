@@ -89,7 +89,8 @@ class _CrusherCanvasRendererState extends State<CrusherCanvasRenderer> {
         );
 
         return GestureDetector(
-          onTapDown: (details) => _handleTapDown(details, context.size ?? Size.zero),
+          onTapDown: (details) =>
+              _handleTapDown(details, context.size ?? Size.zero),
           onTapUp: _handleTapUp,
           onTapCancel: _handleTapCancel,
           behavior: HitTestBehavior.opaque,
@@ -178,7 +179,13 @@ class _CrusherWorldPainter extends CustomPainter {
     _drawRipples(canvas);
   }
 
-  void _drawBackground(Canvas canvas, Size size, double ox, double oy, double scale) {
+  void _drawBackground(
+    Canvas canvas,
+    Size size,
+    double ox,
+    double oy,
+    double scale,
+  ) {
     // Koyu metalik maden arka planı
     final bgPaint = Paint()
       ..shader = const RadialGradient(
@@ -202,7 +209,11 @@ class _CrusherWorldPainter extends CustomPainter {
     }
   }
 
-  void _drawChamber(Canvas canvas, Offset Function(double, double) toScreen, double Function(double) toScale) {
+  void _drawChamber(
+    Canvas canvas,
+    Offset Function(double, double) toScreen,
+    double Function(double) toScale,
+  ) {
     // Kırıcı hunisi yan plakaları (Funnel walls)
     final funnelLeft = Path()
       ..moveTo(toScreen(-2.6, 3.8).dx, toScreen(-2.6, 3.8).dy)
@@ -238,8 +249,18 @@ class _CrusherWorldPainter extends CustomPainter {
     canvas.drawPath(funnelRight, borderPaint);
 
     // Endüstriyel sarı-siyah uyarı çizgileri
-    _drawHazardStripes(canvas, toScreen(-2.8, 3.7), toScreen(-1.4, 3.5), toScale(0.18));
-    _drawHazardStripes(canvas, toScreen(1.4, 3.5), toScreen(2.8, 3.7), toScale(0.18));
+    _drawHazardStripes(
+      canvas,
+      toScreen(-2.8, 3.7),
+      toScreen(-1.4, 3.5),
+      toScale(0.18),
+    );
+    _drawHazardStripes(
+      canvas,
+      toScreen(1.4, 3.5),
+      toScreen(2.8, 3.7),
+      toScale(0.18),
+    );
   }
 
   void _drawHazardStripes(Canvas canvas, Offset p1, Offset p2, double height) {
@@ -265,7 +286,11 @@ class _CrusherWorldPainter extends CustomPainter {
     canvas.restore();
   }
 
-  void _drawConveyors(Canvas canvas, Offset Function(double, double) toScreen, double Function(double) toScale) {
+  void _drawConveyors(
+    Canvas canvas,
+    Offset Function(double, double) toScreen,
+    double Function(double) toScale,
+  ) {
     // 1. Üst Giriş Bandı (Sağdan merdaneye besleme)
     final topBeltStart = toScreen(6.4, 4.14);
     final topBeltEnd = toScreen(0.42, 4.14);
@@ -281,18 +306,29 @@ class _CrusherWorldPainter extends CustomPainter {
       topBeltEnd,
       Offset(topBeltStart.dx, topBeltStart.dy + beltHeight),
     );
-    canvas.drawRRect(RRect.fromRectAndRadius(topRect, const Radius.circular(4)), beltPaint);
-    canvas.drawRRect(RRect.fromRectAndRadius(topRect, const Radius.circular(4)), beltBorder);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(topRect, const Radius.circular(4)),
+      beltPaint,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(topRect, const Radius.circular(4)),
+      beltBorder,
+    );
 
     // Dönen makara dişleri / hareket hissi
-    final animOffset = (now.millisecondsSinceEpoch * 0.05 * game.conveyorSpeed) % 18;
+    final animOffset =
+        (now.millisecondsSinceEpoch * 0.05 * game.conveyorSpeed) % 18;
     final tickPaint = Paint()
       ..color = const Color(0xff334152)
       ..strokeWidth = 2.5;
     for (double x = topRect.left; x < topRect.right; x += 18) {
       final drawX = x - animOffset;
       if (drawX >= topRect.left && drawX <= topRect.right) {
-        canvas.drawLine(Offset(drawX, topRect.top), Offset(drawX, topRect.bottom), tickPaint);
+        canvas.drawLine(
+          Offset(drawX, topRect.top),
+          Offset(drawX, topRect.bottom),
+          tickPaint,
+        );
       }
     }
 
@@ -303,19 +339,33 @@ class _CrusherWorldPainter extends CustomPainter {
       botBeltStart,
       Offset(botBeltEnd.dx, botBeltStart.dy + beltHeight),
     );
-    canvas.drawRRect(RRect.fromRectAndRadius(botRect, const Radius.circular(4)), beltPaint);
-    canvas.drawRRect(RRect.fromRectAndRadius(botRect, const Radius.circular(4)), beltBorder);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(botRect, const Radius.circular(4)),
+      beltPaint,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(botRect, const Radius.circular(4)),
+      beltBorder,
+    );
 
     final botAnimOffset = (now.millisecondsSinceEpoch * 0.08) % 18;
     for (double x = botRect.left; x < botRect.right; x += 18) {
       final drawX = x - botAnimOffset;
       if (drawX >= botRect.left && drawX <= botRect.right) {
-        canvas.drawLine(Offset(drawX, botRect.top), Offset(drawX, botRect.bottom), tickPaint);
+        canvas.drawLine(
+          Offset(drawX, botRect.top),
+          Offset(drawX, botRect.bottom),
+          tickPaint,
+        );
       }
     }
   }
 
-  void _drawRollers(Canvas canvas, Offset Function(double, double) toScreen, double Function(double) toScale) {
+  void _drawRollers(
+    Canvas canvas,
+    Offset Function(double, double) toScreen,
+    double Function(double) toScale,
+  ) {
     const leftX = -0.77;
     const rightX = 0.77;
     const rollerY = 0.69;
@@ -334,7 +384,13 @@ class _CrusherWorldPainter extends CustomPainter {
     _drawSingleRoller(canvas, rightCenter, rRadius, -angle, clockwise: false);
   }
 
-  void _drawSingleRoller(Canvas canvas, Offset center, double radius, double angle, {required bool clockwise}) {
+  void _drawSingleRoller(
+    Canvas canvas,
+    Offset center,
+    double radius,
+    double angle, {
+    required bool clockwise,
+  }) {
     // Dış gövde
     final rollerPaint = Paint()
       ..shader = RadialGradient(
@@ -417,7 +473,11 @@ class _CrusherWorldPainter extends CustomPainter {
     }
   }
 
-  void _drawRocks(Canvas canvas, Offset Function(double, double) toScreen, double Function(double) toScale) {
+  void _drawRocks(
+    Canvas canvas,
+    Offset Function(double, double) toScreen,
+    double Function(double) toScale,
+  ) {
     for (final rock in game.rocks) {
       final center = toScreen(rock.x, rock.y);
       final r = toScale(rock.radius);
@@ -494,23 +554,144 @@ class _CrusherWorldPainter extends CustomPainter {
         );
         canvas.drawRRect(
           RRect.fromRectAndRadius(fillRect, const Radius.circular(2)),
-          Paint()..color = hpRatio > 0.4 ? const Color(0xffc8ef70) : const Color(0xffff5555),
+          Paint()
+            ..color = hpRatio > 0.4
+                ? const Color(0xffc8ef70)
+                : const Color(0xffff5555),
         );
       }
     }
   }
 
-  void _drawParticles(Canvas canvas, Offset Function(double, double) toScreen, double Function(double) toScale) {
+  void _drawParticles(
+    Canvas canvas,
+    Offset Function(double, double) toScreen,
+    double Function(double) toScale,
+  ) {
     for (final p in game.particles) {
       final center = toScreen(p.x, p.y);
       final r = toScale(p.size);
       final alpha = (p.life / 0.5).clamp(0.0, 1.0);
 
-      final pPaint = Paint()
-        ..color = p.color.withOpacity(alpha)
-        ..style = PaintingStyle.fill;
+      if (p.kind == CrusherParticleKind.spark) {
+        final velocity = Offset(p.vx, -p.vy);
+        final speed = velocity.distance;
+        final direction = speed > .001 ? velocity / speed : const Offset(1, 0);
+        final streakLength = toScale(
+          p.size * (2.8 + speed.clamp(0.0, 3.0) * .35),
+        );
+        final start = center - direction * (streakLength * .42);
+        final end = center + direction * (streakLength * .58);
+        final glowPaint = Paint()
+          ..color = p.color.withValues(alpha: alpha * .9)
+          ..strokeWidth = math.max(3.0, r * 3.2)
+          ..strokeCap = StrokeCap.round;
+        final corePaint = Paint()
+          ..color = Color.lerp(
+            p.color,
+            Colors.white,
+            .82,
+          )!.withValues(alpha: alpha)
+          ..strokeWidth = math.max(1.2, r * .9)
+          ..strokeCap = StrokeCap.round;
 
-      canvas.drawCircle(center, math.max(1.5, r), pPaint);
+        canvas.drawLine(start, end, glowPaint);
+        canvas.drawLine(start, end, corePaint);
+      } else if (p.kind == CrusherParticleKind.fragment) {
+        _drawRockFragment(canvas, center, r, p, alpha);
+      } else {
+        final pPaint = Paint()
+          ..color = p.color.withOpacity(alpha)
+          ..style = PaintingStyle.fill;
+
+        canvas.drawCircle(center, math.max(1.5, r), pPaint);
+      }
+    }
+  }
+
+  void _drawRockFragment(
+    Canvas canvas,
+    Offset center,
+    double radius,
+    CrusherParticle particle,
+    double alpha,
+  ) {
+    if (particle.isProminent && !particle.fallingThroughRollerGap) {
+      final glow = Paint()
+        ..color = particle.color.withValues(alpha: alpha * .42)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+      canvas.drawCircle(center, radius * 1.08, glow);
+    }
+
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(particle.rotation);
+
+    final shard = Path()
+      ..moveTo(-radius * .82, -radius * .24)
+      ..lineTo(-radius * .18, -radius * .91)
+      ..lineTo(radius * .74, -radius * .45)
+      ..lineTo(radius * .52, radius * .48)
+      ..lineTo(-radius * .22, radius * .84)
+      ..lineTo(-radius * .9, radius * .27)
+      ..close();
+    final bounds = Rect.fromCenter(
+      center: Offset.zero,
+      width: radius * 2,
+      height: radius * 2,
+    );
+    final fill = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          Color.lerp(
+            particle.color,
+            Colors.white,
+            .32,
+          )!.withValues(alpha: alpha),
+          particle.color.withValues(alpha: alpha),
+          Color.lerp(
+            particle.color,
+            Colors.black,
+            .34,
+          )!.withValues(alpha: alpha),
+        ],
+      ).createShader(bounds);
+    final edge = Paint()
+      ..color = Colors.white.withValues(
+        alpha: alpha * (particle.isProminent ? .9 : .58),
+      )
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = particle.isProminent ? 1.0 : 1.2;
+    canvas.drawPath(shard, fill);
+    canvas.drawPath(shard, edge);
+
+    final facet = Path()
+      ..moveTo(-radius * .18, -radius * .91)
+      ..lineTo(radius * .08, radius * .04)
+      ..lineTo(radius * .74, -radius * .45)
+      ..close();
+    canvas.drawPath(
+      facet,
+      Paint()
+        ..color = Colors.white.withValues(alpha: alpha * .3)
+        ..style = PaintingStyle.fill,
+    );
+    canvas.restore();
+
+    if (particle.isProminent && !particle.onOutputConveyor) {
+      final velocity = Offset(particle.vx, -particle.vy);
+      final speed = velocity.distance;
+      if (speed > .01) {
+        final direction = velocity / speed;
+        final tail = center - direction * (radius * 1.35);
+        final trail = Paint()
+          ..color = particle.color.withValues(alpha: alpha * .5)
+          ..strokeWidth = math.max(2.0, radius * .22)
+          ..strokeCap = StrokeCap.round;
+        canvas.drawLine(tail, center, trail);
+      }
     }
   }
 

@@ -1,8 +1,11 @@
+import 'dart:math';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tasin_alti/domain/models/game_state.dart';
 import 'package:tasin_alti/domain/simulation/game_engine.dart';
 import 'package:tasin_alti/app/game_controller.dart';
 import 'package:tasin_alti/crusher/crusher_engine.dart';
+import 'package:tasin_alti/domain/models/resource_definition.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -53,21 +56,24 @@ void main() {
       expect(controller.state.coins.toDouble(), initialCoins - cost);
     });
 
-    test('_advanceCrusher dolu haznede kırmaya başlar ve ürünü ambara gönderir', () {
-      final state = GameState.newGame();
-      state.crusherRepaired = true;
-      state.addRawOre('coal', 30);
-      expect(state.amount('coal'), 0);
+    test(
+      '_advanceCrusher dolu haznede kırmaya başlar ve ürünü ambara gönderir',
+      () {
+        final state = GameState.newGame();
+        state.crusherRepaired = true;
+        state.addRawOre('coal', 30);
+        expect(state.amount('coal'), 0);
 
-      // 1 saniye simülasyon ilerlet
-      GameEngine.advance(state, const Duration(seconds: 1));
+        // 1 saniye simülasyon ilerlet
+        GameEngine.advance(state, const Duration(seconds: 1));
 
-      // Kırıcı bir kaya işler. Aynı simülasyon adımında gelen yeni kaya,
-      // işlenen kayayı dengeleyebileceği için hazne adedi sabit kalabilir.
-      expect(state.amount('coal'), greaterThan(0));
-      expect(state.totalOreCrushed, greaterThan(0));
-      expect(state.rawOreInventory['coal'] ?? 0, lessThanOrEqualTo(30));
-    });
+        // Kırıcı bir kaya işler. Aynı simülasyon adımında gelen yeni kaya,
+        // işlenen kayayı dengeleyebileceği için hazne adedi sabit kalabilir.
+        expect(state.amount('coal'), greaterThan(0));
+        expect(state.totalOreCrushed, greaterThan(0));
+        expect(state.rawOreInventory['coal'] ?? 0, lessThanOrEqualTo(30));
+      },
+    );
 
     test('Ambar dolunca kırıcı durur, oyuncu satış yapınca yer açılır ve kırıcı devam eder', () {
       final controller = GameController();
@@ -112,7 +118,7 @@ void main() {
       expect(state.rawOreInventory['coal'], 45); // Kırıldı ve azaldı
     });
 
-    test('Kırıcı dört kaya birikince arka planda çalışmaya başlar', () {
+    test('Başlangıçta kayalar birikir, sonra düzenli biçimde kırılır', () {
       final state = GameState.newGame();
       state.crusherRepaired = true;
       state.rawOreInventory.clear();
@@ -122,13 +128,13 @@ void main() {
       // Başlangıçta birkaç kaya haznede birikir.
       GameEngine.advance(
         state,
-        const Duration(seconds: 3),
+        const Duration(seconds: 1),
         allowRandomEvents: false,
       );
-      expect(state.totalRawOreCount, 3);
+      expect(state.totalRawOreCount, 2);
       expect(state.totalOreCrushed, 0);
 
-      // Dördüncü kaya gelince bir taş kırılır, üçü haznede kalır.
+      // Dördüncü kaya gelince üretim başlar, haznede başlangıç tamponu kalır.
       GameEngine.advance(
         state,
         const Duration(seconds: 1),
@@ -137,8 +143,121 @@ void main() {
 
       expect(state.totalMined, greaterThan(initialMined));
       expect(state.cargoUsed, greaterThan(0));
-      expect(state.totalRawOreCount, 3);
-      expect(state.totalOreCrushed, 1);
+      expect(state.totalRawOreCount, 2);
+      expect(state.totalOreCrushed, 2);
+
+      GameEngine.advance(
+        state,
+        const Duration(seconds: 3),
+        allowRandomEvents: false,
+      );
+      expect(state.totalRawOreCount, 2);
+      expect(state.totalOreCrushed, 8);
+    });
+
+    test(
+      'Konveyör beslemesi kapasiteyi aşmaz, tam hazne de boşaltılabilir',
+      () {
+        final state = GameState.newGame();
+        final starterCapacity = state.crusherHopperCapacity;
+
+        state.addRawOre('coal', starterCapacity + 25);
+        expect(state.totalRawOreCount, starterCapacity);
+        state.addRawOre('copper', 10);
+        expect(state.totalRawOreCount, starterCapacity);
+
+        // Kapasite yükseltmesi yeni stok alanı açar; yeni besleme yine sınırlıdır.
+        state.crusherUpgrades['storage'] = 2;
+        expect(state.crusherHopperCapacity, greaterThan(starterCapacity));
+        state.addRawOre('copper', 1000);
+        expect(state.totalRawOreCount, state.crusherHopperCapacity);
+        state.addRawOre('silver', 1);
+        expect(state.totalRawOreCount, state.crusherHopperCapacity);
+
+        // Dolu ham hazne interaktif kırıcıyı durdurmaz; mevcut taşları işleyebilir.
+        final controller = GameController();
+        addTearDown(controller.dispose);
+        controller.state.rawOreInventory
+          ..clear()
+          ..addAll(state.rawOreInventory);
+        controller.state.crusherUpgrades['storage'] = 2;
+        final crusher = CrusherGame(controller, random: Random(12));
+        addTearDown(crusher.dispose);
+        expect(crusher.isHalted, isFalse);
+        final queuedRock = crusher.rocks.first;
+        for (var press = 0; press < 40; press++) {
+          crusher.manualPress(rockId: queuedRock.seed);
+        }
+        expect(controller.state.totalOreCrushed, 1);
+        expect(
+          controller.state.totalRawOreCount,
+          lessThan(starterCapacity + 50),
+        );
+      },
+    );
+
+    test('Hız ve güç geliştirmeleri pasif üretim hızını artırır', () {
+      final starter = GameState.newGame();
+      starter.crusherRepaired = true;
+      starter.rawOreInventory.clear();
+
+      final upgraded = GameState.newGame();
+      upgraded.crusherRepaired = true;
+      upgraded.rawOreInventory.clear();
+      upgraded.crusherUpgrades['speed'] = 5;
+      upgraded.crusherUpgrades['power'] = 5;
+      upgraded.crusherUpgrades['storage'] = 2;
+
+      GameEngine.advance(
+        starter,
+        const Duration(seconds: 6),
+        allowRandomEvents: false,
+      );
+      GameEngine.advance(
+        upgraded,
+        const Duration(seconds: 6),
+        allowRandomEvents: false,
+      );
+
+      expect(upgraded.totalOreCrushed, greaterThan(starter.totalOreCrushed));
+      expect(
+        upgraded.crusherHopperCapacity,
+        greaterThan(starter.crusherHopperCapacity),
+      );
+    });
+
+    test('Derinlik ilerledikçe olasılık değerli cevherlere kayar', () {
+      final shallowWeights = GameState.crusherMaterialWeightsAtDepth(5000);
+      final midWeights = GameState.crusherMaterialWeightsAtDepth(18000);
+      final deepWeights = GameState.crusherMaterialWeightsAtDepth(80000);
+
+      expect(shallowWeights.keys.toList(), ['coal', 'copper']);
+      expect(midWeights.keys.toList(), ['coal', 'copper', 'silver', 'gold']);
+      expect(deepWeights.keys.toList(), contains('platinum'));
+      expect(deepWeights.keys.toList(), contains('diamond'));
+      final shallowCoalShare =
+          shallowWeights['coal']! /
+          shallowWeights.values.reduce((total, weight) => total + weight);
+      final deepCoalShare =
+          deepWeights['coal']! /
+          deepWeights.values.reduce((total, weight) => total + weight);
+      expect(deepCoalShare, lessThan(shallowCoalShare));
+
+      final shallowRandom = Random(41);
+      final deepRandom = Random(41);
+      var shallowValue = 0.0;
+      var deepValue = 0.0;
+      const samples = 1000;
+      for (var i = 0; i < samples; i++) {
+        final shallowId = GameState.pickCrusherMaterialAtDepth(
+          5000,
+          shallowRandom,
+        );
+        final deepId = GameState.pickCrusherMaterialAtDepth(80000, deepRandom);
+        shallowValue += ResourceCatalog.byId[shallowId]!.baseValue;
+        deepValue += ResourceCatalog.byId[deepId]!.baseValue;
+      }
+      expect(deepValue / samples, greaterThan(shallowValue / samples));
     });
 
     test('Yıkık istasyon onarılmadan otomatik kırma başlamaz', () {

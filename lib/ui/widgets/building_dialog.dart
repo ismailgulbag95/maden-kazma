@@ -21,6 +21,8 @@ import '../../domain/models/drill_assembly_definition.dart';
 import '../../domain/models/reactor_definition.dart';
 import '../../domain/models/buff_lab_definition.dart';
 import '../../domain/simulation/game_engine.dart';
+import '../../crusher/localization.dart';
+import '../../services/sound_service.dart';
 import 'atlas_sprite.dart';
 import 'game_primitives.dart';
 import 'warehouse_panel.dart';
@@ -31,6 +33,34 @@ String _compactCash(num value) {
   if (value >= 1e6) return '${(value / 1e6).toStringAsFixed(2)}M';
   if (value >= 1e3) return '${(value / 1e3).toStringAsFixed(2)}K';
   return value.toStringAsFixed(0);
+}
+
+class _LocalizedText extends StatelessWidget {
+  const _LocalizedText(
+    this.data, {
+    this.style,
+    this.maxLines,
+    this.overflow,
+    this.textAlign,
+    this.softWrap,
+  });
+
+  final String data;
+  final TextStyle? style;
+  final int? maxLines;
+  final TextOverflow? overflow;
+  final TextAlign? textAlign;
+  final bool? softWrap;
+
+  @override
+  Widget build(BuildContext context) => Text(
+    context.gameText(data),
+    style: style,
+    maxLines: maxLines,
+    overflow: overflow,
+    textAlign: textAlign,
+    softWrap: softWrap,
+  );
 }
 
 class BuildingDialog extends StatelessWidget {
@@ -97,10 +127,13 @@ class BuildingDialog extends StatelessWidget {
                     ),
                     const SizedBox(width: 6),
                     Expanded(
-                      child: Text(
+                      child: _LocalizedText(
                         controller.saveError == null
-                            ? 'Vardiya kaydı etkin'
-                            : 'Kayıt uyarısı: ${controller.saveError}',
+                            ? context.gameText('Vardiya kaydı etkin')
+                            : context.gameText(
+                                'Kayıt uyarısı: {error}',
+                                values: {'error': controller.saveError!},
+                              ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -110,8 +143,10 @@ class BuildingDialog extends StatelessWidget {
                       ),
                     ),
                     TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('KAPAT'),
+                      onPressed: withButtonTapSound(
+                        () => Navigator.of(context).pop(),
+                      ),
+                      child: _LocalizedText(context.gameText('KAPAT')),
                     ),
                   ],
                 ),
@@ -130,7 +165,10 @@ class BuildingDialog extends StatelessWidget {
     final requirements = GameEngine.upgradeMaterialRequirements(state, 'drill');
     final materials = requirements.entries
         .map((entry) {
-          final name = ResourceCatalog.byId[entry.key]?.name ?? entry.key;
+          final name = gameTextForLanguage(
+            state.languageCode,
+            ResourceCatalog.byId[entry.key]?.name ?? entry.key,
+          );
           final available = math.max(
             0,
             state.amount(entry.key) - state.reserve(entry.key),
@@ -140,12 +178,29 @@ class BuildingDialog extends StatelessWidget {
         .join(' + ');
     final materialSuffix = materials.isEmpty ? '' : ' + $materials';
     final drill = drillCost <= 0
-        ? 'Matkap üst sınırda'
-        : 'Matkap $drillLevel. kademe: ${_compactCash(drillCost.toDouble())} kasa$materialSuffix';
+        ? gameTextForLanguage(state.languageCode, 'Matkap üst sınırda')
+        : gameTextForLanguage(
+            state.languageCode,
+            'Matkap {level}. kademe: {cost} kasa{materials}',
+            {
+              'level': drillLevel,
+              'cost': _compactCash(drillCost.toDouble()),
+              'materials': materialSuffix,
+            },
+          );
     final hire = state.activeMinerCount <= 0
-        ? 'önce madenci: ${_compactCash(minerCost.toDouble())} kasa'
-        : 'sonraki madenci: ${_compactCash(minerCost.toDouble())} kasa';
-    return '$drill • $hire';
+        ? gameTextForLanguage(state.languageCode, 'Önce madenci: {cost} kasa', {
+            'cost': _compactCash(minerCost.toDouble()),
+          })
+        : gameTextForLanguage(
+            state.languageCode,
+            'Sonraki madenci: {cost} kasa',
+            {'cost': _compactCash(minerCost.toDouble())},
+          );
+    return gameTextForLanguage(state.languageCode, '{drill} • {hire}', {
+      'drill': drill,
+      'hire': hire,
+    });
   }
 
   Widget _contents(BuildContext context) {
@@ -186,8 +241,8 @@ class BuildingDialog extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'YATIRIM VE MALİYET HESAPLAYICISI',
+                        _LocalizedText(
+                          context.gameText('YATIRIM VE MALİYET HESAPLAYICISI'),
                           style: TextStyle(
                             color: MinePalette.amber,
                             fontSize: 9,
@@ -196,7 +251,7 @@ class BuildingDialog extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 3),
-                        Text(
+                        _LocalizedText(
                           investmentPlan,
                           style: const TextStyle(
                             color: MinePalette.cream,
@@ -222,7 +277,6 @@ class BuildingDialog extends StatelessWidget {
                   state.canAfford(GameEngine.minerCost(state)) &&
                   state.activeMinerCount < 10 &&
                   (!state.guidedProgression ||
-                      state.debugModeEnabled ||
                       state.initialTutorialComplete ||
                       state.tutorialStep == 2),
               onPressed: controller.hireMiner,
@@ -244,7 +298,7 @@ class BuildingDialog extends StatelessWidget {
               onPressed: controller.upgradeWorkerLevel,
               accent: MinePalette.cyan,
             ),
-            _workerAssignmentsSection(state),
+            _workerAssignmentsSection(context, state),
             for (final track in ['drill', 'foundry', 'weapon'])
               UpgradeRow(
                 controller: controller,
@@ -358,7 +412,7 @@ class BuildingDialog extends StatelessWidget {
               onPressed: controller.forgeDrillPart,
               accent: MinePalette.cyan,
             ),
-            _gemForgeSection(state),
+            _gemForgeSection(context, state),
             _subheading('UZMAN MADENCİLER'),
             if (!state.unlockedBuildings.contains('super_miners'))
               const _EmptyHint(
@@ -398,7 +452,7 @@ class BuildingDialog extends StatelessWidget {
                   specialist.$4,
                 ),
             const SizedBox(height: 6),
-            _specialWorkerRosterSection(state),
+            _specialWorkerRosterSection(context, state),
             ActionTile(
               icon: Icons.shield_rounded,
               title: 'Muhafız karşılaşması',
@@ -456,14 +510,14 @@ class BuildingDialog extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
+                            _LocalizedText(
                               'Otomatik satış',
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w900,
                               ),
                             ),
-                            Text(
+                            _LocalizedText(
                               'Ucuz cevherden başlayarak eşiğe kadar satar. Kilit ve rezerv korunur.',
                               style: TextStyle(
                                 color: MinePalette.muted,
@@ -475,7 +529,9 @@ class BuildingDialog extends StatelessWidget {
                       ),
                       Switch.adaptive(
                         value: state.autoSellEnabled,
-                        onChanged: controller.setAutoSellEnabled,
+                        onChanged: withButtonTapSoundValue(
+                          controller.setAutoSellEnabled,
+                        ),
                       ),
                     ],
                   ),
@@ -487,12 +543,16 @@ class BuildingDialog extends StatelessWidget {
                           in GameState.autoSellThresholdChoices)
                         ButtonSegment<double>(
                           value: threshold,
-                          label: Text('${(threshold * 100).round()}%'),
+                          label: _LocalizedText(
+                            '${(threshold * 100).round()}%',
+                          ),
                         ),
                     ],
                     selected: {state.autoSellThreshold},
-                    onSelectionChanged: (selected) =>
-                        controller.setAutoSellThreshold(selected.first),
+                    onSelectionChanged: withButtonTapSoundValue(
+                      (selected) =>
+                          controller.setAutoSellThreshold(selected.first),
+                    ),
                   ),
                 ],
               ),
@@ -508,9 +568,11 @@ class BuildingDialog extends StatelessWidget {
                     child: Padding(
                       padding: const EdgeInsets.only(right: 4),
                       child: OutlinedButton(
-                        onPressed: _canSellResources(state)
-                            ? () => controller.sellFraction(fraction)
-                            : null,
+                        onPressed: withButtonTapSound(
+                          _canSellResources(state)
+                              ? () => controller.sellFraction(fraction)
+                              : null,
+                        ),
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(horizontal: 2),
                           minimumSize: const Size(0, 48),
@@ -519,7 +581,7 @@ class BuildingDialog extends StatelessWidget {
                             fontWeight: FontWeight.w900,
                           ),
                         ),
-                        child: Text(label),
+                        child: _LocalizedText(label),
                       ),
                     ),
                   ),
@@ -529,9 +591,11 @@ class BuildingDialog extends StatelessWidget {
             SizedBox(
               height: 46,
               child: ElevatedButton.icon(
-                onPressed: _canSellResources(state) ? controller.sellAll : null,
+                onPressed: withButtonTapSound(
+                  _canSellResources(state) ? controller.sellAll : null,
+                ),
                 icon: const Icon(Icons.point_of_sale_rounded),
-                label: const Text('REZERV DIŞI HER ŞEYİ SAT'),
+                label: const _LocalizedText('REZERV DIŞI HER ŞEYİ SAT'),
               ),
             ),
             const SizedBox(height: 10),
@@ -627,6 +691,7 @@ class BuildingDialog extends StatelessWidget {
                   buttonLabel: 'SANDIĞI AÇ',
                   enabled: true,
                   onPressed: () => controller.openChest(tier: tier),
+                  buttonSoundEnabled: false,
                   accent: tier == 'deep'
                       ? MinePalette.violet
                       : tier == 'gold'
@@ -807,9 +872,9 @@ class BuildingDialog extends StatelessWidget {
       context: context,
       builder: (dialogContext) => AlertDialog(
         backgroundColor: MinePalette.ink,
-        title: const Text('Sondaj montajı nasıl geliştirilir?'),
+        title: const _LocalizedText('Sondaj montajı nasıl geliştirilir?'),
         content: const SingleChildScrollView(
-          child: Text(
+          child: _LocalizedText(
             'Sondaj ucu, soğutma fanı ve sondaj motoru ayrı parçalardır. '
             'Her kart yalnızca kendi parçasını bir seviye yükseltir.\n\n'
             '1. Kartta bir sonraki seviyenin şemasını, derinlik şartını, '
@@ -839,8 +904,8 @@ class BuildingDialog extends StatelessWidget {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('ANLADIM'),
+            onPressed: withButtonTapSound(() => Navigator.pop(dialogContext)),
+            child: const _LocalizedText('ANLADIM'),
           ),
         ],
       ),
@@ -855,11 +920,13 @@ class BuildingDialog extends StatelessWidget {
         children: [
           Expanded(child: _subheading('SONDAJ MONTAJI')),
           IconButton(
-            tooltip: 'Montaj geliştirme yardımını aç',
+            tooltip: context.gameText('Montaj geliştirme yardımını aç'),
             visualDensity: VisualDensity.compact,
             constraints: const BoxConstraints.tightFor(width: 34, height: 34),
             padding: EdgeInsets.zero,
-            onPressed: () => _showDrillAssemblyHelp(context),
+            onPressed: withButtonTapSound(
+              () => _showDrillAssemblyHelp(context),
+            ),
             icon: const Icon(
               Icons.help_outline_rounded,
               color: MinePalette.cyan,
@@ -1151,7 +1218,7 @@ class BuildingDialog extends StatelessWidget {
             ),
             child: SwitchListTile(
               contentPadding: const EdgeInsets.symmetric(horizontal: 10),
-              title: Text(
+              title: _LocalizedText(
                 buff.name,
                 style: const TextStyle(
                   color: MinePalette.cream,
@@ -1159,7 +1226,7 @@ class BuildingDialog extends StatelessWidget {
                   fontSize: 12,
                 ),
               ),
-              subtitle: Text(
+              subtitle: _LocalizedText(
                 '${buff.description} • ${buff.energyDrainPerSecond.toStringAsFixed(0)} enerji/sn',
                 style: const TextStyle(color: MinePalette.muted, fontSize: 10),
               ),
@@ -1168,7 +1235,10 @@ class BuildingDialog extends StatelessWidget {
               onChanged:
                   state.activeBuffIds.contains(buff.id) ||
                       state.energy >= buff.energyDrainPerSecond
-                  ? (active) => controller.toggleBuffLabEffect(buff.id, active)
+                  ? withButtonTapSoundValue(
+                      (active) =>
+                          controller.toggleBuffLabEffect(buff.id, active),
+                    )
                   : null,
             ),
           ),
@@ -1210,7 +1280,7 @@ class BuildingDialog extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
+              _LocalizedText(
                 state.reactorShutdown
                     ? 'GÜVENLİK KAPATMASI'
                     : stable
@@ -1225,7 +1295,7 @@ class BuildingDialog extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 4),
-              Text(
+              _LocalizedText(
                 'Isı $heat / Soğutma $cooling • Üretim ${GameEngine.reactorEnergyPerSecond(state)} enerji/sn • Depo ${state.energy.toStringAsFixed(0)}',
                 style: const TextStyle(color: MinePalette.cream, fontSize: 10),
               ),
@@ -1233,9 +1303,13 @@ class BuildingDialog extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
                   child: OutlinedButton.icon(
-                    onPressed: stable ? controller.restartReactor : null,
+                    onPressed: withButtonTapSound(
+                      stable ? controller.restartReactor : null,
+                    ),
                     icon: const Icon(Icons.restart_alt_rounded),
-                    label: const Text('DENGEYİ KUR VE YENİDEN BAŞLAT'),
+                    label: const _LocalizedText(
+                      'DENGEYİ KUR VE YENİDEN BAŞLAT',
+                    ),
                   ),
                 ),
             ],
@@ -1272,13 +1346,20 @@ class BuildingDialog extends StatelessWidget {
                     : MinePalette.amber;
                 return Semantics(
                   button: valid,
-                  label: valid
-                      ? 'Yuva $x, $y • ${component?.name ?? 'boş'}'
-                      : 'Kilitli yuva',
+                  label: context.gameText(
+                    valid ? 'Yuva {x}, {y} • {component}' : 'Kilitli yuva',
+                    values: {
+                      'x': x,
+                      'y': y,
+                      'component': context.gameText(component?.name ?? 'boş'),
+                    },
+                  ),
                   child: InkWell(
-                    onTap: valid
-                        ? () => _showReactorComponentSelector(context, x, y)
-                        : null,
+                    onTap: withButtonTapSound(
+                      valid
+                          ? () => _showReactorComponentSelector(context, x, y)
+                          : null,
+                    ),
                     child: Container(
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
@@ -1292,7 +1373,7 @@ class BuildingDialog extends StatelessWidget {
                         ),
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: Text(
+                      child: _LocalizedText(
                         component?.shortName ?? (valid ? '·' : '×'),
                         maxLines: 1,
                         overflow: TextOverflow.clip,
@@ -1355,7 +1436,7 @@ class BuildingDialog extends StatelessWidget {
           shrinkWrap: true,
           children: [
             const ListTile(
-              title: Text(
+              title: _LocalizedText(
                 'REAKTÖR MODÜLÜ SEÇ',
                 style: TextStyle(
                   color: MinePalette.amber,
@@ -1368,11 +1449,11 @@ class BuildingDialog extends StatelessWidget {
                 Icons.crop_square_rounded,
                 color: MinePalette.muted,
               ),
-              title: const Text('Yuvayı boşalt'),
-              onTap: () {
+              title: const _LocalizedText('Yuvayı boşalt'),
+              onTap: withButtonTapSound(() {
                 controller.setReactorComponent(x, y, 'empty');
                 Navigator.pop(sheetContext);
-              },
+              }),
             ),
             for (final component in ReactorCatalog.components)
               if (component.minimumLevel <= level)
@@ -1385,15 +1466,15 @@ class BuildingDialog extends StatelessWidget {
                         ? MinePalette.cyan
                         : MinePalette.amber,
                   ),
-                  title: Text(component.name),
-                  subtitle: Text(
+                  title: _LocalizedText(component.name),
+                  subtitle: _LocalizedText(
                     '+${component.energyPerSecond} enerji/sn • +${component.heatGenerated} ısı • -${component.heatCooled} soğutma',
                     style: const TextStyle(color: MinePalette.muted),
                   ),
-                  onTap: () {
+                  onTap: withButtonTapSound(() {
                     controller.setReactorComponent(x, y, component.id);
                     Navigator.pop(sheetContext);
-                  },
+                  }),
                 ),
           ],
         ),
@@ -1418,18 +1499,22 @@ class BuildingDialog extends StatelessWidget {
       context: context,
       builder: (dialogContext) => AlertDialog(
         backgroundColor: MinePalette.ink,
-        title: const Text('Bilim insanını çekirdeğe ada?'),
-        content: Text(
+        title: const _LocalizedText('Bilim insanını çekirdeğe ada?'),
+        content: _LocalizedText(
           '${scientist.name} kadrodan kalıcı olarak ayrılır. Karşılığında $reward kalıcı çekirdek parçası alırsın.',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('VAZGEÇ'),
+            onPressed: withButtonTapSound(
+              () => Navigator.pop(dialogContext, false),
+            ),
+            child: const _LocalizedText('VAZGEÇ'),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('ADA'),
+            onPressed: withButtonTapSound(
+              () => Navigator.pop(dialogContext, true),
+            ),
+            child: const _LocalizedText('ADA'),
           ),
         ],
       ),
@@ -1699,7 +1784,7 @@ class BuildingDialog extends StatelessWidget {
               ),
               const SizedBox(width: 7),
               Expanded(
-                child: Text(
+                child: _LocalizedText(
                   '${scientist.name} • ${scientist.rarity.name} • Lv ${scientist.level}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -1710,7 +1795,7 @@ class BuildingDialog extends StatelessWidget {
                   ),
                 ),
               ),
-              Text(
+              _LocalizedText(
                 '${scientist.experience}/${scientist.level * 100} xp',
                 style: const TextStyle(color: MinePalette.muted, fontSize: 8),
               ),
@@ -1718,7 +1803,7 @@ class BuildingDialog extends StatelessWidget {
           ),
           Padding(
             padding: const EdgeInsets.only(top: 5),
-            child: Text(
+            child: _LocalizedText(
               '${scientist.trait.name} • ${scientist.trait.description} • Başarı +%${(scientist.successChanceBonus * 100).round()} • Süre −%${(scientist.excavationSpeed * 100).round()} • Yaralanma ${scientist.injuryCount}/2',
               style: const TextStyle(color: MinePalette.muted, fontSize: 8),
             ),
@@ -1727,11 +1812,13 @@ class BuildingDialog extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 7),
               child: OutlinedButton.icon(
-                onPressed: state.revivalTokens > 0
-                    ? () => controller.reviveScientist(scientist.id)
-                    : null,
+                onPressed: withButtonTapSound(
+                  state.revivalTokens > 0
+                      ? () => controller.reviveScientist(scientist.id)
+                      : null,
+                ),
                 icon: const Icon(Icons.favorite_rounded, size: 15),
-                label: Text(
+                label: _LocalizedText(
                   state.revivalTokens > 0
                       ? 'NADİR MÜHÜRLE CANLANDIR'
                       : 'CANLANDIRMA MÜHRÜ GEREKİR',
@@ -1745,7 +1832,7 @@ class BuildingDialog extends StatelessWidget {
           else if (scientist.injured)
             Padding(
               padding: const EdgeInsets.only(top: 5),
-              child: Text(
+              child: _LocalizedText(
                 'Yaralı • iyileşmesine ${_duration(scientist.injuredUntil!.difference(DateTime.now()).inSeconds)} kaldı. Sonraki yaralanma ölümcül olur.',
                 style: const TextStyle(color: MinePalette.danger, fontSize: 8),
               ),
@@ -1756,7 +1843,7 @@ class BuildingDialog extends StatelessWidget {
               child: Row(
                 children: [
                   Expanded(
-                    child: Text(
+                    child: _LocalizedText(
                       readyAt!.isAfter(DateTime.now())
                           ? '${ScientistExpeditionCatalog.byId[state.activeScientistMissionId]!.name} sürüyor • ${_duration(readyAt.difference(DateTime.now()).inSeconds)} kaldı.'
                           : 'Sefer tamamlandı; ganimeti teslim al.',
@@ -1768,9 +1855,14 @@ class BuildingDialog extends StatelessWidget {
                   ),
                   if (!readyAt.isAfter(DateTime.now()))
                     TextButton.icon(
-                      onPressed: controller.claimScientistExpedition,
+                      onPressed: withButtonTapSound(
+                        controller.claimScientistExpedition,
+                      ),
                       icon: const Icon(Icons.inventory_2_rounded, size: 15),
-                      label: const Text('AL', style: TextStyle(fontSize: 9)),
+                      label: const _LocalizedText(
+                        'AL',
+                        style: TextStyle(fontSize: 9),
+                      ),
                     ),
                 ],
               ),
@@ -1787,14 +1879,15 @@ class BuildingDialog extends StatelessWidget {
                       message:
                           '${mission.description}\n${(GameEngine.scientistMissionSuccessChance(scientist, mission) * 100).round()}% başarı • ${_duration(GameEngine.scientistMissionDuration(scientist, mission).inSeconds)} • Başarısızlık yaralanma riski taşır.',
                       child: OutlinedButton(
-                        onPressed:
-                            canStart &&
-                                state.deepestMeters >= mission.minimumDepth
-                            ? () => controller.startScientistExpedition(
-                                scientist.id,
-                                mission.id,
-                              )
-                            : null,
+                        onPressed: withButtonTapSound(
+                          canStart &&
+                                  state.deepestMeters >= mission.minimumDepth
+                              ? () => controller.startScientistExpedition(
+                                  scientist.id,
+                                  mission.id,
+                                )
+                              : null,
+                        ),
                         style: OutlinedButton.styleFrom(
                           visualDensity: VisualDensity.compact,
                           padding: const EdgeInsets.symmetric(
@@ -1804,7 +1897,7 @@ class BuildingDialog extends StatelessWidget {
                           side: const BorderSide(color: MinePalette.border),
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
-                        child: Text(
+                        child: _LocalizedText(
                           '${mission.name} • ${(GameEngine.scientistMissionSuccessChance(scientist, mission) * 100).round()}%',
                           style: const TextStyle(
                             fontSize: 8,
@@ -1859,7 +1952,7 @@ class BuildingDialog extends StatelessWidget {
               ),
               const SizedBox(width: 9),
               const Expanded(
-                child: Text(
+                child: _LocalizedText(
                   'Haritası çıkarılmamış mağaralarda cevher, yapı malzemesi, sefer bileti ve eski kalıntılar bulunabilir.',
                   style: TextStyle(
                     color: MinePalette.cream,
@@ -1902,7 +1995,7 @@ class BuildingDialog extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text(
+                const _LocalizedText(
                   'SEFER ROTASI',
                   style: TextStyle(
                     color: MinePalette.cyan,
@@ -1914,23 +2007,33 @@ class BuildingDialog extends StatelessWidget {
                 SegmentedButton<String>(
                   showSelectedIcon: false,
                   segments: const [
-                    ButtonSegment(value: 'survey', label: Text('HARİTALI')),
-                    ButtonSegment(value: 'safe', label: Text('GÜVENLİ')),
-                    ButtonSegment(value: 'deep', label: Text('DERİN')),
+                    ButtonSegment(
+                      value: 'survey',
+                      label: _LocalizedText('HARİTALI'),
+                    ),
+                    ButtonSegment(
+                      value: 'safe',
+                      label: _LocalizedText('GÜVENLİ'),
+                    ),
+                    ButtonSegment(
+                      value: 'deep',
+                      label: _LocalizedText('DERİN'),
+                    ),
                   ],
                   selected: {state.caveRoute},
-                  onSelectionChanged: (selected) =>
-                      controller.selectCaveRoute(selected.first),
+                  onSelectionChanged: withButtonTapSoundValue(
+                    (selected) => controller.selectCaveRoute(selected.first),
+                  ),
                 ),
                 const SizedBox(height: 4),
-                Text(
+                _LocalizedText(
                   CaveRouteCatalog.byId[state.caveRoute]!.description,
                   style: const TextStyle(color: MinePalette.muted, fontSize: 9),
                 ),
                 Row(
                   children: [
                     const Expanded(
-                      child: Text(
+                      child: _LocalizedText(
                         'GÖNDERİLECEK DRON',
                         style: TextStyle(
                           color: MinePalette.muted,
@@ -1940,19 +2043,21 @@ class BuildingDialog extends StatelessWidget {
                       ),
                     ),
                     IconButton(
-                      tooltip: 'Bir dron çıkar',
+                      tooltip: context.gameText('Bir dron çıkar'),
                       constraints: const BoxConstraints.tightFor(
                         width: 48,
                         height: 48,
                       ),
-                      onPressed: state.caveDroneCount > 1
-                          ? () => controller.setCaveDroneCount(
-                              state.caveDroneCount - 1,
-                            )
-                          : null,
+                      onPressed: withButtonTapSound(
+                        state.caveDroneCount > 1
+                            ? () => controller.setCaveDroneCount(
+                                state.caveDroneCount - 1,
+                              )
+                            : null,
+                      ),
                       icon: const Icon(Icons.remove_circle_outline_rounded),
                     ),
-                    Text(
+                    _LocalizedText(
                       '${state.caveDroneCount} / ${state.drones}',
                       style: const TextStyle(
                         color: MinePalette.cream,
@@ -1961,21 +2066,23 @@ class BuildingDialog extends StatelessWidget {
                       ),
                     ),
                     IconButton(
-                      tooltip: 'Bir dron ekle',
+                      tooltip: context.gameText('Bir dron ekle'),
                       constraints: const BoxConstraints.tightFor(
                         width: 48,
                         height: 48,
                       ),
-                      onPressed: state.caveDroneCount < state.drones
-                          ? () => controller.setCaveDroneCount(
-                              state.caveDroneCount + 1,
-                            )
-                          : null,
+                      onPressed: withButtonTapSound(
+                        state.caveDroneCount < state.drones
+                            ? () => controller.setCaveDroneCount(
+                                state.caveDroneCount + 1,
+                              )
+                            : null,
+                      ),
                       icon: const Icon(Icons.add_circle_outline_rounded),
                     ),
                   ],
                 ),
-                Text(
+                _LocalizedText(
                   '4 düğümlü keşif • Ganimet çarpanı ${((1 + (state.caveDroneCount - 1) * .35) * CaveRouteCatalog.byId[state.caveRoute]!.lootMultiplier).toStringAsFixed(1)}×',
                   style: const TextStyle(
                     color: MinePalette.amber,
@@ -1987,7 +2094,7 @@ class BuildingDialog extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 7),
-          const Text(
+          const _LocalizedText(
             'KEŞİF DRONU',
             style: TextStyle(
               color: MinePalette.cyan,
@@ -2010,14 +2117,16 @@ class BuildingDialog extends StatelessWidget {
                     width: 30,
                     height: 23,
                   ),
-                  label: Text(drone.name),
+                  label: _LocalizedText(drone.name),
                   selected: state.caveDroneType == drone.id,
-                  onSelected: (_) => controller.selectCaveDrone(drone.id),
+                  onSelected: withButtonTapSoundValue(
+                    (_) => controller.selectCaveDrone(drone.id),
+                  ),
                 ),
             ],
           ),
           const SizedBox(height: 4),
-          Text(
+          _LocalizedText(
             '${CaveDroneCatalog.byId[state.caveDroneType]!.description} • '
             'Can ${CaveDroneCatalog.byId[state.caveDroneType]!.health} • '
             'Görüş ${CaveDroneCatalog.byId[state.caveDroneType]!.vision} • '
@@ -2027,7 +2136,7 @@ class BuildingDialog extends StatelessWidget {
           ),
         ],
         if (state.caveNodeMap.isNotEmpty)
-          _caveExplorationMap(state, controller),
+          _caveExplorationMap(context, state, controller),
         ActionTile(
           icon: Icons.route_rounded,
           title: canClaim
@@ -2060,6 +2169,7 @@ class BuildingDialog extends StatelessWidget {
           onPressed: canClaim
               ? controller.claimCaveExpedition
               : controller.startCaveExpedition,
+          buttonSoundEnabled: canClaim,
           accent: canClaim ? MinePalette.amber : MinePalette.teal,
         ),
         if (exploring && state.caveStep > 0)
@@ -2120,7 +2230,11 @@ class BuildingDialog extends StatelessWidget {
     );
   }
 
-  Widget _caveExplorationMap(GameState state, GameController controller) {
+  Widget _caveExplorationMap(
+    BuildContext context,
+    GameState state,
+    GameController controller,
+  ) {
     final drone = CaveDroneCatalog.byId[state.caveDroneType]!;
     final maxHealth = drone.health + (state.caveDroneCount - 1) * 14;
     final visibleThrough = state.caveStep + drone.vision;
@@ -2148,7 +2262,7 @@ class BuildingDialog extends StatelessWidget {
               ),
               const SizedBox(width: 6),
               Expanded(
-                child: Text(
+                child: _LocalizedText(
                   '${drone.name} • DÜĞÜM ${state.caveStep.clamp(0, 4)}/4',
                   style: const TextStyle(
                     color: MinePalette.cream,
@@ -2158,7 +2272,7 @@ class BuildingDialog extends StatelessWidget {
                   ),
                 ),
               ),
-              Text(
+              _LocalizedText(
                 'YAKIT ${state.caveDroneFuel}',
                 style: const TextStyle(
                   color: MinePalette.amber,
@@ -2188,7 +2302,7 @@ class BuildingDialog extends StatelessWidget {
               children: [
                 SizedBox(
                   width: 22,
-                  child: Text(
+                  child: _LocalizedText(
                     '${row + 1}',
                     textAlign: TextAlign.center,
                     style: TextStyle(
@@ -2204,6 +2318,7 @@ class BuildingDialog extends StatelessWidget {
                   if (lane > 0) const SizedBox(width: 5),
                   Expanded(
                     child: _caveNodeButton(
+                      context: context,
                       state: state,
                       controller: controller,
                       row: row,
@@ -2234,7 +2349,7 @@ class BuildingDialog extends StatelessWidget {
               ),
           ],
           const SizedBox(height: 5),
-          Text(
+          _LocalizedText(
             state.caveExploring
                 ? 'Seçili yoldaki düğüme dokun. Dron görüşü sisi deler; mıknatıs yan kola erişir.'
                 : state.caveDroneHealth <= 0
@@ -2263,6 +2378,7 @@ class BuildingDialog extends StatelessWidget {
       .join(', ');
 
   Widget _caveNodeButton({
+    required BuildContext context,
     required GameState state,
     required GameController controller,
     required int row,
@@ -2279,7 +2395,9 @@ class BuildingDialog extends StatelessWidget {
     final tint = visible ? _caveNodeColor(nodeId) : MinePalette.muted;
     return Semantics(
       button: canChoose,
-      label: visible ? node.name : 'Keşfedilmemiş galeri',
+      label: visible
+          ? context.gameText(node.name)
+          : context.gameText('Keşfedilmemiş galeri'),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         height: 42,
@@ -2302,7 +2420,9 @@ class BuildingDialog extends StatelessWidget {
         ),
         child: InkWell(
           borderRadius: BorderRadius.circular(6),
-          onTap: canChoose ? () => controller.chooseCaveNode(lane) : null,
+          onTap: withButtonTapSound(
+            canChoose ? () => controller.chooseCaveNode(lane) : null,
+          ),
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 150),
             child: !visible
@@ -2330,7 +2450,7 @@ class BuildingDialog extends StatelessWidget {
                                 color: tint,
                                 size: 16,
                               ),
-                              Text(
+                              _LocalizedText(
                                 node.name,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -2460,7 +2580,7 @@ class BuildingDialog extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-        Text(
+        _LocalizedText(
           boss.name,
           textAlign: TextAlign.center,
           style: const TextStyle(
@@ -2470,7 +2590,7 @@ class BuildingDialog extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 3),
-        Text(
+        _LocalizedText(
           '${health.toStringAsFixed(0)} / ${boss.health.toStringAsFixed(0)} dayanıklılık',
           textAlign: TextAlign.center,
           style: const TextStyle(color: MinePalette.muted, fontSize: 11),
@@ -2499,15 +2619,15 @@ class BuildingDialog extends StatelessWidget {
         SizedBox(
           height: 50,
           child: ElevatedButton.icon(
-            onPressed: controller.attackBoss,
+            onPressed: withButtonTapSound(controller.attackBoss),
             icon: const Icon(Icons.flash_on_rounded),
-            label: Text(
+            label: _LocalizedText(
               'SALDIR • ${GameEngine.bossAttackDamage(state, critical: weakPointOpen).toStringAsFixed(1)} GÜÇ',
             ),
           ),
         ),
         const SizedBox(height: 8),
-        Text(
+        _LocalizedText(
           'Zafer ödülü: ${boss.reward} kasa + ${3 + boss.id} sondaj parçası + $chestRewardName',
           textAlign: TextAlign.center,
           style: const TextStyle(
@@ -2546,8 +2666,19 @@ class BuildingDialog extends StatelessWidget {
           ActionTile(
             icon: Icons.task_alt_rounded,
             title: challenge.title,
-            description:
-                '${challenge.description} İlerleme: ${state.dailyChallengeProgress[challenge.id] ?? 0}/${challenge.target}. Ödül: ${challenge.rewardCoins} kasa.',
+            description: gameTextForLanguage(
+              state.languageCode,
+              '{challenge} İlerleme: {progress}/{target}. Ödül: {reward} kasa.',
+              {
+                'challenge': gameTextForLanguage(
+                  state.languageCode,
+                  challenge.description,
+                ),
+                'progress': state.dailyChallengeProgress[challenge.id] ?? 0,
+                'target': challenge.target,
+                'reward': challenge.rewardCoins,
+              },
+            ),
             buttonLabel: state.claimedDailyChallengeIds.contains(challenge.id)
                 ? 'ALINDI'
                 : (state.dailyChallengeProgress[challenge.id] ?? 0) >=
@@ -2564,8 +2695,16 @@ class BuildingDialog extends StatelessWidget {
         ActionTile(
           icon: Icons.calendar_view_week_rounded,
           title: 'Haftalık kilometre taşı',
-          description:
-              '${state.weeklyChallengeProgress}/${DailyChallengeCatalog.weeklyTarget} günlük hedefi ödüllendir. Ödül: ${DailyChallengeCatalog.weeklyRewardCoins} kasa ve ${DailyChallengeCatalog.weeklyRewardCoreShards} çekirdek parçası.',
+          description: gameTextForLanguage(
+            state.languageCode,
+            '{progress}/{target} günlük hedefi ödüllendir. Ödül: {coins} kasa ve {shards} çekirdek parçası.',
+            {
+              'progress': state.weeklyChallengeProgress,
+              'target': DailyChallengeCatalog.weeklyTarget,
+              'coins': DailyChallengeCatalog.weeklyRewardCoins,
+              'shards': DailyChallengeCatalog.weeklyRewardCoreShards,
+            },
+          ),
           buttonLabel: state.weeklyChallengeClaimed
               ? 'ALINDI'
               : state.weeklyChallengeProgress >=
@@ -2666,7 +2805,7 @@ class BuildingDialog extends StatelessWidget {
     return [...minerals, ...carriedSpecials].take(35).toList();
   }
 
-  Widget _specialWorkerRosterSection(GameState state) {
+  Widget _specialWorkerRosterSection(BuildContext context, GameState state) {
     final unlocked = state.unlockedBuildings.contains('super_miners');
     final cost = GameEngine.specialWorkerCost(state);
     return Column(
@@ -2695,7 +2834,7 @@ class BuildingDialog extends StatelessWidget {
               'Kopya özel madencileri hurdaya çevirip seviye malzemesi kazanabilirsin.',
             ),
           for (final worker in state.specialWorkerRoster)
-            _specialWorkerCard(worker, state),
+            _specialWorkerCard(context, worker, state),
         ],
       ],
     );
@@ -2714,7 +2853,11 @@ class BuildingDialog extends StatelessWidget {
     return [for (var floor = firstFloor; floor <= lastFloor; floor++) floor];
   }
 
-  Widget _specialWorkerCard(SpecialWorkerState worker, GameState state) {
+  Widget _specialWorkerCard(
+    BuildContext context,
+    SpecialWorkerState worker,
+    GameState state,
+  ) {
     const worldNames = ['Dünya', 'Ay', 'Titan'];
     final ability = SpecialWorkerAbilityCatalog.byId[worker.abilityId]!;
     final isSeller = worker.abilityId == 'auto_seller';
@@ -2764,7 +2907,7 @@ class BuildingDialog extends StatelessWidget {
               ),
               const SizedBox(width: 6),
               Expanded(
-                child: Text(
+                child: _LocalizedText(
                   '${worker.name} • ${worker.rarity.name} • Lv ${worker.level}',
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -2774,7 +2917,7 @@ class BuildingDialog extends StatelessWidget {
                   ),
                 ),
               ),
-              Text(
+              _LocalizedText(
                 '×${worker.power.toStringAsFixed(1)}',
                 style: const TextStyle(
                   color: MinePalette.amber,
@@ -2786,7 +2929,7 @@ class BuildingDialog extends StatelessWidget {
           ),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Text(
+            child: _LocalizedText(
               isSeller
                   ? '${ability.name} • Her saniye ${worker.rarity.sellerUnitsPerLevel * worker.level} adet seçilen madeni satar.'
                   : '${ability.name} • ${ability.description}',
@@ -2800,19 +2943,19 @@ class BuildingDialog extends StatelessWidget {
               underline: const SizedBox.shrink(),
               style: const TextStyle(color: MinePalette.cream, fontSize: 9),
               dropdownColor: MinePalette.panel,
-              hint: const Text('Satılacak maden'),
+              hint: const _LocalizedText('Satılacak maden'),
               items: [
                 for (final resource in sellableResources)
                   DropdownMenuItem(
                     value: resource.id,
-                    child: Text(resource.name),
+                    child: _LocalizedText(resource.name),
                   ),
               ],
-              onChanged: (resourceId) {
+              onChanged: withButtonTapSoundValue((resourceId) {
                 if (resourceId != null) {
                   controller.setSpecialWorkerResource(worker.id, resourceId);
                 }
-              },
+              }),
             ),
           if (!isSeller)
             Row(
@@ -2831,10 +2974,10 @@ class BuildingDialog extends StatelessWidget {
                       for (final world in openWorlds)
                         DropdownMenuItem(
                           value: world,
-                          child: Text(worldNames[world]),
+                          child: _LocalizedText(worldNames[world]),
                         ),
                     ],
-                    onChanged: (world) {
+                    onChanged: withButtonTapSoundValue((world) {
                       if (world == null) return;
                       final targetFloors = _workerFloors(state, world);
                       controller.moveSpecialWorker(
@@ -2842,7 +2985,7 @@ class BuildingDialog extends StatelessWidget {
                         world,
                         targetFloors.first,
                       );
-                    },
+                    }),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -2860,10 +3003,10 @@ class BuildingDialog extends StatelessWidget {
                       for (final floor in floors)
                         DropdownMenuItem(
                           value: floor,
-                          child: Text('$floor. kat'),
+                          child: _LocalizedText('$floor. kat'),
                         ),
                     ],
-                    onChanged: (floor) {
+                    onChanged: withButtonTapSoundValue((floor) {
                       if (floor != null) {
                         controller.moveSpecialWorker(
                           worker.id,
@@ -2871,7 +3014,7 @@ class BuildingDialog extends StatelessWidget {
                           floor,
                         );
                       }
-                    },
+                    }),
                   ),
                 ),
               ],
@@ -2883,7 +3026,7 @@ class BuildingDialog extends StatelessWidget {
                   child: Row(
                     children: [
                       const Expanded(
-                        child: Text(
+                        child: _LocalizedText(
                           '5 dk’da kat değiştir',
                           style: TextStyle(
                             color: MinePalette.muted,
@@ -2893,8 +3036,12 @@ class BuildingDialog extends StatelessWidget {
                       ),
                       Switch(
                         value: worker.autoMove,
-                        onChanged: (value) => controller
-                            .setSpecialWorkerAutoMove(worker.id, value),
+                        onChanged: withButtonTapSoundValue(
+                          (value) => controller.setSpecialWorkerAutoMove(
+                            worker.id,
+                            value,
+                          ),
+                        ),
                         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         activeThumbColor: MinePalette.teal,
                       ),
@@ -2902,18 +3049,25 @@ class BuildingDialog extends StatelessWidget {
                   ),
                 ),
                 TextButton.icon(
-                  onPressed: upgradeCost > 0 && state.workerScrap >= upgradeCost
-                      ? () => controller.upgradeSpecialWorker(worker.id)
-                      : null,
+                  onPressed: withButtonTapSound(
+                    upgradeCost > 0 && state.workerScrap >= upgradeCost
+                        ? () => controller.upgradeSpecialWorker(worker.id)
+                        : null,
+                  ),
                   icon: const Icon(Icons.arrow_upward_rounded, size: 13),
-                  label: Text(
+                  label: _LocalizedText(
                     upgradeCost == 0 ? 'MAX' : 'Lv +1 • $upgradeCost',
                     style: const TextStyle(fontSize: 8),
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Hurdaya ayır: +${worker.rarity.scrapValue} hurda',
-                  onPressed: () => controller.dismantleSpecialWorker(worker.id),
+                  tooltip: context.gameText(
+                    'Hurdaya ayır: +{scrap} hurda',
+                    values: {'scrap': worker.rarity.scrapValue},
+                  ),
+                  onPressed: withButtonTapSound(
+                    () => controller.dismantleSpecialWorker(worker.id),
+                  ),
                   icon: const Icon(
                     Icons.delete_sweep_rounded,
                     color: MinePalette.muted,
@@ -2958,28 +3112,31 @@ class BuildingDialog extends StatelessWidget {
       context: context,
       builder: (dialogContext) => AlertDialog(
         backgroundColor: MinePalette.panel,
-        title: const Text('Yeni çekirdek döngüsü başlatılsın mı?'),
-        content: Text(
+        title: const _LocalizedText('Yeni çekirdek döngüsü başlatılsın mı?'),
+        content: _LocalizedText(
           'Mevcut derinlik, kasa, ambar, sondaj parçası seviyeleri, vardiya yöneticisi ve reaktör ilerlemesi sıfırlanacak. ${math.max(1, (controller.state.deepestMeters / 500000).floor())} kalıcı çekirdek parçası korunacak.',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('VAZGEÇ'),
+            onPressed: withButtonTapSound(() => Navigator.pop(dialogContext)),
+            child: const _LocalizedText('VAZGEÇ'),
           ),
           FilledButton(
-            onPressed: () {
+            onPressed: withButtonTapSound(() {
               Navigator.pop(dialogContext);
               controller.prestige();
-            },
-            child: const Text('YENİDEN DOĞ'),
+            }),
+            child: const _LocalizedText('YENİDEN DOĞ'),
           ),
         ],
       ),
     );
   }
 
-  Widget _workerAssignmentsSection(GameState state) => Container(
+  Widget _workerAssignmentsSection(
+    BuildContext context,
+    GameState state,
+  ) => Container(
     margin: const EdgeInsets.only(bottom: 8),
     padding: const EdgeInsets.all(8),
     decoration: BoxDecoration(
@@ -2991,12 +3148,13 @@ class BuildingDialog extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _subheading('EKİP GÖREV DAĞILIMI'),
-        Text(
+        _LocalizedText(
           '${state.diggingWorkers} kazıcı • ${state.transportWorkers} taşıyıcı • ${state.scannerWorkers} tarayıcı • ${state.sortingWorkers} ayıklayıcı',
           style: const TextStyle(color: MinePalette.muted, fontSize: 9),
         ),
         const SizedBox(height: 3),
         _workerRoleRow(
+          context,
           state,
           role: 'digging',
           name: 'Kazı',
@@ -3004,6 +3162,7 @@ class BuildingDialog extends StatelessWidget {
           icon: Icons.construction_rounded,
         ),
         _workerRoleRow(
+          context,
           state,
           role: 'transport',
           name: 'Taşıma',
@@ -3011,6 +3170,7 @@ class BuildingDialog extends StatelessWidget {
           icon: Icons.local_shipping_rounded,
         ),
         _workerRoleRow(
+          context,
           state,
           role: 'scanner',
           name: 'Tarama',
@@ -3018,13 +3178,14 @@ class BuildingDialog extends StatelessWidget {
           icon: Icons.radar_rounded,
         ),
         _workerRoleRow(
+          context,
           state,
           role: 'sorting',
           name: 'Ayıklama',
           benefit: 'Her çalışan kaynak satışına %2 ekler.',
           icon: Icons.filter_alt_rounded,
         ),
-        const Text(
+        const _LocalizedText(
           'Öncelik 1 en düşük, 4 en yüksek. Yeni görev açılırken düşük öncelikli ekipten kişi alınır; yeni işe alınanlar kazıya katılır.',
           style: TextStyle(color: MinePalette.muted, fontSize: 8, height: 1.3),
         ),
@@ -3033,6 +3194,7 @@ class BuildingDialog extends StatelessWidget {
   );
 
   Widget _workerRoleRow(
+    BuildContext context,
     GameState state, {
     required String role,
     required String name,
@@ -3052,7 +3214,7 @@ class BuildingDialog extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              _LocalizedText(
                 name,
                 style: const TextStyle(
                   color: MinePalette.cream,
@@ -3060,7 +3222,7 @@ class BuildingDialog extends StatelessWidget {
                   fontWeight: FontWeight.w900,
                 ),
               ),
-              Text(
+              _LocalizedText(
                 unlocked ? benefit : 'Danışman göreviyle açılacak. $benefit',
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
@@ -3071,18 +3233,18 @@ class BuildingDialog extends StatelessWidget {
         ),
         if (role != 'digging' && unlocked)
           IconButton(
-            tooltip: 'Bir çalışanı kazıya döndür',
+            tooltip: context.gameText('Bir çalışanı kazıya döndür'),
             constraints: const BoxConstraints.tightFor(width: 48, height: 48),
-            onPressed: count > 0
-                ? () => controller.assignWorkerRole(role, -1)
-                : null,
+            onPressed: withButtonTapSound(
+              count > 0 ? () => controller.assignWorkerRole(role, -1) : null,
+            ),
             icon: const Icon(Icons.remove_circle_outline_rounded),
           )
         else
           const SizedBox(width: 48),
         SizedBox(
           width: 20,
-          child: Text(
+          child: _LocalizedText(
             '$count',
             textAlign: TextAlign.center,
             style: const TextStyle(
@@ -3094,23 +3256,24 @@ class BuildingDialog extends StatelessWidget {
         ),
         if (role != 'digging' && unlocked)
           IconButton(
-            tooltip: 'Bir kazıcıyı bu göreve ata',
+            tooltip: context.gameText('Bir kazıcıyı bu göreve ata'),
             constraints: const BoxConstraints.tightFor(width: 48, height: 48),
-            onPressed:
-                state.workerRolePriority
-                    .take(priority - 1)
-                    .any(
-                      (candidate) => candidate == 'digging'
-                          ? state.diggingWorkers > 0
-                          : (state.workerAssignments[candidate] ?? 0) > 0,
-                    )
-                ? () => controller.assignWorkerRole(role, 1)
-                : null,
+            onPressed: withButtonTapSound(
+              state.workerRolePriority
+                      .take(priority - 1)
+                      .any(
+                        (candidate) => candidate == 'digging'
+                            ? state.diggingWorkers > 0
+                            : (state.workerAssignments[candidate] ?? 0) > 0,
+                      )
+                  ? () => controller.assignWorkerRole(role, 1)
+                  : null,
+            ),
             icon: const Icon(Icons.add_circle_outline_rounded),
           )
         else if (role != 'digging')
           Tooltip(
-            message: 'Danışman göreviyle açılacak',
+            message: context.gameText('Danışman göreviyle açılacak'),
             child: const SizedBox(
               width: 48,
               height: 48,
@@ -3121,14 +3284,16 @@ class BuildingDialog extends StatelessWidget {
           const SizedBox(width: 48),
         if (unlocked)
           PopupMenuButton<int>(
-            tooltip: 'Görev önceliğini değiştir',
-            onSelected: (position) =>
-                controller.setWorkerRolePriority(role, position - 1),
+            tooltip: context.gameText('Görev önceliğini değiştir'),
+            onSelected: withButtonTapSoundValue(
+              (position) =>
+                  controller.setWorkerRolePriority(role, position - 1),
+            ),
             itemBuilder: (context) => [
               for (var position = 1; position <= 4; position++)
                 PopupMenuItem(
                   value: position,
-                  child: Text(
+                  child: _LocalizedText(
                     'Öncelik $position${position == 1
                         ? ' • düşük'
                         : position == 4
@@ -3145,7 +3310,7 @@ class BuildingDialog extends StatelessWidget {
                 border: Border.all(color: MinePalette.border),
                 borderRadius: BorderRadius.circular(6),
               ),
-              child: Text(
+              child: _LocalizedText(
                 '$priority',
                 style: const TextStyle(
                   color: MinePalette.amber,
@@ -3161,7 +3326,7 @@ class BuildingDialog extends StatelessWidget {
     );
   }
 
-  Widget _gemForgeSection(GameState state) {
+  Widget _gemForgeSection(BuildContext context, GameState state) {
     if (!state.unlockedBuildings.contains('gem_forge')) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3206,7 +3371,7 @@ class BuildingDialog extends StatelessWidget {
                     ),
                     const SizedBox(width: 5),
                     Expanded(
-                      child: Text(
+                      child: _LocalizedText(
                         '${gem.name} • ${state.gems[gem.id] ?? 0}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -3217,9 +3382,11 @@ class BuildingDialog extends StatelessWidget {
                       ),
                     ),
                     TextButton(
-                      onPressed: (state.gems[gem.id] ?? 0) > 0
-                          ? () => controller.toggleGemEquipment(gem.id)
-                          : null,
+                      onPressed: withButtonTapSound(
+                        (state.gems[gem.id] ?? 0) > 0
+                            ? () => controller.toggleGemEquipment(gem.id)
+                            : null,
+                      ),
                       style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(horizontal: 5),
                         minimumSize: const Size(0, 40),
@@ -3228,7 +3395,7 @@ class BuildingDialog extends StatelessWidget {
                           fontWeight: FontWeight.w900,
                         ),
                       ),
-                      child: Text(
+                      child: _LocalizedText(
                         state.equippedGems.contains(gem.id)
                             ? 'YUVADAN ÇIKAR'
                             : 'KUŞAN',
@@ -3239,7 +3406,7 @@ class BuildingDialog extends StatelessWidget {
                 Row(
                   children: [
                     const Expanded(
-                      child: Text(
+                      child: _LocalizedText(
                         'İŞ YÜKÜ',
                         style: TextStyle(
                           color: MinePalette.muted,
@@ -3249,16 +3416,18 @@ class BuildingDialog extends StatelessWidget {
                       ),
                     ),
                     IconButton(
-                      tooltip: 'İş yükünü %5 azalt',
+                      tooltip: context.gameText('İş yükünü %5 azalt'),
                       constraints: const BoxConstraints.tightFor(
                         width: 48,
                         height: 48,
                       ),
                       visualDensity: VisualDensity.compact,
-                      onPressed: () => controller.adjustGemWorkload(gem.id, -5),
+                      onPressed: withButtonTapSound(
+                        () => controller.adjustGemWorkload(gem.id, -5),
+                      ),
                       icon: const Icon(Icons.remove_circle_outline_rounded),
                     ),
-                    Text(
+                    _LocalizedText(
                       '${state.gemWorkload[gem.id] ?? 0}%',
                       style: const TextStyle(
                         color: MinePalette.cyan,
@@ -3267,22 +3436,24 @@ class BuildingDialog extends StatelessWidget {
                       ),
                     ),
                     IconButton(
-                      tooltip: 'İş yükünü %5 artır',
+                      tooltip: context.gameText('İş yükünü %5 artır'),
                       constraints: const BoxConstraints.tightFor(
                         width: 48,
                         height: 48,
                       ),
                       visualDensity: VisualDensity.compact,
-                      onPressed: () => controller.adjustGemWorkload(gem.id, 5),
+                      onPressed: withButtonTapSound(
+                        () => controller.adjustGemWorkload(gem.id, 5),
+                      ),
                       icon: const Icon(Icons.add_circle_outline_rounded),
                     ),
                   ],
                 ),
-                Text(
+                _LocalizedText(
                   'Tarif: ${gem.recipe.entries.map((entry) => '${entry.value} ${ResourceCatalog.byId[entry.key]?.name ?? entry.key}').join(' + ')}',
                   style: const TextStyle(color: MinePalette.muted, fontSize: 9),
                 ),
-                Text(
+                _LocalizedText(
                   gem.bonus,
                   style: TextStyle(
                     color: Color(gem.colorHex),
@@ -3352,9 +3523,9 @@ class BuildingDialog extends StatelessWidget {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: unlocked && !current
-              ? () => controller.switchWorld(index)
-              : null,
+          onTap: withButtonTapSound(
+            unlocked && !current ? () => controller.switchWorld(index) : null,
+          ),
           borderRadius: BorderRadius.circular(7),
           child: Container(
             margin: const EdgeInsets.only(bottom: 6),
@@ -3382,14 +3553,14 @@ class BuildingDialog extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
+                      _LocalizedText(
                         title,
                         style: const TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
-                      Text(
+                      _LocalizedText(
                         '$subtitle • ${depth.floor()} m',
                         style: const TextStyle(
                           color: MinePalette.muted,
@@ -3399,7 +3570,7 @@ class BuildingDialog extends StatelessWidget {
                     ],
                   ),
                 ),
-                Text(
+                _LocalizedText(
                   current
                       ? 'AKTİF'
                       : unlocked
@@ -3471,7 +3642,7 @@ class _DialogHeader extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              _LocalizedText(
                 data.$1,
                 style: const TextStyle(
                   color: MinePalette.cream,
@@ -3480,7 +3651,7 @@ class _DialogHeader extends StatelessWidget {
                   letterSpacing: .5,
                 ),
               ),
-              Text(
+              _LocalizedText(
                 data.$2,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -3490,8 +3661,8 @@ class _DialogHeader extends StatelessWidget {
           ),
         ),
         IconButton(
-          tooltip: 'Pencereyi kapat',
-          onPressed: () => Navigator.of(context).pop(),
+          tooltip: context.gameText('Pencereyi kapat'),
+          onPressed: withButtonTapSound(() => Navigator.of(context).pop()),
           icon: const Icon(Icons.close_rounded),
         ),
       ],
@@ -3536,7 +3707,7 @@ class _InventoryRow extends StatelessWidget {
           ),
           const SizedBox(width: 6),
           Expanded(
-            child: Text(
+            child: _LocalizedText(
               resource.name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -3547,7 +3718,7 @@ class _InventoryRow extends StatelessWidget {
               ),
             ),
           ),
-          Text(
+          _LocalizedText(
             '×$amount',
             style: const TextStyle(
               color: MinePalette.cyan,
@@ -3558,11 +3729,13 @@ class _InventoryRow extends StatelessWidget {
           if (isTradable && amount > 0) ...[
             IconButton(
               tooltip: reserve > 0
-                  ? 'Rezervi kaldır'
-                  : 'En çok 10 adet rezerve et',
+                  ? context.gameText('Rezervi kaldır')
+                  : context.gameText('En çok 10 adet rezerve et'),
               visualDensity: VisualDensity.compact,
               constraints: const BoxConstraints.tightFor(width: 40, height: 40),
-              onPressed: () => controller.toggleReserve(resource.id),
+              onPressed: withButtonTapSound(
+                () => controller.toggleReserve(resource.id),
+              ),
               icon: Icon(
                 reserve > 0
                     ? Icons.bookmark_rounded
@@ -3573,11 +3746,13 @@ class _InventoryRow extends StatelessWidget {
             ),
             IconButton(
               tooltip: isLocked
-                  ? 'Kaynak kilidini aç'
-                  : 'Kaynağı satıştan koru',
+                  ? context.gameText('Kaynak kilidini aç')
+                  : context.gameText('Kaynağı satıştan koru'),
               visualDensity: VisualDensity.compact,
               constraints: const BoxConstraints.tightFor(width: 40, height: 40),
-              onPressed: () => controller.toggleResourceLock(resource.id),
+              onPressed: withButtonTapSound(
+                () => controller.toggleResourceLock(resource.id),
+              ),
               icon: Icon(
                 isLocked ? Icons.lock_rounded : Icons.lock_open_rounded,
                 color: isLocked ? MinePalette.amber : MinePalette.muted,
@@ -3588,9 +3763,11 @@ class _InventoryRow extends StatelessWidget {
               width: 48,
               height: 34,
               child: FilledButton(
-                onPressed: canSell ? () => controller.sell(resource.id) : null,
+                onPressed: withButtonTapSound(
+                  canSell ? () => controller.sell(resource.id) : null,
+                ),
                 style: FilledButton.styleFrom(padding: EdgeInsets.zero),
-                child: Text(
+                child: _LocalizedText(
                   '+${resource.baseValue}',
                   style: const TextStyle(
                     fontSize: 9,
@@ -3602,7 +3779,7 @@ class _InventoryRow extends StatelessWidget {
           ] else
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 6),
-              child: Text(
+              child: _LocalizedText(
                 'DEĞERLİ',
                 style: TextStyle(
                   color: MinePalette.muted,
@@ -3668,7 +3845,7 @@ class _RelicRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
+                _LocalizedText(
                   '$name • Lv $level/5',
                   style: const TextStyle(
                     color: MinePalette.cream,
@@ -3677,7 +3854,7 @@ class _RelicRow extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 3),
-                Text(
+                _LocalizedText(
                   'Pasif kazanç: ${_relicEffect(id, level)}',
                   style: const TextStyle(color: MinePalette.muted, fontSize: 9),
                 ),
@@ -3689,17 +3866,21 @@ class _RelicRow extends StatelessWidget {
                   children: [
                     if (duplicateCount > 0)
                       TextButton.icon(
-                        onPressed: onDismantle,
+                        onPressed: withButtonTapSound(onDismantle),
                         icon: const Icon(Icons.recycling_rounded, size: 14),
-                        label: Text('KOPYA $duplicateCount → +1 HURDA'),
+                        label: _LocalizedText(
+                          'KOPYA $duplicateCount → +1 HURDA',
+                        ),
                       ),
                     TextButton(
-                      onPressed: onToggle,
-                      child: Text(equipped ? 'ÇIKAR' : 'KUŞAN'),
+                      onPressed: withButtonTapSound(onToggle),
+                      child: _LocalizedText(equipped ? 'ÇIKAR' : 'KUŞAN'),
                     ),
                     TextButton(
-                      onPressed: upgradeCost > 0 ? onUpgrade : null,
-                      child: Text(
+                      onPressed: withButtonTapSound(
+                        upgradeCost > 0 ? onUpgrade : null,
+                      ),
+                      child: _LocalizedText(
                         upgradeCost == 0 ? 'MAKS.' : 'GELİŞTİR • $upgradeCost',
                       ),
                     ),
@@ -3734,12 +3915,12 @@ class _QuestProgressCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
+          _LocalizedText(
             quest.title,
             style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
           ),
           const SizedBox(height: 5),
-          Text(
+          _LocalizedText(
             quest.description,
             style: const TextStyle(color: MinePalette.muted, fontSize: 10),
           ),
@@ -3751,7 +3932,7 @@ class _QuestProgressCard extends StatelessWidget {
             color: MinePalette.teal,
           ),
           const SizedBox(height: 5),
-          Text(
+          _LocalizedText(
             '$progress / ${quest.target} • ödül ${quest.reward} kasa',
             style: const TextStyle(
               color: MinePalette.amber,
@@ -3801,7 +3982,7 @@ class _QuestListRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
+                _LocalizedText(
                   quest.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -3821,7 +4002,7 @@ class _QuestListRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          Text(
+          _LocalizedText(
             '+${quest.reward}',
             style: const TextStyle(
               color: MinePalette.amber,
@@ -3871,7 +4052,7 @@ class _AchievementRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
+                _LocalizedText(
                   achievement.title,
                   style: const TextStyle(
                     color: MinePalette.cream,
@@ -3880,7 +4061,7 @@ class _AchievementRow extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 3),
-                Text(
+                _LocalizedText(
                   achievement.description,
                   style: const TextStyle(color: MinePalette.muted, fontSize: 9),
                 ),
@@ -3895,7 +4076,7 @@ class _AchievementRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 9),
-          Text(
+          _LocalizedText(
             unlocked ? '✓ +${achievement.reward}' : '+${achievement.reward}',
             style: TextStyle(
               color: unlocked ? MinePalette.amber : MinePalette.muted,
@@ -3932,8 +4113,8 @@ class _EmptyHint extends StatelessWidget {
         ),
         const SizedBox(width: 7),
         Expanded(
-          child: Text(
-            text,
+          child: _LocalizedText(
+            context.gameText(text),
             style: const TextStyle(
               color: MinePalette.muted,
               fontSize: 10,
@@ -3946,167 +4127,177 @@ class _EmptyHint extends StatelessWidget {
   );
 }
 
-Widget _sectionIntro(String title, String description) => Container(
-  margin: const EdgeInsets.only(bottom: 11),
-  padding: const EdgeInsets.all(10),
-  decoration: BoxDecoration(
-    color: const Color(0xFF102D38),
-    border: Border.all(color: MinePalette.border),
-    borderRadius: BorderRadius.circular(8),
+Widget _sectionIntro(String title, String description) => Builder(
+  builder: (context) => Container(
+    margin: const EdgeInsets.only(bottom: 11),
+    padding: const EdgeInsets.all(10),
+    decoration: BoxDecoration(
+      color: const Color(0xFF102D38),
+      border: Border.all(color: MinePalette.border),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(
+          Icons.lightbulb_outline_rounded,
+          color: MinePalette.amber,
+          size: 19,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _LocalizedText(
+                context.gameText(title),
+                style: const TextStyle(
+                  color: MinePalette.cream,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: .8,
+                ),
+              ),
+              const SizedBox(height: 4),
+              _LocalizedText(
+                context.gameText(description),
+                style: const TextStyle(
+                  color: MinePalette.muted,
+                  fontSize: 10,
+                  height: 1.3,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
   ),
-  child: Row(
-    crossAxisAlignment: CrossAxisAlignment.start,
+);
+
+Widget _meter(String label, double value, String trailing) => Builder(
+  builder: (context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      const Icon(
-        Icons.lightbulb_outline_rounded,
-        color: MinePalette.amber,
-        size: 19,
-      ),
-      const SizedBox(width: 8),
-      Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
+      Row(
+        children: [
+          Expanded(
+            child: _LocalizedText(
+              context.gameText(label),
               style: const TextStyle(
                 color: MinePalette.cream,
                 fontSize: 10,
-                fontWeight: FontWeight.w900,
-                letterSpacing: .8,
+                fontWeight: FontWeight.w800,
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              description,
-              style: const TextStyle(
-                color: MinePalette.muted,
-                fontSize: 10,
-                height: 1.3,
-              ),
+          ),
+          _LocalizedText(
+            context.gameText(trailing),
+            style: const TextStyle(
+              color: MinePalette.muted,
+              fontSize: 9,
+              fontWeight: FontWeight.w800,
             ),
-          ],
-        ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 4),
+      LinearProgressIndicator(
+        value: value.clamp(0, 1).toDouble(),
+        minHeight: 8,
+        backgroundColor: const Color(0xFF06161D),
+        color: value > .75 ? MinePalette.danger : MinePalette.teal,
+        borderRadius: BorderRadius.circular(4),
       ),
     ],
   ),
 );
 
-Widget _meter(String label, double value, String trailing) => Column(
-  crossAxisAlignment: CrossAxisAlignment.stretch,
-  children: [
-    Row(
+Widget _subheading(String label) => Builder(
+  builder: (context) => Padding(
+    padding: const EdgeInsets.only(top: 5, bottom: 3),
+    child: _LocalizedText(
+      context.gameText(label),
+      style: const TextStyle(
+        color: MinePalette.amber,
+        fontSize: 10,
+        fontWeight: FontWeight.w900,
+        letterSpacing: .8,
+      ),
+    ),
+  ),
+);
+
+Widget _statTile(String label, String value) => Builder(
+  builder: (context) => Container(
+    margin: const EdgeInsets.only(bottom: 6),
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
+    decoration: BoxDecoration(
+      color: const Color(0xFF0B222C),
+      border: Border.all(color: MinePalette.border),
+      borderRadius: BorderRadius.circular(7),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
-          child: Text(
-            label,
+          flex: 2,
+          child: _LocalizedText(
+            context.gameText(label),
+            style: const TextStyle(color: MinePalette.muted, fontSize: 10),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          flex: 3,
+          child: _LocalizedText(
+            context.gameText(value),
+            textAlign: TextAlign.right,
             style: const TextStyle(
               color: MinePalette.cream,
               fontSize: 10,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w900,
             ),
           ),
         ),
-        Text(
-          trailing,
+      ],
+    ),
+  ),
+);
+
+Widget _detailTile(String label, String value) => Builder(
+  builder: (context) => Container(
+    margin: const EdgeInsets.only(bottom: 6),
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
+    decoration: BoxDecoration(
+      color: const Color(0xFF0B222C),
+      border: Border.all(color: MinePalette.border),
+      borderRadius: BorderRadius.circular(7),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _LocalizedText(
+          context.gameText(label),
           style: const TextStyle(
             color: MinePalette.muted,
-            fontSize: 9,
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 4),
+        _LocalizedText(
+          context.gameText(value),
+          softWrap: true,
+          style: const TextStyle(
+            color: MinePalette.cream,
+            fontSize: 10,
+            height: 1.35,
             fontWeight: FontWeight.w800,
           ),
         ),
       ],
     ),
-    const SizedBox(height: 4),
-    LinearProgressIndicator(
-      value: value.clamp(0, 1).toDouble(),
-      minHeight: 8,
-      backgroundColor: const Color(0xFF06161D),
-      color: value > .75 ? MinePalette.danger : MinePalette.teal,
-      borderRadius: BorderRadius.circular(4),
-    ),
-  ],
-);
-
-Widget _subheading(String label) => Padding(
-  padding: const EdgeInsets.only(top: 5, bottom: 3),
-  child: Text(
-    label,
-    style: const TextStyle(
-      color: MinePalette.amber,
-      fontSize: 10,
-      fontWeight: FontWeight.w900,
-      letterSpacing: .8,
-    ),
-  ),
-);
-
-Widget _statTile(String label, String value) => Container(
-  margin: const EdgeInsets.only(bottom: 6),
-  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
-  decoration: BoxDecoration(
-    color: const Color(0xFF0B222C),
-    border: Border.all(color: MinePalette.border),
-    borderRadius: BorderRadius.circular(7),
-  ),
-  child: Row(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Expanded(
-        flex: 2,
-        child: Text(
-          label,
-          style: const TextStyle(color: MinePalette.muted, fontSize: 10),
-        ),
-      ),
-      const SizedBox(width: 8),
-      Expanded(
-        flex: 3,
-        child: Text(
-          value,
-          textAlign: TextAlign.right,
-          style: const TextStyle(
-            color: MinePalette.cream,
-            fontSize: 10,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-      ),
-    ],
-  ),
-);
-
-Widget _detailTile(String label, String value) => Container(
-  margin: const EdgeInsets.only(bottom: 6),
-  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
-  decoration: BoxDecoration(
-    color: const Color(0xFF0B222C),
-    border: Border.all(color: MinePalette.border),
-    borderRadius: BorderRadius.circular(7),
-  ),
-  child: Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(
-        label,
-        style: const TextStyle(
-          color: MinePalette.muted,
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-      const SizedBox(height: 4),
-      Text(
-        value,
-        softWrap: true,
-        style: const TextStyle(
-          color: MinePalette.cream,
-          fontSize: 10,
-          height: 1.35,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    ],
   ),
 );
 

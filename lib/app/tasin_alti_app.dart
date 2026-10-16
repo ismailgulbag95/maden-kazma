@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import '../core/design/palette.dart';
 import 'game_controller.dart';
@@ -18,10 +19,29 @@ class TasinAltiApp extends StatefulWidget {
 
 class _TasinAltiAppState extends State<TasinAltiApp>
     with WidgetsBindingObserver {
+  late String _languageCode;
+
   @override
   void initState() {
     super.initState();
+    _languageCode = widget.controller.state.languageCode;
+    widget.controller.addListener(_onControllerChanged);
     WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didUpdateWidget(covariant TasinAltiApp oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller == widget.controller) return;
+    oldWidget.controller.removeListener(_onControllerChanged);
+    _languageCode = widget.controller.state.languageCode;
+    widget.controller.addListener(_onControllerChanged);
+  }
+
+  void _onControllerChanged() {
+    final nextLanguageCode = widget.controller.state.languageCode;
+    if (_languageCode == nextLanguageCode) return;
+    setState(() => _languageCode = nextLanguageCode);
   }
 
   @override
@@ -40,7 +60,14 @@ class _TasinAltiAppState extends State<TasinAltiApp>
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-    title: 'Taşın Altı',
+    title: _languageCode == 'en' ? 'Beneath the Stone' : 'Taşın Altı',
+    locale: Locale(_languageCode),
+    supportedLocales: const [Locale('tr'), Locale('en')],
+    localizationsDelegates: const [
+      GlobalMaterialLocalizations.delegate,
+      GlobalWidgetsLocalizations.delegate,
+      GlobalCupertinoLocalizations.delegate,
+    ],
     debugShowCheckedModeBanner: false,
     theme: MinePalette.theme,
     home: GameScreen(controller: widget.controller),
@@ -48,6 +75,7 @@ class _TasinAltiAppState extends State<TasinAltiApp>
 
   @override
   void dispose() {
+    widget.controller.removeListener(_onControllerChanged);
     WidgetsBinding.instance.removeObserver(this);
     widget.controller.dispose();
     super.dispose();

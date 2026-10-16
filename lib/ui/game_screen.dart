@@ -7,6 +7,7 @@ import 'package:flutter/scheduler.dart' show Ticker;
 
 import '../app/game_controller.dart';
 import '../core/design/palette.dart';
+import '../crusher/localization.dart';
 import '../domain/models/advisor_guide.dart';
 import '../domain/models/drill_assembly_definition.dart';
 import '../domain/models/mine_event_definition.dart';
@@ -137,7 +138,7 @@ class _GameScreenState extends State<GameScreen> {
     if (!widget.controller.state.crusherStationDiscovered ||
         !widget.controller.state.crusherRepaired) {
       widget.controller.showNotice(
-        '7 km’deki taş kırma istasyonunu önce onar.',
+        context.gameText('7 km’deki taş kırma istasyonunu önce onar.'),
       );
       return;
     }
@@ -157,21 +158,27 @@ class _GameScreenState extends State<GameScreen> {
     final repair = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Yıkık taş kırma istasyonu'),
-        content: const Text(
-          '7 km katında eski bir taş kırma hattı bulundu. '
-          'Dişli ve konveyörü onarıp cevher akışını yeniden başlat.',
+        title: Text(context.gameText('Yıkık taş kırma istasyonu')),
+        content: Text(
+          context.gameText(
+            '7 km katında eski bir taş kırma hattı bulundu. '
+            'Dişli ve konveyörü onarıp cevher akışını yeniden başlat.',
+          ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Vazgeç'),
+            onPressed: withButtonTapSound(
+              () => Navigator.pop(dialogContext, false),
+            ),
+            child: Text(context.gameText('Vazgeç')),
           ),
           FilledButton(
-            onPressed: state.canAfford(GameState.crusherRepairCost)
-                ? () => Navigator.pop(dialogContext, true)
-                : null,
-            child: const Text('Onar · 50 kasa'),
+            onPressed: withButtonTapSound(
+              state.canAfford(GameState.crusherRepairCost)
+                  ? () => Navigator.pop(dialogContext, true)
+                  : null,
+            ),
+            child: Text(context.gameText('Onar · 50 kasa')),
           ),
         ],
       ),
@@ -223,14 +230,22 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   String _lockedBuildingMessage() {
+    final language = widget.controller.state.languageCode;
     if (!widget.controller.state.initialTutorialComplete) {
-      return 'Danışman robotun görevini tamamlayınca bu sistem açılacak.';
+      return gameTextForLanguage(
+        language,
+        'Danışman robotun görevini tamamlayınca bu sistem açılacak.',
+      );
     }
     final guide = AdvisorGuideCatalog.currentFor(widget.controller.state);
     if (guide != null) {
-      return 'Önce danışman robotun ${guide.targetLabel} tanıtımını tamamla.';
+      return gameTextForLanguage(
+        language,
+        'Önce danışman robotun {target} tanıtımını tamamla.',
+        {'target': gameTextForLanguage(language, guide.targetLabel)},
+      );
     }
-    return 'Bu sistem henüz açılmadı.';
+    return gameTextForLanguage(language, 'Bu sistem henüz açılmadı.');
   }
 
   void _openSettings() {
@@ -283,8 +298,8 @@ class _GameScreenState extends State<GameScreen> {
                     size: 42,
                   ),
                   const SizedBox(height: 12),
-                  const Text(
-                    'Oyun başlatılamadı',
+                  Text(
+                    context.gameText('Oyun başlatılamadı'),
                     style: TextStyle(
                       color: MinePalette.cream,
                       fontSize: 20,
@@ -298,8 +313,8 @@ class _GameScreenState extends State<GameScreen> {
                     style: const TextStyle(color: MinePalette.muted),
                   ),
                   const SizedBox(height: 16),
-                  const Text(
-                    'Sayfayı yenileyip tekrar deneyin.',
+                  Text(
+                    context.gameText('Sayfayı yenileyip tekrar deneyin.'),
                     style: TextStyle(color: MinePalette.muted),
                   ),
                 ],
@@ -337,14 +352,11 @@ class _GameScreenState extends State<GameScreen> {
                       children: [
                         _HudBar(
                           state: widget.controller.state,
-                          onSettings: _openSettings,
-                          onToggleSound: () =>
-                              widget.controller.setSoundEffectsEnabled(
-                                !widget.controller.state.soundEffectsEnabled,
-                              ),
-                          onFlexCard: _openFlexCard,
+                          onSettings: withButtonTapSound(_openSettings)!,
+                          onToggleSound: widget.controller.toggleAllAudio,
+                          onFlexCard: withButtonTapSound(_openFlexCard)!,
                           onOpenCrusher: widget.controller.state.crusherRepaired
-                              ? _openCrusher
+                              ? withButtonTapSound(_openCrusher)
                               : null,
                         ),
                         Expanded(
@@ -405,7 +417,7 @@ class _GameScreenState extends State<GameScreen> {
                                   ],
                                 ),
                                 child: Text(
-                                  _activeNotice!,
+                                  context.gameText(_activeNotice!),
                                   textAlign: TextAlign.center,
                                   style: const TextStyle(
                                     color: MinePalette.cream,
@@ -468,28 +480,31 @@ class _HudBar extends StatelessWidget {
       final chips = [
         _HudChip(
           icon: Icons.currency_exchange_rounded,
-          label: 'KASA',
-          value: state.debugMoneyEnabled ? '∞' : _formatCoins(state.coins),
+          label: context.gameText('KASA'),
+          value: _formatCoins(state.coins, languageCode: state.languageCode),
           color: MinePalette.amber,
           compact: compact,
         ),
         _CargoHudChip(
           value:
-              '${state.cargoUsed.toStringAsFixed(0)} / ${state.effectiveCargoCapacity.toStringAsFixed(0)}',
+              '${_formatLocalizedInteger(state.cargoUsed, state.languageCode)} / ${_formatLocalizedInteger(state.effectiveCargoCapacity, state.languageCode)}',
           compact: compact,
           full: state.cargoFull,
         ),
         _HudChip(
           icon: Icons.air_rounded,
-          label: 'BASINÇ',
+          label: context.gameText('BASINÇ'),
           value: '${state.pressure.toStringAsFixed(0)}%',
           color: state.pressure > 70 ? MinePalette.danger : MinePalette.cream,
           compact: compact,
         ),
         _HudChip(
           icon: Icons.vertical_align_bottom_rounded,
-          label: 'DERİNLİK',
-          value: _depthLabel(state.deepestMeters.floor()),
+          label: context.gameText('DERİNLİK'),
+          value: _depthLabel(
+            state.deepestMeters.floor(),
+            languageCode: state.languageCode,
+          ),
           color: MinePalette.cyan,
           compact: compact,
         ),
@@ -515,7 +530,7 @@ class _HudBar extends StatelessWidget {
                     Expanded(child: _GameTitle(compact: true)),
                     if (onOpenCrusher != null)
                       IconButton(
-                        tooltip: 'Kırma & Ayrıştırma Tesisi',
+                        tooltip: context.gameText('Kırma & Ayrıştırma Tesisi'),
                         visualDensity: VisualDensity.compact,
                         onPressed: onOpenCrusher,
                         icon: Badge(
@@ -537,7 +552,7 @@ class _HudBar extends StatelessWidget {
                         ),
                       ),
                     IconButton(
-                      tooltip: 'Keşif Karnesi',
+                      tooltip: context.gameText('Keşif Karnesi'),
                       visualDensity: VisualDensity.compact,
                       onPressed: onFlexCard,
                       icon: const Icon(
@@ -547,13 +562,15 @@ class _HudBar extends StatelessWidget {
                       ),
                     ),
                     IconButton(
-                      tooltip: state.soundEffectsEnabled
-                          ? 'Ses efektlerini kapat'
-                          : 'Ses efektlerini aç',
+                      tooltip: context.gameText(
+                        state.musicEnabled || state.soundEffectsEnabled
+                            ? 'Tüm sesleri kapat'
+                            : 'Tüm sesleri aç',
+                      ),
                       visualDensity: VisualDensity.compact,
-                      onPressed: onToggleSound,
+                      onPressed: withButtonTapSound(onToggleSound),
                       icon: Icon(
-                        state.soundEffectsEnabled
+                        state.musicEnabled || state.soundEffectsEnabled
                             ? Icons.volume_up_outlined
                             : Icons.volume_off_outlined,
                         color: MinePalette.muted,
@@ -561,7 +578,7 @@ class _HudBar extends StatelessWidget {
                       ),
                     ),
                     IconButton(
-                      tooltip: 'Ayarlar',
+                      tooltip: context.gameText('Ayarlar'),
                       visualDensity: VisualDensity.compact,
                       onPressed: onSettings,
                       icon: const Icon(
@@ -607,7 +624,7 @@ class _HudBar extends StatelessWidget {
             ),
             if (onOpenCrusher != null)
               IconButton(
-                tooltip: 'Kırma & Ayrıştırma Tesisi',
+                tooltip: context.gameText('Kırma & Ayrıştırma Tesisi'),
                 visualDensity: compact
                     ? VisualDensity.compact
                     : VisualDensity.standard,
@@ -631,7 +648,7 @@ class _HudBar extends StatelessWidget {
                 ),
               ),
             IconButton(
-              tooltip: 'Keşif Karnesi',
+              tooltip: context.gameText('Keşif Karnesi'),
               visualDensity: compact
                   ? VisualDensity.compact
                   : VisualDensity.standard,
@@ -643,15 +660,17 @@ class _HudBar extends StatelessWidget {
               ),
             ),
             IconButton(
-              tooltip: state.soundEffectsEnabled
-                  ? 'Ses efektlerini kapat'
-                  : 'Ses efektlerini aç',
+              tooltip: context.gameText(
+                state.musicEnabled || state.soundEffectsEnabled
+                    ? 'Tüm sesleri kapat'
+                    : 'Tüm sesleri aç',
+              ),
               visualDensity: compact
                   ? VisualDensity.compact
                   : VisualDensity.standard,
-              onPressed: onToggleSound,
+              onPressed: withButtonTapSound(onToggleSound),
               icon: Icon(
-                state.soundEffectsEnabled
+                state.musicEnabled || state.soundEffectsEnabled
                     ? Icons.volume_up_outlined
                     : Icons.volume_off_outlined,
                 color: MinePalette.muted,
@@ -659,7 +678,7 @@ class _HudBar extends StatelessWidget {
               ),
             ),
             IconButton(
-              tooltip: 'Ayarlar',
+              tooltip: context.gameText('Ayarlar'),
               visualDensity: compact
                   ? VisualDensity.compact
                   : VisualDensity.standard,
@@ -700,7 +719,7 @@ class _GameTitle extends StatelessWidget {
       fit: BoxFit.scaleDown,
       alignment: Alignment.centerLeft,
       child: Text(
-        'TAŞIN ALTI',
+        context.gameText('TAŞIN ALTI'),
         style: TextStyle(
           color: const Color(0xFFFFCF83),
           fontSize: compact ? 16 : 25,
@@ -777,7 +796,7 @@ class _HudChip extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  label,
+                  context.gameText(label),
                   style: TextStyle(
                     fontSize: compact ? 7 : 9,
                     color: Color.lerp(MinePalette.muted, alarmColor, pulse),
@@ -1063,7 +1082,7 @@ class _GoalBanner extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        title,
+                        context.gameText(title),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -1074,7 +1093,7 @@ class _GoalBanner extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        message,
+                        context.gameText(message),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -1086,8 +1105,15 @@ class _GoalBanner extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         guide == null && quest.kind == QuestKind.depth
-                            ? '$detail • $progress / ${quest.target} m'
-                            : detail,
+                            ? context.gameText(
+                                '{detail} • {progress} / {target} m',
+                                values: {
+                                  'detail': context.gameText(detail),
+                                  'progress': progress,
+                                  'target': quest.target,
+                                },
+                              )
+                            : context.gameText(detail),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -1107,15 +1133,17 @@ class _GoalBanner extends StatelessWidget {
                   SizedBox(
                     height: 34,
                     child: ElevatedButton(
-                      onPressed: guide == null
-                          ? ready
-                                ? controller.claimCurrentQuest
-                                : () => onOpenUtility(targetPanel ?? 'quests')
-                          : isTutorial
-                          ? ready
-                                ? controller.claimCurrentQuest
-                                : () => onOpenTarget(guide!)
-                          : () => onOpenTarget(guide!),
+                      onPressed: withButtonTapSound(
+                        guide == null
+                            ? ready
+                                  ? controller.claimCurrentQuest
+                                  : () => onOpenUtility(targetPanel ?? 'quests')
+                            : isTutorial
+                            ? ready
+                                  ? controller.claimCurrentQuest
+                                  : () => onOpenTarget(guide!)
+                            : () => onOpenTarget(guide!),
+                      ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: MinePalette.amber,
                         foregroundColor: MinePalette.ink,
@@ -1126,19 +1154,21 @@ class _GoalBanner extends StatelessWidget {
                         ),
                       ),
                       child: Text(
-                        guide == null
-                            ? ready
-                                  ? 'AL'
-                                  : targetPanel == null
-                                  ? 'GÖREV'
-                                  : 'AÇ'
-                            : isTutorial
-                            ? ready
-                                  ? 'AL'
-                                  : 'AÇ'
-                            : guide!.targetPanel == null
-                            ? 'TAMAM'
-                            : 'AÇ',
+                        context.gameText(
+                          guide == null
+                              ? ready
+                                    ? 'AL'
+                                    : targetPanel == null
+                                    ? 'GÖREV'
+                                    : 'AÇ'
+                              : isTutorial
+                              ? ready
+                                    ? 'AL'
+                                    : 'AÇ'
+                              : guide!.targetPanel == null
+                              ? 'TAMAM'
+                              : 'AÇ',
+                        ),
                       ),
                     ),
                   ),
@@ -1382,7 +1412,7 @@ class _MineNoticeButton extends StatelessWidget {
         color: danger ? const Color(0xFF3D2023) : const Color(0xFF3D3020),
         borderRadius: BorderRadius.circular(8),
         child: InkWell(
-          onTap: onTap,
+          onTap: withButtonTapSound(onTap),
           borderRadius: BorderRadius.circular(8),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 11),
@@ -1396,7 +1426,7 @@ class _MineNoticeButton extends StatelessWidget {
                 const SizedBox(width: 7),
                 Expanded(
                   child: Text(
-                    title,
+                    context.gameText(title),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -1407,7 +1437,7 @@ class _MineNoticeButton extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '$action  ›',
+                  '${context.gameText(action)}  ›',
                   style: TextStyle(
                     color: danger ? MinePalette.danger : MinePalette.amber,
                     fontSize: 9,
@@ -1445,9 +1475,12 @@ class _QuickNav extends StatelessWidget {
   Widget build(BuildContext context) => Semantics(
     button: enabled,
     enabled: enabled,
-    label: badgeCount > 0 ? '$label, $badgeCount alınmamış ödül' : label,
+    label: context.gameText(
+      badgeCount > 0 ? '{label}, {count} alınmamış ödül' : '{label}',
+      values: {'label': context.gameText(label), 'count': badgeCount},
+    ),
     child: InkWell(
-      onTap: enabled ? onTap : null,
+      onTap: withButtonTapSound(enabled ? onTap : null),
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -1498,7 +1531,7 @@ class _QuickNav extends StatelessWidget {
                 FittedBox(
                   fit: BoxFit.scaleDown,
                   child: Text(
-                    label,
+                    context.gameText(label),
                     style: TextStyle(
                       color: enabled ? MinePalette.cream : MinePalette.muted,
                       fontSize: 9,
@@ -1677,7 +1710,10 @@ class _SurfaceOutpost extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  '${state.currentWorldName} • Yüzey Karakolu',
+                  context.gameText(
+                    '{world} • Yüzey Karakolu',
+                    values: {'world': context.gameText(state.currentWorldName)},
+                  ),
                   style: const TextStyle(
                     color: MinePalette.cream,
                     fontSize: 8,
@@ -1754,7 +1790,10 @@ class _BuildingButton extends StatelessWidget {
     return Semantics(
       button: unlocked,
       enabled: unlocked,
-      label: unlocked ? '$label binasını aç' : '$label kilitli',
+      label: context.gameText(
+        unlocked ? '{building} binasını aç' : '{building} kilitli',
+        values: {'building': context.gameText(label)},
+      ),
       key: ValueKey('surface-building-$id'),
       child: SizedBox(
         width: width,
@@ -1762,7 +1801,7 @@ class _BuildingButton extends StatelessWidget {
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: unlocked ? onTap : null,
+            onTap: withButtonTapSound(unlocked ? onTap : null),
             borderRadius: BorderRadius.circular(8),
             child: Stack(
               alignment: Alignment.bottomCenter,
@@ -1877,7 +1916,7 @@ class _BuildingButton extends StatelessWidget {
                         child: FittedBox(
                           fit: BoxFit.scaleDown,
                           child: Text(
-                            label,
+                            context.gameText(label),
                             key: ValueKey('surface-building-label-$id'),
                             maxLines: 1,
                             style: TextStyle(
@@ -1950,8 +1989,8 @@ class _DepthRail extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(7, 12, 5, 10),
       child: Column(
         children: [
-          const Text(
-            'DERİNLİK',
+          Text(
+            context.gameText('DERİNLİK'),
             style: TextStyle(
               color: MinePalette.cream,
               fontSize: 9,
@@ -2016,7 +2055,12 @@ class _DepthRail extends StatelessWidget {
                           const SizedBox(width: 3),
                           Expanded(
                             child: Text(
-                              _depthLabel(meter),
+                              context.gameText(
+                                _depthLabel(
+                                  meter,
+                                  languageCode: state.languageCode,
+                                ),
+                              ),
                               maxLines: 1,
                               overflow: TextOverflow.clip,
                               style: TextStyle(
@@ -2045,7 +2089,7 @@ class _DepthRail extends StatelessWidget {
             size: 19,
           ),
           Text(
-            state.currentWorldName,
+            context.gameText(state.currentWorldName),
             style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800),
           ),
         ],
@@ -2081,8 +2125,10 @@ class _RightDock extends StatelessWidget {
               GamePanel(
                 title: 'YÜKSELTMELER',
                 icon: Icons.lock_outline_rounded,
-                child: const Text(
-                  'Atölye, ilk görevleri tamamladığında açılacak.',
+                child: Text(
+                  context.gameText(
+                    'Atölye, ilk görevleri tamamladığında açılacak.',
+                  ),
                   style: TextStyle(color: MinePalette.muted, fontSize: 11),
                 ),
               ),
@@ -2090,19 +2136,28 @@ class _RightDock extends StatelessWidget {
             _QuestDock(controller: controller),
             const SizedBox(height: 10),
             OutlinedButton.icon(
-              onPressed: state.canOpenBuilding('achievements')
-                  ? () => onUtility('achievements')
-                  : null,
+              onPressed: withButtonTapSound(
+                state.canOpenBuilding('achievements')
+                    ? () => onUtility('achievements')
+                    : null,
+              ),
               icon: const Icon(Icons.emoji_events_rounded),
               label: Text(
-                'BAŞARIMLAR • ${controller.state.unlockedAchievements.length}',
+                context.gameText(
+                  'BAŞARIMLAR • {count}',
+                  values: {
+                    'count': controller.state.unlockedAchievements.length,
+                  },
+                ),
               ),
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
-              onPressed: canOpenResearch ? () => onUtility('research') : null,
+              onPressed: withButtonTapSound(
+                canOpenResearch ? () => onUtility('research') : null,
+              ),
               icon: const Icon(Icons.auto_awesome),
-              label: const Text('ARAŞTIRMA • DİZİYİ TARA'),
+              label: Text(context.gameText('ARAŞTIRMA • DİZİYİ TARA')),
               style: controller.currentQuest.kind == QuestKind.resonance
                   ? OutlinedButton.styleFrom(
                       foregroundColor: MinePalette.amber,
@@ -2126,15 +2181,20 @@ class _RightDock extends StatelessWidget {
                       )
                     : null,
                 icon: const Icon(Icons.inventory_2_rounded),
-                label: Text('${state.totalChestsFound} SANDIĞI AÇ'),
+                label: Text(
+                  context.gameText(
+                    '{count} SANDIĞI AÇ',
+                    values: {'count': state.totalChestsFound},
+                  ),
+                ),
               ),
             ],
             if (GameEngine.availableBossIndex(state) != null) ...[
               const SizedBox(height: 8),
               ElevatedButton.icon(
-                onPressed: () => onUtility('boss'),
+                onPressed: withButtonTapSound(() => onUtility('boss')),
                 icon: const Icon(Icons.shield_moon_rounded),
-                label: const Text('MUHAFIZLA SAVAŞ'),
+                label: Text(context.gameText('MUHAFIZLA SAVAŞ')),
               ),
             ],
           ],
@@ -2182,7 +2242,7 @@ class _QuestDock extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            quest.title,
+            context.gameText(quest.title),
             style: const TextStyle(
               color: MinePalette.cream,
               fontSize: 13,
@@ -2191,12 +2251,12 @@ class _QuestDock extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            quest.description,
+            context.gameText(quest.description),
             style: const TextStyle(color: MinePalette.muted, fontSize: 10),
           ),
           const SizedBox(height: 4),
           Text(
-            _goalRequirementLine(controller, quest: quest),
+            context.gameText(_goalRequirementLine(controller, quest: quest)),
             style: const TextStyle(
               color: MinePalette.teal,
               fontSize: 9,
@@ -2220,7 +2280,10 @@ class _QuestDock extends StatelessWidget {
                 style: const TextStyle(color: MinePalette.muted, fontSize: 10),
               ),
               Text(
-                '+${quest.reward} kasa',
+                context.gameText(
+                  '+{reward} kasa',
+                  values: {'reward': quest.reward},
+                ),
                 style: const TextStyle(
                   color: MinePalette.amber,
                   fontSize: 10,
@@ -2233,11 +2296,15 @@ class _QuestDock extends StatelessWidget {
           SizedBox(
             height: 40,
             child: ElevatedButton(
-              onPressed: controller.currentQuestReady
-                  ? controller.claimCurrentQuest
-                  : null,
+              onPressed: withButtonTapSound(
+                controller.currentQuestReady
+                    ? controller.claimCurrentQuest
+                    : null,
+              ),
               child: Text(
-                controller.currentQuestReady ? 'ÖDÜLÜ AL' : 'GÖREVİ TAKİP ET',
+                context.gameText(
+                  controller.currentQuestReady ? 'ÖDÜLÜ AL' : 'GÖREVİ TAKİP ET',
+                ),
               ),
             ),
           ),
@@ -2264,6 +2331,7 @@ class _MineShaftViewState extends State<_MineShaftView> {
   final ScrollController _cameraController = ScrollController();
   bool _manualCamera = false;
   bool _hasAutoFollowed = false;
+  double? _lastAutoFollowTarget;
 
   @override
   void dispose() {
@@ -2279,7 +2347,15 @@ class _MineShaftViewState extends State<_MineShaftView> {
       final target = maxOffset
           .clamp(position.minScrollExtent, position.maxScrollExtent)
           .toDouble();
-      if ((position.pixels - target).abs() < 1) return;
+      final targetChanged =
+          _lastAutoFollowTarget == null ||
+          (_lastAutoFollowTarget! - target).abs() >= 1;
+      if (!targetChanged &&
+          (position.isScrollingNotifier.value ||
+              (position.pixels - target).abs() < 1)) {
+        return;
+      }
+      _lastAutoFollowTarget = target;
       if (!_hasAutoFollowed) {
         _hasAutoFollowed = true;
         _cameraController.jumpTo(target);
@@ -2315,6 +2391,10 @@ class _MineShaftViewState extends State<_MineShaftView> {
         final width = constraints.maxWidth;
         final narrow = width < 690;
         final worldIndex = state.activeWorldIndex.clamp(0, 2).toInt();
+        final crusherDiscovery =
+            worldIndex == 0 &&
+            state.crusherStationDiscovered &&
+            !state.crusherRepaired;
         final worldStartDepth = GameState.worldEntryDepths[worldIndex];
         final worldDepth = math.max(
           state.depthMeters,
@@ -2342,8 +2422,10 @@ class _MineShaftViewState extends State<_MineShaftView> {
           children: [
             Positioned.fill(
               child: Semantics(
-                label: 'Maden katmanları',
-                hint: 'Etkin derinliğin üstündeki ve altındaki katmanları kaydır.',
+                label: context.gameText('Maden katmanları'),
+                hint: context.gameText(
+                  'Etkin derinliğin üstündeki ve altındaki katmanları kaydır.',
+                ),
                 explicitChildNodes: true,
                 child: NotificationListener<ScrollNotification>(
                   onNotification: _handleScroll,
@@ -2386,6 +2468,7 @@ class _MineShaftViewState extends State<_MineShaftView> {
                   floorHeight: floorHeight,
                   floorCount: floorCount,
                   manualCamera: _manualCamera,
+                  crusherDiscovery: crusherDiscovery,
                 ),
               ),
             ),
@@ -2426,7 +2509,13 @@ class _MineShaftViewState extends State<_MineShaftView> {
                     ),
                     const SizedBox(width: 5),
                     Text(
-                      '${state.drillRateMetersPerSecond.toStringAsFixed(1)} m/sn',
+                      context.gameText(
+                        '{speed} m/sn',
+                        values: {
+                          'speed': state.drillRateMetersPerSecond
+                              .toStringAsFixed(1),
+                        },
+                      ),
                       style: const TextStyle(
                         color: MinePalette.cream,
                         fontSize: 11,
@@ -2460,8 +2549,10 @@ class _MineShaftViewState extends State<_MineShaftView> {
                 right: 10,
                 top: 88,
                 child: IconButton.filledTonal(
-                  tooltip: 'Aktif derinliğe dön',
-                  onPressed: () => setState(() => _manualCamera = false),
+                  tooltip: context.gameText('Aktif derinliğe dön'),
+                  onPressed: withButtonTapSound(
+                    () => setState(() => _manualCamera = false),
+                  ),
                   icon: const Icon(Icons.my_location_rounded),
                 ),
               )
@@ -2480,7 +2571,7 @@ class _MineShaftViewState extends State<_MineShaftView> {
                       border: Border.all(color: MinePalette.border),
                       borderRadius: BorderRadius.circular(7),
                     ),
-                    child: const Row(
+                    child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
@@ -2490,7 +2581,7 @@ class _MineShaftViewState extends State<_MineShaftView> {
                         ),
                         SizedBox(width: 4),
                         Text(
-                          'KATLARI KAYDIR',
+                          context.gameText('KATLARI KAYDIR'),
                           style: TextStyle(
                             fontSize: 8,
                             fontWeight: FontWeight.w900,
@@ -2535,6 +2626,11 @@ class _MineWorld extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = controller.state;
     final worldIndex = state.activeWorldIndex.clamp(0, 2).toInt();
+    final isCrusherFloor =
+        worldIndex == 0 &&
+        floorIndex == 6 &&
+        isDiscoveredFloor &&
+        isFullyDugFloor;
     final guideTarget = AdvisorGuideCatalog.currentFor(state)?.target;
     final minorVariant = (floorIndex % 100) ~/ 50;
     final deposits =
@@ -2603,59 +2699,75 @@ class _MineWorld extends StatelessWidget {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        const Positioned.fill(child: CustomPaint(painter: _MineBasePainter())),
-        Positioned.fill(
-          child: Opacity(
-            opacity: 0.78,
-            child: CaveTextureBackground(
-              asset: _mineWallAsset(
-                worldIndex: worldIndex,
-                majorBand: floorIndex ~/ 100,
-              ),
-              verticalOffset: floorIndex * height,
-              minorTint: _mineMinorTint(
-                worldIndex: worldIndex,
-                variant: minorVariant,
+        if (isCrusherFloor)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Image.asset(
+                'assets/packs/crusher-station-floor.png',
+                key: const ValueKey('mine-crusher-station-background'),
+                fit: BoxFit.cover,
+                alignment: Alignment.bottomCenter,
+                filterQuality: FilterQuality.none,
               ),
             ),
+          )
+        else ...[
+          const Positioned.fill(
+            child: CustomPaint(painter: _MineBasePainter()),
           ),
-        ),
-        const Positioned.fill(
-          child: CustomPaint(painter: _MineLightingPainter()),
-        ),
-        Positioned(
-          left: 0,
-          top: 0,
-          bottom: 0,
-          width: edgeRockWidth,
-          child: IgnorePointer(
+          Positioned.fill(
             child: Opacity(
-              opacity: .94,
-              child: MineEdgeRockStrip(
-                asset: 'mine-edge-rock-tile.png',
+              opacity: 0.78,
+              child: CaveTextureBackground(
+                asset: _mineWallAsset(
+                  worldIndex: worldIndex,
+                  majorBand: floorIndex ~/ 100,
+                ),
                 verticalOffset: floorIndex * height,
-                tint: edgeTint,
+                minorTint: _mineMinorTint(
+                  worldIndex: worldIndex,
+                  variant: minorVariant,
+                ),
               ),
             ),
           ),
-        ),
-        Positioned(
-          right: 0,
-          top: 0,
-          bottom: 0,
-          width: edgeRockWidth,
-          child: IgnorePointer(
-            child: Opacity(
-              opacity: .94,
-              child: MineEdgeRockStrip(
-                asset: 'mine-edge-rock-tile.png',
-                verticalOffset: floorIndex * height,
-                mirroredX: true,
-                tint: edgeTint,
+          const Positioned.fill(
+            child: CustomPaint(painter: _MineLightingPainter()),
+          ),
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: edgeRockWidth,
+            child: IgnorePointer(
+              child: Opacity(
+                opacity: .94,
+                child: MineEdgeRockStrip(
+                  asset: 'mine-edge-rock-tile.png',
+                  verticalOffset: floorIndex * height,
+                  tint: edgeTint,
+                ),
               ),
             ),
           ),
-        ),
+          Positioned(
+            right: 0,
+            top: 0,
+            bottom: 0,
+            width: edgeRockWidth,
+            child: IgnorePointer(
+              child: Opacity(
+                opacity: .94,
+                child: MineEdgeRockStrip(
+                  asset: 'mine-edge-rock-tile.png',
+                  verticalOffset: floorIndex * height,
+                  mirroredX: true,
+                  tint: edgeTint,
+                ),
+              ),
+            ),
+          ),
+        ],
         Positioned(
           left: (width - shaftWidth) / 2,
           top: 0,
@@ -2668,8 +2780,7 @@ class _MineWorld extends StatelessWidget {
         Positioned.fill(
           child: CustomPaint(painter: _ShaftPainter(variant: minorVariant)),
         ),
-        if (isActiveFloor ||
-            (worldIndex == 0 && floorIndex == 6 && isFullyDugFloor))
+        if (isActiveFloor)
           Positioned(
             left: 0,
             right: 0,
@@ -2710,7 +2821,13 @@ class _MineWorld extends StatelessWidget {
                 borderRadius: BorderRadius.circular(5),
               ),
               child: Text(
-                _mineFloorDepthLabel(worldIndex, floorIndex),
+                context.gameText(
+                  _mineFloorDepthLabel(
+                    worldIndex,
+                    floorIndex,
+                    languageCode: state.languageCode,
+                  ),
+                ),
                 style: const TextStyle(
                   color: MinePalette.cream,
                   fontSize: 8,
@@ -2719,7 +2836,7 @@ class _MineWorld extends StatelessWidget {
               ),
             ),
           ),
-        if (isDiscoveredFloor && !isActiveFloor)
+        if (isDiscoveredFloor && !isActiveFloor && !isCrusherFloor)
           for (var worker = 0; worker < workerSlots.length; worker++)
             Positioned(
               left: workerSlots[worker].left,
@@ -2743,16 +2860,14 @@ class _MineWorld extends StatelessWidget {
                 ),
               ),
             ),
-        if (worldIndex == 0 &&
-            floorIndex == 6 &&
-            isDiscoveredFloor &&
-            isFullyDugFloor)
+        if (isCrusherFloor)
           ..._crusherStationPositions(
             width: width,
             height: height,
             shaftWidth: shaftWidth,
             edgeInset: edgeRockWidth,
             repaired: state.crusherRepaired,
+            highlighted: !state.crusherRepaired,
             onTap: onCrusherStation,
           ),
         if (isActiveFloor)
@@ -2785,6 +2900,7 @@ class _MineWorld extends StatelessWidget {
               key: ValueKey('ore-node-${deposits[index].id}'),
               deposit: deposits[index],
               resource: ResourceCatalog.byId[deposits[index].resourceId]!,
+              languageCode: state.languageCode,
               placement: oreNodes[index],
               showAdvisorMarker: guideTarget == 'ore',
               onTap: () {
@@ -2820,6 +2936,8 @@ class _CrusherStation extends StatefulWidget {
     required this.height,
     required this.mirrored,
     required this.side,
+    required this.highlighted,
+    required this.showDiscoveryLabel,
   });
 
   final bool repaired;
@@ -2828,6 +2946,8 @@ class _CrusherStation extends StatefulWidget {
   final double height;
   final bool mirrored;
   final String side;
+  final bool highlighted;
+  final bool showDiscoveryLabel;
 
   @override
   State<_CrusherStation> createState() => _CrusherStationState();
@@ -2844,14 +2964,17 @@ class _CrusherStationState extends State<_CrusherStation>
       vsync: this,
       duration: const Duration(seconds: 4),
     );
-    if (widget.repaired) _gear.repeat();
+    if (widget.repaired || widget.highlighted) _gear.repeat();
   }
 
   @override
   void didUpdateWidget(covariant _CrusherStation oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.repaired == widget.repaired) return;
-    if (widget.repaired) {
+    if (oldWidget.repaired == widget.repaired &&
+        oldWidget.highlighted == widget.highlighted) {
+      return;
+    }
+    if (widget.repaired || widget.highlighted) {
       _gear.repeat();
     } else {
       _gear.stop();
@@ -2867,24 +2990,63 @@ class _CrusherStationState extends State<_CrusherStation>
   @override
   Widget build(BuildContext context) => Semantics(
     button: true,
-    label: widget.repaired
-        ? '${widget.side} onarılmış taş kırma istasyonu, kırıcıyı aç'
-        : '${widget.side} yıkık taş kırma istasyonu, 50 kasaya onar',
+    label: context.gameText(
+      widget.repaired
+          ? '{side} onarılmış taş kırma istasyonu, kırıcıyı aç'
+          : '{side} yıkık taş kırma istasyonu, 50 kasaya onar',
+      values: {'side': context.gameText(widget.side)},
+    ),
     child: Transform.flip(
       flipX: widget.mirrored,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           key: ValueKey('crusher-station-7km-${widget.side}'),
-          onTap: widget.onTap,
+          onTap: withButtonTapSound(widget.onTap),
           child: SizedBox(
             width: widget.width,
             height: widget.height,
             child: LayoutBuilder(
               builder: (context, constraints) => Stack(
                 alignment: Alignment.center,
+                clipBehavior: Clip.none,
                 children: [
+                  if (widget.highlighted)
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: AnimatedBuilder(
+                          animation: _gear,
+                          builder: (context, child) {
+                            final pulse =
+                                (math.sin(_gear.value * math.pi * 2) + 1) / 2;
+                            return Container(
+                              key: ValueKey(
+                                'crusher-discovery-highlight-${widget.side}',
+                              ),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: MinePalette.cyan.withValues(
+                                    alpha: .45 + pulse * .5,
+                                  ),
+                                  width: 1.5 + pulse,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: MinePalette.cyan.withValues(
+                                      alpha: .12 + pulse * .2,
+                                    ),
+                                    blurRadius: 7 + pulse * 6,
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
                   Image.asset(
+                    key: ValueKey('crusher-station-art-${widget.side}'),
                     widget.repaired
                         ? 'assets/packs/crusher-station-repaired.png'
                         : 'assets/packs/crusher-station-ruined.png',
@@ -2907,6 +3069,75 @@ class _CrusherStationState extends State<_CrusherStation>
                         ),
                       ),
                     ),
+                  if (widget.showDiscoveryLabel)
+                    Positioned(
+                      top: 3,
+                      right: 3,
+                      child: IgnorePointer(
+                        child: Semantics(
+                          label: context.gameText(
+                            'Yeni keşif: taş kırma istasyonu',
+                          ),
+                          child: Container(
+                            key: const ValueKey('crusher-discovery-callout'),
+                            width: widget.width < 94 ? 18 : null,
+                            height: widget.width < 94 ? 18 : null,
+                            alignment: Alignment.center,
+                            padding: EdgeInsets.symmetric(
+                              horizontal: widget.width < 94 ? 0 : 6,
+                              vertical: widget.width < 94 ? 0 : 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xED0A2029),
+                              border: Border.all(
+                                color: MinePalette.cyan,
+                                width: 1.2,
+                              ),
+                              borderRadius: BorderRadius.circular(6),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Color(0xAA34D3CB),
+                                  blurRadius: 8,
+                                ),
+                              ],
+                            ),
+                            child: widget.width < 94
+                                ? const Icon(
+                                    Icons.keyboard_double_arrow_down_rounded,
+                                    size: 13,
+                                    color: MinePalette.amber,
+                                  )
+                                : Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.explore_rounded,
+                                        size: 12,
+                                        color: MinePalette.cyan,
+                                      ),
+                                      SizedBox(width: 3),
+                                      Text(
+                                        context.gameText('YENİ KEŞİF'),
+                                        style: TextStyle(
+                                          color: MinePalette.cream,
+                                          fontSize: 8,
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: .2,
+                                        ),
+                                      ),
+                                      SizedBox(width: 2),
+                                      Icon(
+                                        Icons
+                                            .keyboard_double_arrow_down_rounded,
+                                        size: 12,
+                                        color: MinePalette.amber,
+                                      ),
+                                    ],
+                                  ),
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -2923,19 +3154,32 @@ List<Widget> _crusherStationPositions({
   required double shaftWidth,
   required double edgeInset,
   required bool repaired,
+  required bool highlighted,
   required VoidCallback onTap,
 }) {
-  const shaftGap = 4.0;
-  final sideSpace = (width - shaftWidth) / 2 - edgeInset - shaftGap;
-  final size = math.max(
+  const shaftGap = _crusherStationShaftGap;
+  final stationEdgeInset = math.min(edgeInset, 12.0);
+  final sideSpace = (width - shaftWidth) / 2 - stationEdgeInset - shaftGap;
+  final platformTop = _crusherFloorPlatformTopY(width: width, height: height);
+  final size = _crusherStationSizeForFloor(
+    width: width,
+    height: height,
+    shaftWidth: shaftWidth,
+    edgeInset: edgeInset,
+    repaired: repaired,
+  );
+  final visibleFootFraction = _crusherStationVisibleFootFraction(repaired);
+  final bottomInset = size * (1 - visibleFootFraction);
+  final sideCenteringOffset = math.max(0.0, (sideSpace - size) / 2);
+  final baselineBottom = math.max(
     0.0,
-    math.min(132.0, math.min(width * .29, math.min(height * .56, sideSpace))),
+    height - platformTop - bottomInset - _crusherStationGroundOffset,
   );
   final shaftLeft = (width - shaftWidth) / 2;
   return [
     Positioned(
-      left: shaftLeft - shaftGap - size,
-      bottom: 0,
+      left: shaftLeft - shaftGap - sideCenteringOffset - size,
+      bottom: baselineBottom,
       child: _CrusherStation(
         repaired: repaired,
         onTap: onTap,
@@ -2943,11 +3187,13 @@ List<Widget> _crusherStationPositions({
         height: size,
         mirrored: false,
         side: 'Sol',
+        highlighted: highlighted,
+        showDiscoveryLabel: false,
       ),
     ),
     Positioned(
-      left: shaftLeft + shaftWidth + shaftGap,
-      bottom: 0,
+      left: shaftLeft + shaftWidth + shaftGap + sideCenteringOffset,
+      bottom: baselineBottom,
       child: _CrusherStation(
         repaired: repaired,
         onTap: onTap,
@@ -2955,9 +3201,74 @@ List<Widget> _crusherStationPositions({
         height: size,
         mirrored: true,
         side: 'Sağ',
+        highlighted: highlighted,
+        showDiscoveryLabel: highlighted,
       ),
     ),
   ];
+}
+
+double _crusherStationSizeForFloor({
+  required double width,
+  required double height,
+  required double shaftWidth,
+  required double edgeInset,
+  required bool repaired,
+}) {
+  const shaftGap = _crusherStationShaftGap;
+  // Stations may sit slightly over the decorative edge rocks while retaining
+  // a small screen-edge clearance and keeping the hitboxes clear of the shaft.
+  final stationEdgeInset = math.min(edgeInset, 12.0);
+  final sideSpace = (width - shaftWidth) / 2 - stationEdgeInset - shaftGap;
+  final platformTop = _crusherFloorPlatformTopY(width: width, height: height);
+  final visibleFootFraction = _crusherStationVisibleFootFraction(repaired);
+
+  // Keep the complete station hitbox inside the floor row. The usable vertical
+  // space varies with the background's BoxFit.cover crop, so derive it from
+  // the actual platform line instead of using a fixed row-height fraction.
+  final spaceAbovePlatform =
+      math.max(0.0, platformTop - _crusherStationGroundOffset) /
+      visibleFootFraction;
+  final spaceBelowPlatform =
+      math.max(0.0, height - platformTop - _crusherStationGroundOffset) /
+      (1 - visibleFootFraction);
+  return math.max(
+    0.0,
+    math.min(
+      220.0,
+      math.min(sideSpace, math.min(spaceAbovePlatform, spaceBelowPlatform)),
+    ),
+  );
+}
+
+const double _crusherStationGroundOffset = 4.0;
+const double _crusherStationShaftGap = 16.0;
+
+const double _crusherFloorArtworkWidth = 2172;
+const double _crusherFloorArtworkHeight = 724;
+const double _crusherFloorPlatformTop = 588;
+
+double _crusherFloorPlatformTopY({
+  required double width,
+  required double height,
+}) {
+  final scale = math.max(
+    width / _crusherFloorArtworkWidth,
+    height / _crusherFloorArtworkHeight,
+  );
+  final renderedHeight = _crusherFloorArtworkHeight * scale;
+  final topCrop = renderedHeight - height;
+  return _crusherFloorPlatformTop * scale - topCrop;
+}
+
+double _crusherStationVisibleFootFraction(bool repaired) {
+  final spriteWidth = repaired ? 1378.0 : 1377.0;
+  const spriteHeight = 1142.0;
+  // These are the exclusive bottom edges of the substantial (alpha >= 8)
+  // artwork bounds. Ignore stray, nearly transparent pixels under the feet.
+  final visibleFootBottom = repaired ? 1080.0 : 1122.0;
+  final centeredImageTop = (spriteWidth - spriteHeight) / 2;
+  return (centeredImageTop + visibleFootBottom) / spriteWidth;
 }
 
 class _MineFloorCountdown extends StatelessWidget {
@@ -2976,12 +3287,21 @@ class _MineFloorCountdown extends StatelessWidget {
     final remainingSeconds = seconds == null ? null : seconds % 60;
     final compact = width < 76;
     final timeLabel = seconds == null
-        ? 'SON KAT'
-        : '$minutes dk ${remainingSeconds!.toString().padLeft(2, '0')} sn';
+        ? context.gameText('SON KAT')
+        : context.gameText(
+            '{minutes} dk {seconds} sn',
+            values: {
+              'minutes': minutes!,
+              'seconds': remainingSeconds!.toString().padLeft(2, '0'),
+            },
+          );
     return Semantics(
       label: seconds == null
-          ? 'Son kat'
-          : 'Sıradaki kata kalan süre: $minutes dakika $remainingSeconds saniye',
+          ? context.gameText('Son kat')
+          : context.gameText(
+              'Sıradaki kata kalan süre: {minutes} dakika {seconds} saniye',
+              values: {'minutes': minutes!, 'seconds': remainingSeconds!},
+            ),
       child: Container(
         width: width,
         padding: EdgeInsets.symmetric(horizontal: compact ? 3 : 6, vertical: 4),
@@ -2998,11 +3318,13 @@ class _MineFloorCountdown extends StatelessWidget {
               : CrossAxisAlignment.start,
           children: [
             Text(
-              seconds == null
-                  ? 'SON DERİNLİK'
-                  : compact
-                  ? 'SONRAKİ KAT'
-                  : 'SONRAKİ KATA',
+              context.gameText(
+                seconds == null
+                    ? 'SON DERİNLİK'
+                    : compact
+                    ? 'SONRAKİ KAT'
+                    : 'SONRAKİ KATA',
+              ),
               maxLines: 1,
               style: TextStyle(
                 color: MinePalette.muted,
@@ -3016,7 +3338,10 @@ class _MineFloorCountdown extends StatelessWidget {
               Column(
                 children: [
                   Text(
-                    '$minutes dk',
+                    context.gameText(
+                      '{minutes} dk',
+                      values: {'minutes': minutes!},
+                    ),
                     maxLines: 1,
                     style: const TextStyle(
                       color: MinePalette.cream,
@@ -3025,7 +3350,12 @@ class _MineFloorCountdown extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    '${remainingSeconds.toString().padLeft(2, '0')} sn',
+                    context.gameText(
+                      '{seconds} sn',
+                      values: {
+                        'seconds': remainingSeconds!.toString().padLeft(2, '0'),
+                      },
+                    ),
                     maxLines: 1,
                     style: const TextStyle(
                       color: MinePalette.cream,
@@ -3080,6 +3410,7 @@ class _AmbientAdvisorDrone extends StatefulWidget {
     required this.floorHeight,
     required this.floorCount,
     required this.manualCamera,
+    required this.crusherDiscovery,
   });
 
   final GameController controller;
@@ -3090,6 +3421,7 @@ class _AmbientAdvisorDrone extends StatefulWidget {
   final double floorHeight;
   final int floorCount;
   final bool manualCamera;
+  final bool crusherDiscovery;
 
   @override
   State<_AmbientAdvisorDrone> createState() => _AmbientAdvisorDroneState();
@@ -3119,7 +3451,21 @@ class _AmbientAdvisorDroneState extends State<_AmbientAdvisorDrone>
   double _flightStartLeft = .12;
   double _flightEndLeft = .12;
 
-  double get _size => widget.narrow ? 74 : 90;
+  double get _size => widget.crusherDiscovery
+      ? math.min(46.0, widget.floorHeight * .42)
+      : (widget.narrow ? 74 : 90);
+
+  double get _crusherStationSize {
+    final shaftWidth = widget.narrow ? 86.0 : 112.0;
+    final edgeInset = widget.narrow ? 32.0 : 48.0;
+    return _crusherStationSizeForFloor(
+      width: widget.width,
+      height: widget.floorHeight,
+      shaftWidth: shaftWidth,
+      edgeInset: edgeInset,
+      repaired: widget.controller.state.crusherRepaired,
+    );
+  }
 
   double get _cameraOffset => widget.cameraController.hasClients
       ? widget.cameraController.position.pixels
@@ -3167,6 +3513,16 @@ class _AmbientAdvisorDroneState extends State<_AmbientAdvisorDrone>
   @override
   void didUpdateWidget(covariant _AmbientAdvisorDrone oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.crusherDiscovery != widget.crusherDiscovery) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (widget.crusherDiscovery) {
+          _placeAtCrusherDiscovery();
+        } else {
+          _placeAtRandomVisibleSpot();
+        }
+      });
+    }
     if (oldWidget.cameraController != widget.cameraController) {
       oldWidget.cameraController.removeListener(_onCameraChanged);
       _scrollPosition?.isScrollingNotifier.removeListener(
@@ -3200,6 +3556,10 @@ class _AmbientAdvisorDroneState extends State<_AmbientAdvisorDrone>
   }
 
   void _placeInitially() {
+    if (widget.crusherDiscovery) {
+      _placeAtCrusherDiscovery();
+      return;
+    }
     final spot = _randomVisibleSpot();
     setState(() {
       _floorIndex = spot.$1;
@@ -3207,6 +3567,79 @@ class _AmbientAdvisorDroneState extends State<_AmbientAdvisorDrone>
       _leftFraction = spot.$3;
       _initialized = true;
     });
+    _checkVisibility();
+  }
+
+  (int, double, double) _crusherDiscoverySpot() {
+    const crusherFloorIndex = 6;
+    const shaftGap = _crusherStationShaftGap;
+    final shaftWidth = widget.narrow ? 86.0 : 112.0;
+    final stationSize = _crusherStationSize;
+    final edgeInset = widget.narrow ? 32.0 : 48.0;
+    final sideSpace =
+        (widget.width - shaftWidth) / 2 - math.min(edgeInset, 12.0) - shaftGap;
+    final sideCenteringOffset = math.max(0.0, (sideSpace - stationSize) / 2);
+    final stationLeft =
+        (widget.width - shaftWidth) / 2 -
+        shaftGap -
+        sideCenteringOffset -
+        stationSize;
+    final droneLeft = stationLeft + (stationSize - _size) / 2;
+    final maxLeft = math.max(1.0, widget.width - _size);
+    final platformTop = _crusherFloorPlatformTopY(
+      width: widget.width,
+      height: widget.floorHeight,
+    );
+    final stationTop =
+        platformTop -
+        stationSize *
+            _crusherStationVisibleFootFraction(
+              widget.controller.state.crusherRepaired,
+            ) -
+        _crusherStationGroundOffset;
+    final droneWorldY = math.max(
+      0.0,
+      crusherFloorIndex * widget.floorHeight + stationTop - _size - 4,
+    );
+    final droneFloorPosition = (droneWorldY / widget.floorHeight)
+        .clamp(0.0, widget.floorCount.toDouble() - .001)
+        .toDouble();
+    final droneFloorIndex = droneFloorPosition.floor();
+    return (
+      droneFloorIndex,
+      droneFloorPosition - droneFloorIndex,
+      (droneLeft / maxLeft).clamp(0.0, 1.0).toDouble(),
+    );
+  }
+
+  void _placeAtCrusherDiscovery() {
+    _flightController?.stop();
+    _cancelOffscreenTimer();
+    _speechTimer?.cancel();
+    _speechHideTimer?.cancel();
+    final spot = _crusherDiscoverySpot();
+    setState(() {
+      _floorIndex = spot.$1;
+      _floorOffset = spot.$2;
+      _leftFraction = spot.$3;
+      _flying = false;
+      _speech = null;
+      _initialized = true;
+    });
+  }
+
+  void _placeAtRandomVisibleSpot() {
+    _flightController?.stop();
+    final spot = _randomVisibleSpot();
+    setState(() {
+      _floorIndex = spot.$1;
+      _floorOffset = spot.$2;
+      _leftFraction = spot.$3;
+      _flying = false;
+      _speech = null;
+      _initialized = true;
+    });
+    _scheduleSpeech(const Duration(seconds: 18));
     _checkVisibility();
   }
 
@@ -3278,7 +3711,7 @@ class _AmbientAdvisorDroneState extends State<_AmbientAdvisorDrone>
   }
 
   void _checkVisibility() {
-    if (!_initialized || _flying) return;
+    if (!_initialized || _flying || widget.crusherDiscovery) return;
     if (_worldPositionVisible || (_isScrolling && widget.manualCamera)) {
       _cancelOffscreenTimer();
       return;
@@ -3297,6 +3730,7 @@ class _AmbientAdvisorDroneState extends State<_AmbientAdvisorDrone>
     if (!mounted ||
         !_initialized ||
         _flying ||
+        widget.crusherDiscovery ||
         (_isScrolling && widget.manualCamera)) {
       return;
     }
@@ -3342,6 +3776,7 @@ class _AmbientAdvisorDroneState extends State<_AmbientAdvisorDrone>
   void _showSpeech() {
     _speechTimer = null;
     if (!mounted) return;
+    if (widget.crusherDiscovery) return;
     if (!_initialized ||
         !_worldPositionVisible ||
         (_isScrolling && widget.manualCamera)) {
@@ -3352,7 +3787,10 @@ class _AmbientAdvisorDroneState extends State<_AmbientAdvisorDrone>
     final isPlayerTip = _speechCount.isEven;
     final message = isPlayerTip
         ? _dronePlayerHint(widget.controller, _speechCount ~/ 2)
-        : _droneMotivation(_speechCount ~/ 2);
+        : _droneMotivation(
+            _speechCount ~/ 2,
+            widget.controller.state.languageCode,
+          );
     setState(() {
       _speech = _DroneSpeech(message: message, isPlayerTip: isPlayerTip);
       _speechCount++;
@@ -3368,11 +3806,18 @@ class _AmbientAdvisorDroneState extends State<_AmbientAdvisorDrone>
   Widget build(BuildContext context) {
     final size = _size;
     final progress = _flightController?.value ?? 0;
-    final worldY = _flying
+    final discoverySpot = widget.crusherDiscovery
+        ? _crusherDiscoverySpot()
+        : null;
+    final worldY = discoverySpot != null
+        ? (discoverySpot.$1 + discoverySpot.$2) * widget.floorHeight
+        : _flying
         ? _flightStartWorldY +
               (_flightEndWorldY - _flightStartWorldY) * progress
         : _worldY;
-    final leftFraction = _flying
+    final leftFraction = discoverySpot != null
+        ? discoverySpot.$3
+        : _flying
         ? _flightStartLeft + (_flightEndLeft - _flightStartLeft) * progress
         : _leftFraction;
     final left = ((widget.width - size) * leftFraction)
@@ -3390,6 +3835,23 @@ class _AmbientAdvisorDroneState extends State<_AmbientAdvisorDrone>
     final tailLeft = (left + size / 2 - speechLeft - 8)
         .clamp(16.0, math.max(16.0, speechWidth - 16))
         .toDouble();
+    const discoveryMessageHeight = 38.0;
+    final crusherStationTop =
+        7 * widget.floorHeight - _crusherStationSize - _cameraOffset;
+    final crusherStationBottom = 7 * widget.floorHeight - _cameraOffset;
+    final discoveryMessageTop = screenTop
+        .clamp(0.0, math.max(0.0, widget.height - discoveryMessageHeight))
+        .toDouble();
+    final discoveryMessageLeft = left + size + 6;
+    final discoveryMessageWidth = math.min(
+      widget.narrow ? 224.0 : 268.0,
+      math.max(0.0, widget.width - discoveryMessageLeft - 8),
+    );
+    final showCrusherDiscoveryMessage =
+        widget.crusherDiscovery &&
+        crusherStationTop >= 0 &&
+        crusherStationBottom <= widget.height &&
+        crusherStationTop - discoveryMessageTop >= discoveryMessageHeight;
     final speechAboveDrone = screenTop >= speechHeight + 9;
     final speechTop = speechAboveDrone
         ? math.max(0.0, screenTop - speechHeight - 9)
@@ -3403,6 +3865,9 @@ class _AmbientAdvisorDroneState extends State<_AmbientAdvisorDrone>
           width: size,
           height: size,
           child: AnimatedCrewSprite(
+            key: widget.crusherDiscovery
+                ? const ValueKey('crusher-discovery-drone')
+                : null,
             index: 3,
             action: CrewAction.scanning,
             width: size,
@@ -3411,6 +3876,69 @@ class _AmbientAdvisorDroneState extends State<_AmbientAdvisorDrone>
             advisorDroneAnimation: true,
           ),
         ),
+        if (showCrusherDiscoveryMessage)
+          Positioned(
+            left: discoveryMessageLeft,
+            top: discoveryMessageTop,
+            width: discoveryMessageWidth,
+            height: discoveryMessageHeight,
+            child: IgnorePointer(
+              child: Semantics(
+                liveRegion: true,
+                label: context.gameText(
+                  'Yeni keşif. Taş kırma istasyonu bulundu.',
+                ),
+                child: Container(
+                  key: const ValueKey('crusher-discovery-message'),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xF20A2029),
+                    border: Border.all(color: MinePalette.cyan, width: 1.2),
+                    borderRadius: BorderRadius.circular(8),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0xAA34D3CB),
+                        blurRadius: 8,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        context.gameText('YENİ KEŞİF!'),
+                        maxLines: 1,
+                        style: TextStyle(
+                          color: MinePalette.cyan,
+                          fontSize: 9,
+                          height: 1,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: .25,
+                        ),
+                      ),
+                      SizedBox(height: 3),
+                      Text(
+                        context.gameText('Taş kırma istasyonu bulundu'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: MinePalette.cream,
+                          fontSize: 9,
+                          height: 1,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
         if (_speech != null)
           Positioned(
             left: speechLeft,
@@ -3522,7 +4050,9 @@ class _DroneSpeechBubble extends StatelessWidget {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      speech.isPlayerTip ? 'DRON • İPUCU' : 'DRON • EKİBE',
+                      context.gameText(
+                        speech.isPlayerTip ? 'DRON • İPUCU' : 'DRON • EKİBE',
+                      ),
                       style: TextStyle(
                         color: accent,
                         fontSize: 9,
@@ -3535,7 +4065,7 @@ class _DroneSpeechBubble extends StatelessWidget {
                 const SizedBox(height: 3),
                 Expanded(
                   child: Text(
-                    speech.message,
+                    context.gameText(speech.message),
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -3611,7 +4141,7 @@ class _DroneSpeechTailPainter extends CustomPainter {
       oldDelegate.pointsUp != pointsUp;
 }
 
-String _droneMotivation(int index) {
+String _droneMotivation(int index, String language) {
   const lines = [
     'Güzel tempo ekip! Her vuruş bizi yeni bir katmana yaklaştırıyor.',
     'Kasklar sağlam, ekip hazır. Bu vardiyada rekoru kıracağız!',
@@ -3619,55 +4149,76 @@ String _droneMotivation(int index) {
     'Harika çalışıyorsunuz! Birlikte her engeli aşarız.',
     'Dayan ekip! Biraz daha kazarsak yeni keşifler bizi bekliyor.',
   ];
-  return lines[index % lines.length];
+  return gameTextForLanguage(language, lines[index % lines.length]);
 }
 
 String _dronePlayerHint(GameController controller, int index) {
   final state = controller.state;
+  String t(String source, [Map<String, Object> values = const {}]) =>
+      gameTextForLanguage(state.languageCode, source, values);
   if (state.cargoFull || state.cargoRatio >= .88) {
     return state.autoSellEnabled
-        ? 'Ambar doluyor. Otomatik satış eşiğini düşür ya da depodan cevheri sat.'
-        : 'Ambar doluyor. Depodan cevheri sat; boşalan yer kazıyı sürdürür.';
+        ? t(
+            'Ambar doluyor. Otomatik satış eşiğini düşür ya da depodan cevheri sat.',
+          )
+        : t('Ambar doluyor. Depodan cevheri sat; boşalan yer kazıyı sürdürür.');
   }
   if (controller.unclaimedQuestRewardCount > 0) {
-    return 'Görev düğmesindeki hazır ödülleri al; kasayı geliştirmelere yatır.';
+    return t(
+      'Görev düğmesindeki hazır ödülleri al; kasayı geliştirmelere yatır.',
+    );
   }
   if (state.canOpenBuilding('workshop') && state.crewCount > 0) {
     final drillCost = GameEngine.upgradeCost(state, 'drill');
     if (drillCost > 0 &&
         state.canAfford(drillCost) &&
         GameEngine.upgradeMaterialDeficits(state, 'drill').isEmpty) {
-      return 'Atölye’de Sondaj Ucu yükseltmesi hazır; derinlik ilerleme hızını artırır.';
+      return t(
+        'Atölye’de Sondaj Ucu yükseltmesi hazır; derinlik ilerleme hızını artırır.',
+      );
     }
     final assembly = _availableDrillAssemblyUpgrade(state);
     if (assembly != null) {
-      return 'Montajda ${assembly.name} geliştirilebilir; artan sondaj gücü kazıyı hızlandırır.';
+      return t(
+        'Montajda {assembly} geliştirilebilir; artan sondaj gücü kazıyı hızlandırır.',
+        {'assembly': gameTextForLanguage(state.languageCode, assembly.name)},
+      );
     }
     if (controller.currentQuest.kind == QuestKind.assemblyUpgrade) {
-      return 'Montaj görevini ilerlet: Atölye’de ucu, fanı veya motoru geliştir.';
+      return t(
+        'Montaj görevini ilerlet: Atölye’de ucu, fanı veya motoru geliştir.',
+      );
     }
     if (state.activeMinerCount < 10 &&
         state.canAfford(GameEngine.minerCost(state))) {
-      return 'Kasan yeterli; Atölye’den madenci işe alıp cevher ekibini büyütebilirsin.';
+      return t(
+        'Kasan yeterli; Atölye’den madenci işe alıp cevher ekibini büyütebilirsin.',
+      );
     }
   }
   if (state.pressure >= 70 && state.unlockedBuildings.contains('elevator')) {
-    return 'Basınç %70’i aşınca sondaj yavaşlar. Kuyu Asansörü’nde basıncı boşalt.';
+    return t(
+      'Basınç %70’i aşınca sondaj yavaşlar. Kuyu Asansörü’nde basıncı boşalt.',
+    );
   }
   if (state.energy >= 25 &&
       state.unlockedBuildings.contains('reactor') &&
       !state.activeBuffIds.contains('buff_overdrive')) {
-    return '25 reaktör enerjin var: Güç Darbesi sondajı 2 dakika hızlandırır.';
+    return t(
+      '25 reaktör enerjin var: Güç Darbesi sondajı 2 dakika hızlandırır.',
+    );
   }
   if (!state.canOpenBuilding('workshop')) {
-    return 'Görev şeridindeki adımları izle; Atölye açılınca sondaj geliştirmeleri hız kazandırır.';
+    return t(
+      'Görev şeridindeki adımları izle; Atölye açılınca sondaj geliştirmeleri hız kazandırır.',
+    );
   }
   const generalHints = [
     'İlerleme yavaşladı mı? Sondaj Ucu derinlik hızını, montaj parçaları toplam gücü artırır.',
     'Montajda uç, fan ve motoru yükseltmek toplam sondaj gücünü artırır.',
     'Görevleri tamamlayıp kasayı sondaj geliştirmelerine yatırmak daha hızlı derinleşmeni sağlar.',
   ];
-  return generalHints[index % generalHints.length];
+  return t(generalHints[index % generalHints.length]);
 }
 
 DrillAssemblyDefinition? _availableDrillAssemblyUpgrade(GameState state) {
@@ -3879,11 +4430,7 @@ List<_MineWorkerPlacement> _layoutMineWorkers({
   if (crewCount <= 0) return const [];
   final workerCount = math.min(crewCount, 10);
   final baseWorkerWidth = (narrow ? 46.0 : 60.0) * .7;
-  final rightCount = workerCount <= 3
-      ? workerCount
-      : workerCount <= 6
-      ? 3
-      : (workerCount + 1) ~/ 2;
+  final rightCount = (workerCount + 1) ~/ 2;
   final leftCount = workerCount - rightCount;
   final maxSideCount = math.max(rightCount, leftCount);
   final edgeInset = narrow ? 0.0 : 8.0;
@@ -3903,8 +4450,10 @@ List<_MineWorkerPlacement> _layoutMineWorkers({
 
   for (var gallery = 0; gallery < galleryFloors.length; gallery++) {
     for (var crewIndex = 0; crewIndex < workerCount; crewIndex++) {
-      final mirrored = crewIndex >= rightCount;
-      final sideIndex = mirrored ? crewIndex - rightCount : crewIndex;
+      // New hires alternate sides and fill each side from its outer edge
+      // toward the shaft: right, left, right row 2, left row 2, ...
+      final mirrored = crewIndex.isOdd;
+      final sideIndex = crewIndex ~/ 2;
       final sideCount = mirrored ? leftCount : rightCount;
       final firstLeft = mirrored ? edgeInset : width - edgeInset - workerWidth;
       final firstInwardDistance = mirrored
@@ -3957,6 +4506,7 @@ class _OreNode extends StatefulWidget {
     super.key,
     required this.deposit,
     required this.resource,
+    required this.languageCode,
     required this.placement,
     required this.showAdvisorMarker,
     required this.onTap,
@@ -3964,6 +4514,7 @@ class _OreNode extends StatefulWidget {
 
   final OreDepositState deposit;
   final ResourceDefinition resource;
+  final String languageCode;
   final _OreNodePlacement placement;
   final bool showAdvisorMarker;
   final int? Function() onTap;
@@ -4011,7 +4562,15 @@ class _OreNodeState extends State<_OreNode> {
     }
 
     final sequence = _popupSequence++;
-    final label = '$amount ${widget.resource.name.toLowerCase()}';
+    final resourceName = gameTextForLanguage(
+      widget.languageCode,
+      widget.resource.name,
+    ).toLowerCase();
+    final label = gameTextForLanguage(
+      widget.languageCode,
+      '{amount} {resource}',
+      {'amount': amount, 'resource': resourceName},
+    );
     final color = Color(widget.resource.colorHex);
     final maxLeft = math.max(4.0, overlayObject.size.width - 132);
     final left = (anchor.dx - 50 + (sequence.isEven ? -14 : 14))
@@ -4102,8 +4661,20 @@ class _OreNodeState extends State<_OreNode> {
           children: [
             Semantics(
               button: true,
-              label: '${widget.resource.name} cevher taşı',
-              hint: 'Kırmak için dokun.',
+              label: gameTextForLanguage(
+                widget.languageCode,
+                '{resource} cevher taşı',
+                {
+                  'resource': gameTextForLanguage(
+                    widget.languageCode,
+                    widget.resource.name,
+                  ),
+                },
+              ),
+              hint: gameTextForLanguage(
+                widget.languageCode,
+                'Kırmak için dokun.',
+              ),
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: _handleTap,
@@ -4338,14 +4909,17 @@ class _SquareAction extends StatelessWidget {
   Widget build(BuildContext context) => Semantics(
     button: enabled,
     enabled: enabled,
-    label: badgeCount > 0 ? '$label, $badgeCount alınmamış ödül' : label,
+    label: context.gameText(
+      badgeCount > 0 ? '{label}, {count} alınmamış ödül' : '{label}',
+      values: {'label': context.gameText(label), 'count': badgeCount},
+    ),
     child: SizedBox(
       height: 56,
       child: Material(
         color: const Color(0xFF102E3A),
         borderRadius: BorderRadius.circular(8),
         child: InkWell(
-          onTap: enabled ? onTap : null,
+          onTap: withButtonTapSound(enabled ? onTap : null),
           borderRadius: BorderRadius.circular(8),
           child: Stack(
             clipBehavior: Clip.none,
@@ -4396,7 +4970,7 @@ class _SquareAction extends StatelessWidget {
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
                       child: Text(
-                        label,
+                        context.gameText(label),
                         maxLines: 1,
                         style: TextStyle(
                           color: enabled
@@ -4450,7 +5024,18 @@ class _WorldPill extends StatelessWidget {
         ),
         const SizedBox(width: 5),
         Text(
-          '${state.currentWorldName} • ${_depthLabel(state.deepestMeters.floor())}',
+          context.gameText(
+            '{world} • {depth}',
+            values: {
+              'world': context.gameText(state.currentWorldName),
+              'depth': context.gameText(
+                _depthLabel(
+                  state.deepestMeters.floor(),
+                  languageCode: state.languageCode,
+                ),
+              ),
+            },
+          ),
           style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900),
         ),
       ],
@@ -4466,11 +5051,12 @@ class _ResonanceSequenceHint extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final pattern = state.resonancePattern;
-    final targetName =
-        ResourceCatalog.byId[GameEngine.currentResonanceTarget(state)]?.name ??
-        'Kömür';
+    final targetName = context.gameText(
+      ResourceCatalog.byId[GameEngine.currentResonanceTarget(state)]?.name ??
+          'Kömür',
+    );
     final sequence = pattern
-        .map((id) => ResourceCatalog.byId[id]?.name ?? id)
+        .map((id) => context.gameText(ResourceCatalog.byId[id]?.name ?? id))
         .join('  ›  ');
     final length = math.max(1, pattern.length);
     return Container(
@@ -4487,7 +5073,14 @@ class _ResonanceSequenceHint extends StatelessWidget {
           const SizedBox(width: 6),
           Expanded(
             child: Text(
-              'DAMAR AKORDU  ${state.resonanceProgress + 1}/$length  •  $sequence',
+              context.gameText(
+                'DAMAR AKORDU  {progress}/{length}  •  {sequence}',
+                values: {
+                  'progress': state.resonanceProgress + 1,
+                  'length': length,
+                  'sequence': sequence,
+                },
+              ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
@@ -4500,7 +5093,10 @@ class _ResonanceSequenceHint extends StatelessWidget {
           ),
           const SizedBox(width: 6),
           Text(
-            'Sıradaki: $targetName',
+            context.gameText(
+              'Sıradaki: {target}',
+              values: {'target': targetName},
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
@@ -4534,7 +5130,10 @@ class _BuffPill extends StatelessWidget {
         const Icon(Icons.bolt_rounded, size: 15, color: MinePalette.teal),
         const SizedBox(width: 4),
         Text(
-          'REZONANS • ${_duration(seconds)}',
+          context.gameText(
+            'REZONANS • {duration}',
+            values: {'duration': _duration(seconds)},
+          ),
           style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w900),
         ),
       ],
@@ -4718,8 +5317,9 @@ class _ShaftPainter extends CustomPainter {
       variant != oldDelegate.variant;
 }
 
-String _depthLabel(int meters) =>
-    meters >= 1000 ? '${_number(meters ~/ 1000)} km' : '$meters m';
+String _depthLabel(int meters, {String languageCode = 'tr'}) => meters >= 1000
+    ? '${_number(meters ~/ 1000, languageCode: languageCode)} km'
+    : _formatLocalizedInteger(meters, languageCode);
 
 bool _shouldLabelMineFloor(int worldIndex, int floorIndex) {
   final depthAtFloorEnd =
@@ -4727,31 +5327,42 @@ bool _shouldLabelMineFloor(int worldIndex, int floorIndex) {
   return depthAtFloorEnd == 1000 || depthAtFloorEnd % 5000 == 0;
 }
 
-String _mineFloorDepthLabel(int worldIndex, int floorIndex) => _depthLabel(
+String _mineFloorDepthLabel(
+  int worldIndex,
+  int floorIndex, {
+  String languageCode = 'tr',
+}) => _depthLabel(
   (GameState.worldEntryDepths[worldIndex] + (floorIndex + 1) * 1000).round(),
+  languageCode: languageCode,
 );
 
-String _number(num value) {
+String _number(num value, {String languageCode = 'tr'}) {
   final raw = value.round().toString();
+  return _groupIntegerDigits(raw, languageCode);
+}
+
+String _formatLocalizedInteger(num value, String languageCode) =>
+    _groupIntegerDigits(value.round().toString(), languageCode);
+
+String _groupIntegerDigits(String raw, String languageCode) {
+  final separator = languageCode == 'en' ? ',' : '.';
   final result = StringBuffer();
-  for (var i = 0; i < raw.length; i++) {
-    if (i > 0 && (raw.length - i) % 3 == 0) result.write('.');
-    result.write(raw[i]);
+  final isNegative = raw.startsWith('-');
+  final digits = isNegative ? raw.substring(1) : raw;
+  if (isNegative) result.write('-');
+  for (var i = 0; i < digits.length; i++) {
+    if (i > 0 && (digits.length - i) % 3 == 0) result.write(separator);
+    result.write(digits[i]);
   }
   return result.toString();
 }
 
-String _formatCoins(MrMineBigNumber coins) {
+String _formatCoins(MrMineBigNumber coins, {String languageCode = 'tr'}) {
   if (coins.exponent >= 15) {
     return coins.toScientificString();
   }
   final raw = coins.toString();
-  final result = StringBuffer();
-  for (var i = 0; i < raw.length; i++) {
-    if (i > 0 && (raw.length - i) % 3 == 0) result.write('.');
-    result.write(raw[i]);
-  }
-  return result.toString();
+  return _groupIntegerDigits(raw, languageCode);
 }
 
 String _goalRequirementLine(
@@ -4760,6 +5371,8 @@ String _goalRequirementLine(
   required QuestDefinition quest,
 }) {
   final state = controller.state;
+  String t(String source, [Map<String, Object> values = const {}]) =>
+      gameTextForLanguage(state.languageCode, source, values);
   if (guide != null) {
     if (guide.isTutorial) {
       switch (quest.id) {
@@ -4767,12 +5380,29 @@ String _goalRequirementLine(
           final veins = state.oreDeposits.values
               .where((deposit) => !deposit.depleted)
               .length;
-          return '$veins kömür damarı hazır • her damar 5 vuruşta tükenir.';
+          return t(
+            '{veins} kömür damarı hazır • her damar 5 vuruşta tükenir.',
+            {'veins': veins},
+          );
         case 1:
-          return 'Satış hedefi: 40 kasa • toplam satış: ${_formatCoins(state.totalSold)}.';
+          return t('Satış hedefi: 40 kasa • toplam satış: {sold}.', {
+            'sold': _formatCoins(
+              state.totalSold,
+              languageCode: state.languageCode,
+            ),
+          });
         case 2:
           final cost = GameEngine.minerCost(state);
-          return 'Madenci: ${_formatCoins(MrMineBigNumber.fromNum(cost))} kasa • kasan: ${_formatCoins(state.coins)}.';
+          return t('Madenci: {cost} kasa • kasan: {balance}.', {
+            'cost': _formatCoins(
+              MrMineBigNumber.fromNum(cost),
+              languageCode: state.languageCode,
+            ),
+            'balance': _formatCoins(
+              state.coins,
+              languageCode: state.languageCode,
+            ),
+          });
         case 3:
           final cost = GameEngine.upgradeCost(state, 'drill');
           final requirements = GameEngine.upgradeMaterialRequirements(
@@ -4780,55 +5410,102 @@ String _goalRequirementLine(
             'drill',
           );
           final recipe = requirements.entries
-              .map(
-                (entry) =>
-                    '${entry.value} ${ResourceCatalog.byId[entry.key]?.name ?? entry.key}',
-              )
+              .map((entry) {
+                final resourceName =
+                    ResourceCatalog.byId[entry.key]?.name ?? entry.key;
+                return '${entry.value} ${gameTextForLanguage(state.languageCode, resourceName)}';
+              })
               .join(' + ');
           final materials = recipe.isEmpty ? '' : ' + $recipe';
-          return 'Sondaj ucu: ${_formatCoins(MrMineBigNumber.fromNum(cost))} kasa$materials.';
+          return t('Sondaj ucu: {cost} kasa{materials}.', {
+            'cost': _formatCoins(
+              MrMineBigNumber.fromNum(cost),
+              languageCode: state.languageCode,
+            ),
+            'materials': materials,
+          });
         case 4:
           final remaining = (7000 - state.deepestMeters.floor()).clamp(0, 7000);
           return remaining == 0
-              ? '7 km görevi tamamlandı • yıkık taş kırma istasyonunu onar.'
-              : 'Matkap otomatik ilerliyor • $remaining m kaldı • hedef 7 km.';
+              ? t('7 km görevi tamamlandı • yıkık taş kırma istasyonunu onar.')
+              : t(
+                  'Matkap otomatik ilerliyor • {remaining} m kaldı • hedef 7 km.',
+                  {'remaining': remaining},
+                );
       }
     }
     if (guide.requiredDepthMeters > 0) {
-      return 'Kilometre taşı: ${_depthLabel(guide.requiredDepthMeters)} • açmak için AÇ düğmesine dokun.';
+      return t('Kilometre taşı: {depth} • açmak için AÇ düğmesine dokun.', {
+        'depth': t(
+          _depthLabel(
+            guide.requiredDepthMeters,
+            languageCode: state.languageCode,
+          ),
+        ),
+      });
     }
-    return 'Açılan sistemi görmek için AÇ düğmesine dokun.';
+    return t('Açılan sistemi görmek için AÇ düğmesine dokun.');
   }
 
   final progress = controller.currentQuestProgress;
   final remaining = math.max(0, quest.target - progress);
-  final resonanceTargetName =
-      ResourceCatalog.byId[GameEngine.currentResonanceTarget(state)]?.name ??
-      'Kömür';
-  if (controller.currentQuestReady) return 'Hedef tamamlandı • ödülünü al.';
+  final resonanceTargetName = gameTextForLanguage(
+    state.languageCode,
+    ResourceCatalog.byId[GameEngine.currentResonanceTarget(state)]?.name ??
+        'Kömür',
+  );
+  if (controller.currentQuestReady) return t('Hedef tamamlandı • ödülünü al.');
   return switch (quest.kind) {
-    QuestKind.mine =>
-      '$remaining cevher daha çıkar • kuyudaki damarları tıkla.',
+    QuestKind.mine => t(
+      '{remaining} cevher daha çıkar • kuyudaki damarları tıkla.',
+      {'remaining': remaining},
+    ),
     QuestKind.depth =>
       quest.absoluteDepth
-          ? 'Son hedef: ${_depthLabel(quest.target)} • matkap otomatik ilerliyor.'
-          : '$remaining m kaldı • matkap otomatik ilerliyor.',
-    QuestKind.hire =>
-      'Sıradaki madenci: ${_formatCoins(MrMineBigNumber.fromNum(GameEngine.minerCost(state)))} kasa • kasan: ${_formatCoins(state.coins)}.',
-    QuestKind.sell =>
-      'Satış hedefi ${_number(quest.target)} kasa • toplam satış: ${_formatCoins(state.totalSold)}.',
-    QuestKind.upgrade =>
-      'Atölyede sondaj ucu, dökümhane veya muhafız silahını geliştir • toplam seviye ${controller.currentQuestProgress}/${quest.target}.',
-    QuestKind.assemblyUpgrade =>
-      'Atölyeyi aç → Sondaj Montajı bölümünde sondaj ucu, fan veya motor kartındaki şartları tamamlayıp geliştir düğmesine bas • ${controller.currentQuestProgress}/${quest.target}.',
-    QuestKind.chest =>
-      'Bulunan sandık: ${state.totalChestsFound} • Ticaret panelinde bir sandık aç.',
-    QuestKind.cave => 'Sefer Garajında bir rota başlat ve dronu geri getir.',
-    QuestKind.relic =>
+          ? t('Son hedef: {depth} • matkap otomatik ilerliyor.', {
+              'depth': t(
+                _depthLabel(quest.target, languageCode: state.languageCode),
+              ),
+            })
+          : t('{remaining} m kaldı • matkap otomatik ilerliyor.', {
+              'remaining': remaining,
+            }),
+    QuestKind.hire => t('Sıradaki madenci: {cost} kasa • kasan: {balance}.', {
+      'cost': _formatCoins(
+        MrMineBigNumber.fromNum(GameEngine.minerCost(state)),
+        languageCode: state.languageCode,
+      ),
+      'balance': _formatCoins(state.coins, languageCode: state.languageCode),
+    }),
+    QuestKind.sell => t('Satış hedefi {target} kasa • toplam satış: {sold}.', {
+      'target': _number(quest.target, languageCode: state.languageCode),
+      'sold': _formatCoins(state.totalSold, languageCode: state.languageCode),
+    }),
+    QuestKind.upgrade => t(
+      'Atölyede sondaj ucu, dökümhane veya muhafız silahını geliştir • toplam seviye {progress}/{target}.',
+      {'progress': controller.currentQuestProgress, 'target': quest.target},
+    ),
+    QuestKind.assemblyUpgrade => t(
+      'Atölyeyi aç → Sondaj Montajı bölümünde sondaj ucu, fan veya motor kartındaki şartları tamamlayıp geliştir düğmesine bas • {progress}/{target}.',
+      {'progress': controller.currentQuestProgress, 'target': quest.target},
+    ),
+    QuestKind.chest => t(
+      'Bulunan sandık: {count} • Ticaret panelinde bir sandık aç.',
+      {'count': state.totalChestsFound},
+    ),
+    QuestKind.cave => t('Sefer Garajında bir rota başlat ve dronu geri getir.'),
+    QuestKind.relic => t(
       'Araştırmada kalıntı kazısı başlat ve buluntuyu teslim al.',
-    QuestKind.boss => 'Cephanelikte zayıf noktayı açıp muhafıza saldır.',
-    QuestKind.resonance =>
-      'Araştırma’da DİZİYİ TARA’ya bas; kuyuya dönüp sıradaki $resonanceTargetName damarına dokun (${state.resonanceProgress + 1}/${math.max(1, state.resonancePattern.length)}).',
+    ),
+    QuestKind.boss => t('Cephanelikte zayıf noktayı açıp muhafıza saldır.'),
+    QuestKind.resonance => t(
+      'Araştırma’da DİZİYİ TARA’ya bas; kuyuya dönüp sıradaki {target} damarına dokun ({progress}/{length}).',
+      {
+        'target': resonanceTargetName,
+        'progress': state.resonanceProgress + 1,
+        'length': math.max(1, state.resonancePattern.length),
+      },
+    ),
   };
 }
 

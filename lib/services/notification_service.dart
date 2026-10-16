@@ -1,6 +1,10 @@
 import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+
+import '../crusher/localization.dart';
+
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -43,10 +47,10 @@ class NotificationService {
 
       const DarwinInitializationSettings iosSettings =
           DarwinInitializationSettings(
-        requestAlertPermission: false,
-        requestBadgePermission: false,
-        requestSoundPermission: false,
-      );
+            requestAlertPermission: false,
+            requestBadgePermission: false,
+            requestSoundPermission: false,
+          );
 
       const InitializationSettings initSettings = InitializationSettings(
         android: androidSettings,
@@ -68,13 +72,17 @@ class NotificationService {
 
     try {
       if (Platform.isAndroid) {
-        final androidImpl = _notificationsPlugin.resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>();
+        final androidImpl = _notificationsPlugin
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >();
         final granted = await androidImpl?.requestNotificationsPermission();
         return granted ?? false;
       } else if (Platform.isIOS) {
-        final iosImpl = _notificationsPlugin.resolvePlatformSpecificImplementation<
-            IOSFlutterLocalNotificationsPlugin>();
+        final iosImpl = _notificationsPlugin
+            .resolvePlatformSpecificImplementation<
+              IOSFlutterLocalNotificationsPlugin
+            >();
         final granted = await iosImpl?.requestPermissions(
           alert: true,
           badge: true,
@@ -99,7 +107,10 @@ class NotificationService {
   }
 
   /// Ambar dolum bildirimi zamanlar.
-  Future<void> scheduleCargoFullNotification(Duration delay) async {
+  Future<void> scheduleCargoFullNotification(
+    Duration delay, {
+    String language = 'tr',
+  }) async {
     if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS)) return;
 
     // Çok kısa sürede bildirim atmamak için minimum 10 dakika gecikme
@@ -112,11 +123,13 @@ class NotificationService {
     try {
       await _notificationsPlugin.zonedSchedule(
         id: cargoNotificationId,
-        title: '⛏️ Ambarın Tıkabasa Doldu Şef!',
-        body:
-            'Madencilerin kazmayı bıraktı çünkü koyacak yer kalmadı. Gel ve cevherleri satıp servetine servet kat!',
+        title: '⛏️ ${gameText(language, 'Ambarın Tıkabasa Doldu Şef!')}',
+        body: gameText(
+          language,
+          'Madencilerin kazmayı bıraktı çünkü koyacak yer kalmadı. Gel ve cevherleri satıp servetine servet kat!',
+        ),
         scheduledDate: scheduledDate,
-        notificationDetails: _notificationDetails(),
+        notificationDetails: _notificationDetails(language),
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       );
     } catch (e) {
@@ -125,20 +138,22 @@ class NotificationService {
   }
 
   /// Günlük vardiya yenilenme bildirimi (24 saat sonra).
-  Future<void> scheduleDailyDutyNotification() async {
+  Future<void> scheduleDailyDutyNotification({String language = 'tr'}) async {
     if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS)) return;
 
-    final scheduledDate =
-        tz.TZDateTime.now(tz.local).add(const Duration(hours: 24));
+    final scheduledDate = tz.TZDateTime.now(tz.local)
+        .add(const Duration(hours: 24));
 
     try {
       await _notificationsPlugin.zonedSchedule(
         id: dailyDutyNotificationId,
-        title: '📋 Yeni Günlük Vardiya Başladı!',
-        body:
-            'Maden müfettişi yeni görevler ve bolca maden parası getirdi. Vardiyanı kaçırma!',
+        title: '📋 ${gameText(language, 'Yeni Günlük Vardiya Başladı!')}',
+        body: gameText(
+          language,
+          'Maden müfettişi yeni görevler ve bolca maden parası getirdi. Vardiyanı kaçırma!',
+        ),
         scheduledDate: scheduledDate,
-        notificationDetails: _notificationDetails(),
+        notificationDetails: _notificationDetails(language),
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       );
     } catch (e) {
@@ -147,20 +162,22 @@ class NotificationService {
   }
 
   /// 48 saat oyuna girmeyen oyuncuyu çağırma bildirimi.
-  Future<void> scheduleInactivityNotification() async {
+  Future<void> scheduleInactivityNotification({String language = 'tr'}) async {
     if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS)) return;
 
-    final scheduledDate =
-        tz.TZDateTime.now(tz.local).add(const Duration(hours: 48));
+    final scheduledDate = tz.TZDateTime.now(tz.local)
+        .add(const Duration(hours: 48));
 
     try {
       await _notificationsPlugin.zonedSchedule(
         id: inactivityNotificationId,
-        title: '🌋 Derinliklerde Sismik Hareket!',
-        body:
-            'Sensörlerimiz alt katmanlarda gizemli bir elmas damarı tespit etti. Kazmanı kap ve derinlere in!',
+        title: '🌋 ${gameText(language, 'Derinliklerde Sismik Hareket!')}',
+        body: gameText(
+          language,
+          'Sensörlerimiz alt katmanlarda gizemli bir elmas damarı tespit etti. Kazmanı kap ve derinlere in!',
+        ),
         scheduledDate: scheduledDate,
-        notificationDetails: _notificationDetails(),
+        notificationDetails: _notificationDetails(language),
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       );
     } catch (e) {
@@ -168,17 +185,17 @@ class NotificationService {
     }
   }
 
-  NotificationDetails _notificationDetails() {
-    return const NotificationDetails(
+  NotificationDetails _notificationDetails(String language) {
+    return NotificationDetails(
       android: AndroidNotificationDetails(
         channelId,
-        channelName,
-        channelDescription: channelDescription,
+        gameText(language, channelName),
+        channelDescription: gameText(language, channelDescription),
         importance: Importance.high,
         priority: Priority.high,
         icon: '@mipmap/ic_launcher',
       ),
-      iOS: DarwinNotificationDetails(
+      iOS: const DarwinNotificationDetails(
         presentAlert: true,
         presentBadge: true,
         presentSound: true,

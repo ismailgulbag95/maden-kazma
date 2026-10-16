@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../core/design/palette.dart';
+import '../../crusher/localization.dart';
 import '../../services/haptic_service.dart';
+import '../../services/sound_service.dart';
 
 class NotificationPermissionDialog extends StatelessWidget {
   const NotificationPermissionDialog({
@@ -27,146 +29,147 @@ class NotificationPermissionDialog extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.all(22),
             child: Column(
-            mainAxisSize: dynamicSize(context),
-            children: [
-              // Header Badge & Icon
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF102D38),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: MinePalette.amber, width: 1.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: MinePalette.amber.withValues(alpha: 0.25),
-                      blurRadius: 16,
-                      spreadRadius: 2,
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.notifications_active_rounded,
-                  color: MinePalette.amber,
-                  size: 34,
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'MADEN TELSİZİ FREKANSI',
-                style: TextStyle(
-                  color: MinePalette.cream,
-                  fontSize: 19,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.2,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'Madenin derinliklerindeki fırsatları kaçırmamak için telsiz bağlantısını aktif et şef!',
-                style: TextStyle(
-                  color: MinePalette.muted,
-                  fontSize: 13,
-                  height: 1.35,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-
-              // Benefits List
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: MinePalette.panel,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: MinePalette.border),
-                ),
-                child: const Column(
-                  children: [
-                    _BenefitRow(
-                      icon: Icons.inventory_2_rounded,
-                      iconColor: MinePalette.amber,
-                      title: 'Ambar Dolum Alarmı',
-                      description:
-                          'Madencilerin ambarı doldurunca boş durmasın, anında satıp kazan.',
-                    ),
-                    Divider(color: MinePalette.border, height: 18),
-                    _BenefitRow(
-                      icon: Icons.assignment_turned_in_rounded,
-                      iconColor: MinePalette.cyan,
-                      title: 'Günlük Vardiya Görevleri',
-                      description:
-                          'Her gece yenilenen müfettiş görevleri ve maden parası ödülleri.',
-                    ),
-                    Divider(color: MinePalette.border, height: 18),
-                    _BenefitRow(
-                      icon: Icons.diamond_rounded,
-                      iconColor: Color(0xFF90CAF9),
-                      title: 'Sismik Damar Keşifleri',
-                      description:
-                          'Nadir elmas ve yakut damarları yüzeye çıktığında telsizden haber al.',
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 22),
-
-              // Action Buttons
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    HapticService.instance.selectionClick();
-                    Navigator.of(context).pop();
-                    await onEnable();
-                  },
-                  icon: const Icon(Icons.check_circle_rounded, size: 20),
-                  label: const Text(
-                    'TELSİZİ AÇ (BİLDİRİMLERİ ETKİNLEŞTİR)',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.5,
-                      fontSize: 13,
-                    ),
+              mainAxisSize: dynamicSize(context),
+              children: [
+                // Header Badge & Icon
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF102D38),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: MinePalette.amber, width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: MinePalette.amber.withValues(alpha: 0.25),
+                        blurRadius: 16,
+                        spreadRadius: 2,
+                      ),
+                    ],
                   ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: MinePalette.amber,
-                    foregroundColor: MinePalette.ink,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 3,
+                  child: const Icon(
+                    Icons.notifications_active_rounded,
+                    color: MinePalette.amber,
+                    size: 34,
                   ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: TextButton(
-                  onPressed: () {
-                    HapticService.instance.lightTap();
-                    Navigator.of(context).pop();
-                    onDismiss();
-                  },
-                  child: const Text(
-                    'ŞİMDİ DEĞİL, DAHA SONRA',
-                    style: TextStyle(
-                      color: MinePalette.muted,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
-                      letterSpacing: 0.5,
+                const SizedBox(height: 16),
+                Text(
+                  context.gameText('MADEN TELSİZİ FREKANSI'),
+                  style: TextStyle(
+                    color: MinePalette.cream,
+                    fontSize: 19,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.2,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  context.gameText(
+                    'Madenin derinliklerindeki fırsatları kaçırmamak için telsiz bağlantısını aktif et şef!',
+                  ),
+                  style: TextStyle(
+                    color: MinePalette.muted,
+                    fontSize: 13,
+                    height: 1.35,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+
+                // Benefits List
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: MinePalette.panel,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: MinePalette.border),
+                  ),
+                  child: const Column(
+                    children: [
+                      _BenefitRow(
+                        icon: Icons.inventory_2_rounded,
+                        iconColor: MinePalette.amber,
+                        title: 'Ambar Dolum Alarmı',
+                        description: 'Madencilerin ambarı doldurunca boş durmasın, anında satıp kazan.',
+                      ),
+                      Divider(color: MinePalette.border, height: 18),
+                      _BenefitRow(
+                        icon: Icons.assignment_turned_in_rounded,
+                        iconColor: MinePalette.cyan,
+                        title: 'Günlük Vardiya Görevleri',
+                        description: 'Her gece yenilenen müfettiş görevleri ve maden parası ödülleri.',
+                      ),
+                      Divider(color: MinePalette.border, height: 18),
+                      _BenefitRow(
+                        icon: Icons.diamond_rounded,
+                        iconColor: Color(0xFF90CAF9),
+                        title: 'Sismik Damar Keşifleri',
+                        description: 'Nadir elmas ve yakut damarları yüzeye çıktığında telsizden haber al.',
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 22),
+
+                // Action Buttons
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: withButtonTapSound(() async {
+                      HapticService.instance.selectionClick();
+                      Navigator.of(context).pop();
+                      await onEnable();
+                    }),
+                    icon: const Icon(Icons.check_circle_rounded, size: 20),
+                    label: Text(
+                      context.gameText(
+                        'TELSİZİ AÇ (BİLDİRİMLERİ ETKİNLEŞTİR)',
+                      ),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.5,
+                        fontSize: 13,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: MinePalette.amber,
+                      foregroundColor: MinePalette.ink,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 3,
                     ),
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton(
+                    onPressed: withButtonTapSound(() {
+                      HapticService.instance.lightTap();
+                      Navigator.of(context).pop();
+                      onDismiss();
+                    }),
+                    child: Text(
+                      context.gameText('ŞİMDİ DEĞİL, DAHA SONRA'),
+                      style: TextStyle(
+                        color: MinePalette.muted,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
   }
 
   MainAxisSize dynamicSize(BuildContext context) => MainAxisSize.min;
@@ -204,7 +207,7 @@ class _BenefitRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                title,
+                context.gameText(title),
                 style: const TextStyle(
                   color: MinePalette.cream,
                   fontWeight: FontWeight.w700,
@@ -213,7 +216,7 @@ class _BenefitRow extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                description,
+                context.gameText(description),
                 style: const TextStyle(
                   color: MinePalette.muted,
                   fontSize: 11.5,

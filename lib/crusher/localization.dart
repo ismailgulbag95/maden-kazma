@@ -1,12 +1,11 @@
+import 'package:flutter/widgets.dart';
+
 const Map<String, Map<String, String>> gameWords = {
   'tr': {
     'app': 'TAŞ KIRICI',
     'shift': 'OCAK 01',
     'level': 'SEVİYE',
     'xp': 'SEVİYE İLERLEMESİ',
-    'machine': 'ÇİFT MERDANELİ KIRICI',
-    'machineShort': 'ÇİFT MERDANE',
-    'automatic': 'OTOMATİK HAT',
     'rocks': 'KIRILAN TAŞ',
     'rpm': 'DEVİR / DK',
     'power': 'VURUŞ GÜCÜ',
@@ -18,7 +17,7 @@ const Map<String, Map<String, String>> gameWords = {
     'incomeRate': 'SON 60 SN · +{amount}/DK',
     'incomeRateShort': '+{amount}/DK',
     'incomeWindow': 'Son 60 saniyedeki satışlara göre',
-    'tap': 'TAŞA DOKUN: ONU EZ · BASILI TUT',
+    'tap': 'TAŞA DOKUN VE EZ',
     'navCrusher': 'KIRICI',
     'navUpgrade': 'GELİŞTİR',
     'navGoals': 'GÖREV',
@@ -62,7 +61,8 @@ const Map<String, Map<String, String>> gameWords = {
     'skinEquipped': 'SEÇİLİ',
     'locked': 'SEV. {level}',
     'machineLevel': 'MAKİNE SEV.',
-    'currentOre': 'EZİLEN CEVHER',
+    'mostValuableOre': 'EN DEĞERLİ CEVHER',
+    'noOre': 'CEVHER YOK',
     'specialStone': 'PARILTI TAŞI · 6× ÖDÜL',
     'mission': 'VARDİYA HEDEFİ',
     'missionProgress': '{count} / 10 TAŞ',
@@ -135,10 +135,40 @@ const Map<String, Map<String, String>> gameWords = {
     'meteorite': 'Göktaşı',
     'steel': 'Dövme Çelik',
     'copper': 'Bakır',
+    'coal': 'Kömür',
+    'silver': 'Gümüş',
+    'gold': 'Altın',
+    'platinum': 'Platin',
+    'diamond': 'Elmas',
+    'coltan': 'Koltan',
+    'painite': 'Paynit',
+    'black_opal': 'Siyah Opal',
+    'red_diamond': 'Kızıl Elmas',
+    'blue_obsidian': 'Mavi Obsidyen',
+    'californium': 'Kaliforniyum',
+    'carbon': 'Karbon',
+    'moon_iron': 'Ay Demiri',
+    'aluminum': 'Alüminyum',
+    'magnesium': 'Magnezyum',
+    'lunar_titanium': 'Ay Titanyumu',
+    'silicon': 'Silisyum',
+    'promethium': 'Prometyum',
+    'neodymium': 'Neodimyum',
+    'ytterbium': 'İterbiyum',
+    'tin': 'Kalay',
+    'sulfur': 'Kükürt',
+    'lithium': 'Lityum',
+    'manganese': 'Manganez',
+    'mercury': 'Cıva',
+    'nickel': 'Nikel',
+    'alexandrite': 'Aleksandrit',
+    'benitoite': 'Benitoit',
+    'titan_cobalt': 'Titan Kobaltı',
     'arctic': 'Buzul',
     'violet': 'Mor Kristal',
     'obsidian': 'Obsidyen',
     'rpmUnit': 'dev/dk',
+    'crusherRpm': 'Kırıcı: {rpm} dev/dk',
     'powerUnit': 'güç',
     'experience': 'TP',
     'saved': 'İlerleme otomatik kaydediliyor',
@@ -152,9 +182,6 @@ const Map<String, Map<String, String>> gameWords = {
     'shift': 'PIT 01',
     'level': 'LEVEL',
     'xp': 'LEVEL PROGRESS',
-    'machine': 'TWIN ROLLER CRUSHER',
-    'machineShort': 'TWIN ROLLERS',
-    'automatic': 'AUTO LINE',
     'rocks': 'ROCKS CRUSHED',
     'rpm': 'ROTATION / MIN',
     'power': 'IMPACT POWER',
@@ -166,7 +193,7 @@ const Map<String, Map<String, String>> gameWords = {
     'incomeRate': 'LAST 60S · +{amount}/MIN',
     'incomeRateShort': '+{amount}/MIN',
     'incomeWindow': 'Based on sales in the last 60 seconds',
-    'tap': 'TAP A ROCK TO CRUSH IT · HOLD TO HELP',
+    'tap': 'TAP A ROCK TO CRUSH',
     'navCrusher': 'CRUSHER',
     'navUpgrade': 'UPGRADE',
     'navGoals': 'GOALS',
@@ -210,7 +237,8 @@ const Map<String, Map<String, String>> gameWords = {
     'skinEquipped': 'EQUIPPED',
     'locked': 'LV. {level}',
     'machineLevel': 'MACHINE LV.',
-    'currentOre': 'CRUSHING NOW',
+    'mostValuableOre': 'MOST VALUABLE ORE',
+    'noOre': 'NO ORE',
     'specialStone': 'SHIMMER ROCK · 6× REWARD',
     'mission': 'SHIFT GOAL',
     'missionProgress': '{count} / 10 ROCKS',
@@ -283,10 +311,40 @@ const Map<String, Map<String, String>> gameWords = {
     'meteorite': 'Meteorite',
     'steel': 'Forged Steel',
     'copper': 'Copper',
+    'coal': 'Coal',
+    'silver': 'Silver',
+    'gold': 'Gold',
+    'platinum': 'Platinum',
+    'diamond': 'Diamond',
+    'coltan': 'Coltan',
+    'painite': 'Painite',
+    'black_opal': 'Black Opal',
+    'red_diamond': 'Red Diamond',
+    'blue_obsidian': 'Blue Obsidian',
+    'californium': 'Californium',
+    'carbon': 'Carbon',
+    'moon_iron': 'Moon Iron',
+    'aluminum': 'Aluminum',
+    'magnesium': 'Magnesium',
+    'lunar_titanium': 'Lunar Titanium',
+    'silicon': 'Silicon',
+    'promethium': 'Promethium',
+    'neodymium': 'Neodymium',
+    'ytterbium': 'Ytterbium',
+    'tin': 'Tin',
+    'sulfur': 'Sulfur',
+    'lithium': 'Lithium',
+    'manganese': 'Manganese',
+    'mercury': 'Mercury',
+    'nickel': 'Nickel',
+    'alexandrite': 'Alexandrite',
+    'benitoite': 'Benitoite',
+    'titan_cobalt': 'Titan Cobalt',
     'arctic': 'Glacier',
     'violet': 'Violet Crystal',
     'obsidian': 'Obsidian',
     'rpmUnit': 'rpm',
+    'crusherRpm': 'Crusher: {rpm} rpm',
     'powerUnit': 'power',
     'experience': 'XP',
     'saved': 'Progress saves automatically',
@@ -297,14 +355,1630 @@ const Map<String, Map<String, String>> gameWords = {
   },
 };
 
+/// Complete-sentence translations for source text that remains in the
+/// canonical Turkish catalogs and model definitions.
+///
+/// Keep placeholders intact (for example `{count}`) so translators can move
+/// values without changing the calling code.
+const Map<String, String> _englishSourceText = {
+  '3D sahne bu platformda kullanılamıyor.':
+      'The 3D scene is unavailable on this platform.',
+  'TAŞIN ALTI': 'BENEATH THE STONE',
+  'YERALTI MADENİ': 'UNDERGROUND MINE',
+  'VARDİYA': 'SHIFT',
+  'MADEN HAZIRLANIYOR': 'PREPARING THE MINE',
+  'Asansör ve sondaj ekibi vardiyaya hazırlanıyor.':
+      'The elevator and drilling crew are getting ready for the shift.',
+  'YERALTI SİSTEMLERİ KONTROL EDİLİYOR': 'CHECKING UNDERGROUND SYSTEMS',
+  'KIRICI': 'CRUSHER',
+  'Kırıcı Giriş Haznesi:': 'Crusher Feed Hopper:',
+  '{count} Ham Parça': '{count} Raw Pieces',
+  'Oto Kırma: {rate}/sn': 'Auto Crushing: {rate}/sec',
+  'MAKİNE & AYRIŞTIRMA GELİŞTİRMELERİ': 'MACHINE & SORTING UPGRADES',
+  'Merdane Devri (Hız)': 'Roller Speed',
+  'Kırıcı dişlilerin dönüş hızını ve kırma vuruş sıklığını artırır.':
+      'Increases the roller rotation speed and crushing frequency.',
+  'Ezme & Kırma Gücü': 'Crushing Power',
+  'Sert taş ve madenleri daha az vuruşta parçalama gücü kazandırır.':
+      'Crushes hard rocks and ores in fewer hits.',
+  'Hazne Hacmi (Kapasite)': 'Hopper Capacity',
+  'Madencilerin kırma ünitesine doldurabileceği ham taş kapasitesini artırır.':
+      'Increases how many raw rocks miners can load into the crusher.',
+  'Elmas Merdane Dişleri': 'Diamond Roller Teeth',
+  'Her ezmede ekstra kaya ufalar, kritik vuruş ve özel parça şansını katlar.': 'Crushes an extra rock per cycle and improves critical-hit and rare-piece chances.',
+  'Ağır Hizmet Dişli Kutusu': 'Heavy-Duty Gearbox',
+  'Kırma işlemi başına ana kasaya düşen nakit kırma gelirini artırır.':
+      'Increases the cash earned in the main account per crushing cycle.',
+  'Elek & Saflaştırma Verimi': 'Screening & Refining Efficiency',
+  'Kırılan madenlerden ambara çıkan saf maden verim çarpanını yükseltir.':
+      'Increases the refined ore yield sent to storage after crushing.',
+  'Konveyör Besleme Hattı': 'Conveyor Feed Line',
+  'Hazneden kırıcı dişlilerine dökülen taşların bant ilerleme hızını artırır.': 'Increases the belt speed for rocks moving from the hopper to the rollers.',
+  'Sv. {level}': 'Lv. {level}',
+  'YÜKSELT': 'UPGRADE',
+  'AMBAR DOLU (KIRICI DURDURULDU):': 'HOPPER FULL (CRUSHER STOPPED):',
+  'Ambar Kapasitesi (Çıkış):': 'Storage Capacity (Output):',
+  'TÜMÜNÜ SAT & ÇALIŞTIR': 'SELL ALL & RESUME',
+  'Tümünü Sat': 'Sell All',
+  'AMBAR DOLU': 'HOPPER FULL',
+  'Kırıcı durduruldu · Satış yapın': 'Crusher stopped · Sell your stock',
+  'AMBAR DOLU! KIRICI DURDU': 'HOPPER FULL! CRUSHER STOPPED',
+  'Geçen Süre': 'Time Away',
+  'Çıkarılan Cevher': 'Ore Mined',
+  'Sondaj İlerlemesi': 'Drilling Progress',
+  'VARDİYAYI KASAYA AKTAR': 'COLLECT SHIFT EARNINGS',
+  'MADEN TELSİZİ FREKANSI': 'MINE RADIO FREQUENCY',
+  'Madenin derinliklerindeki fırsatları kaçırmamak için telsiz bağlantısını aktif et şef!': 'Turn on the radio, boss, so you never miss an opportunity deep in the mine!',
+  'Ambar Dolum Alarmı': 'Storage Full Alerts',
+  'Madencilerin ambarı doldurunca boş durmasın, anında satıp kazan.':
+      'Get an alert when miners fill storage so you can sell and keep earning.',
+  'Günlük Vardiya Görevleri': 'Daily Shift Goals',
+  'Her gece yenilenen müfettiş görevleri ve maden parası ödülleri.':
+      'Inspector goals and mining-cash rewards that refresh every night.',
+  'Sismik Damar Keşifleri': 'Seismic Vein Discoveries',
+  'Nadir elmas ve yakut damarları yüzeye çıktığında telsizden haber al.':
+      'Get a radio alert when rare diamond and ruby veins are discovered.',
+  'TELSİZİ AÇ (BİLDİRİMLERİ ETKİNLEŞTİR)':
+      'TURN ON RADIO (ENABLE NOTIFICATIONS)',
+  'ŞİMDİ DEĞİL, DAHA SONRA': 'NOT NOW',
+  'ORTAK AMBAR': 'SHARED STORAGE',
+  'Dünya, Ay ve Titan kaynakları aynı kapasiteyi kullanır. Üretim doluluk sınırında durur; sondaj ilerlemeyi sürdürür.': 'Earth, Moon, and Titan resources share storage capacity. Production pauses when storage is full, while drilling continues.',
+  'Kargo kapasitesi': 'Cargo Capacity',
+  'Kargo kapasitesinin son seviyesine ulaştın.':
+      'Cargo capacity is fully upgraded.',
+  'Kargo donanımını yükselt • {name}': 'Upgrade Cargo Equipment • {name}',
+  'Kapasite {current} → {next}.': 'Capacity {current} → {next}.',
+  ' Önce montaj şemasını keşfet.': ' Discover the assembly blueprint first.',
+  ' Eksik cevher: {deficits}.': ' Missing ore: {deficits}.',
+  'ŞEMA GEREKİYOR': 'BLUEPRINT REQUIRED',
+  'MADEN SAT': 'SELL ORE',
+  'İZOTOP SAT': 'SELL ISOTOPES',
+  '{world} • {count} kaynak': '{world} • {count} resources',
+  'HEPSİNİ SAT': 'SELL ALL',
+  'Kilit, seçilen en az miktarı tekli ve toplu satışta korur.': 'The reserve lock protects your selected minimum during single and bulk sales.',
+  'Bu dünyada henüz izotop açılmadı.':
+      'No isotopes have been unlocked in this world yet.',
+  'Henüz satılabilir maden açılmadı.': 'No ore is available to sell yet.',
+  '???': '???',
+  '{price} / birim': '{price} / unit',
+  'Satış kilidini düzenle': 'Edit sale reserve',
+  'Stok kilidi ekle': 'Set a stock reserve',
+  'Satıştan korunacak miktar': 'Amount to keep in storage',
+  'Sahip olunan miktar: {owned}': 'Owned: {owned}',
+  'İPTAL': 'CANCEL',
+  'UYGULA': 'APPLY',
+  'SAT': 'SELL',
+  'Dünya': 'Earth',
+  'Ay': 'Moon',
+  'Titan': 'Titan',
+  'Keşif Karnesi': 'EXPLORATION REPORT',
+  'KEŞİF KARNESİ': 'EXPLORATION REPORT',
+  'En Derin Nokta': 'Deepest Point',
+  'Toplam Çıkarılan': 'Total Mined',
+  'Maden Kasası': 'Mining Cash',
+  'Bilim Ekibi': 'Science Team',
+  'Uzman': 'Experts',
+  'Cevher': 'Ore',
+  'KARNEYİ KOPYALA / PAYLAŞ': 'COPY / SHARE REPORT',
+  'Keşif karnesi panoya kopyalandı! Arkadaşlarınla paylaşabilirsin.':
+      'Exploration report copied! Share it with your friends.',
+  'Yerin altındaki gizemi çözebilir misin? #TasinAlti #MobileGaming': 'Can you uncover the mystery beneath the stone? #BeneathTheStone #MobileGaming',
+  'Gezegenler Arası Kolonizatör 🪐': 'Interplanetary Colonist 🪐',
+  'Titan Öncüsü 🚀': 'Titan Pioneer 🚀',
+  'Çekirdek Fatihi 🌋': 'Core Conqueror 🌋',
+  'Derinlik Jeoloğu 💎': 'Deep-Sea Geologist 💎',
+  'Maden Şefi ⛏️': 'Mine Foreman ⛏️',
+  'Kıdemli Kazıcı ⚒️': 'Senior Driller ⚒️',
+  'Acemi Madenci 🪨': 'Rookie Miner 🪨',
+  'Ay Kolonisi 🌙': 'Moon Colony 🌙',
+  'Titan Madeni 🪐': 'Titan Mine 🪐',
+  'Dünya Karakolu 🌍': 'Earth Outpost 🌍',
+  '⛏️ TAŞIN ALTI — KEŞİF KARNESİ\n🎖️ Unvan: {title}\n📍 Konum: {world}\n📏 En Derin Nokta: {depth} km\n📦 Toplam Çıkarılan: {mined} cevher\n💎 Kasa: {coins}\n\nYerin altındaki gizemi çözebilir misin? #TasinAlti #MobileGaming': '⛏️ BENEATH THE STONE — EXPLORATION REPORT\n🎖️ Title: {title}\n📍 Location: {world}\n📏 Deepest Point: {depth} km\n📦 Total Mined: {mined} ore\n💎 Cash: {coins}\n\nCan you uncover the mystery beneath the stone? #BeneathTheStone #MobileGaming',
+  'İlk Kıvılcım': 'First Spark',
+  'İlk cevherini çıkar.': 'Mine your first ore.',
+  'Damar Takipçisi': 'Vein Tracker',
+  '100 cevher çıkar.': 'Mine 100 ore.',
+  'Maden Ustası': 'Master Miner',
+  '1.000 cevher çıkar.': 'Mine 1,000 ore.',
+  'Yer Kabuğu': 'Earth’s Crust',
+  '1 km derinliğe ulaş.': 'Reach a depth of 1 km.',
+  'On Kilometre': 'Ten Kilometers',
+  '10 km derinliğe ulaş.': 'Reach a depth of 10 km.',
+  'Sessiz Katman': 'Silent Layer',
+  '100 km derinliğe ulaş.': 'Reach a depth of 100 km.',
+  'Çekirdek Sinyali': 'Core Signal',
+  '500 km derinliğe ulaş.': 'Reach a depth of 500 km.',
+  'Beş madenci çalıştır.': 'Employ five miners.',
+  '25 madenci çalıştır.': 'Employ 25 miners.',
+  'İlk Kazanç': 'First Earnings',
+  '1.000 kasa değerinde kaynak sat.': 'Sell 1,000 coins’ worth of resources.',
+  'Ticaret Ağı': 'Trade Network',
+  '100.000 kasa değerinde kaynak sat.':
+      'Sell 100,000 coins’ worth of resources.',
+  'Gömülü Hatıra': 'Buried Memory',
+  'Bir sandık aç.': 'Open a chest.',
+  'Kasa Koleksiyoncusu': 'Chest Collector',
+  '10 sandık aç.': 'Open 10 chests.',
+  'Harita Çizgisi': 'Mapping the Way',
+  'İlk mağara seferini tamamla.': 'Complete your first cave expedition.',
+  'Derin Kâşif': 'Deep Explorer',
+  '10 mağara seferini tamamla.': 'Complete 10 cave expeditions.',
+  'Eski Yazıt': 'Ancient Inscription',
+  'Bir kalıntı bul.': 'Find a relic.',
+  'Arşiv Bekçisi': 'Archive Keeper',
+  'Altı kalıntı bul.': 'Find six relics.',
+  'Taş Muhafızı': 'Stone Guardian',
+  'Bir muhafızı yen.': 'Defeat a guardian.',
+  'Altı muhafızı yen.': 'Defeat six guardians.',
+  'Katman Yankısı': 'Layer Echo',
+  'Bir rezonans dizisini tamamla.': 'Complete a resonance sequence.',
+  'Damar Orkestratörü': 'Vein Conductor',
+  '10 rezonans dizisi tamamla.': 'Complete 10 resonance sequences.',
+  'İkinci Vardiya': 'Second Shift',
+  'Çekirdek döngüsünü bir kez yenile.': 'Reset the core cycle once.',
+  'Ay Madencisi': 'Moon Miner',
+  'Ay katmanlarına ulaş.': 'Reach the Moon layers.',
+  'Titan Kaşifi': 'Titan Explorer',
+  'Titan katmanlarına ulaş.': 'Reach the Titan layers.',
+  'Titan’ın Son Katmanı': 'Titan’s Final Layer',
+  '2.566 km derinliğe ulaş.': 'Reach a depth of 2,566 km.',
+  'Kömür': 'Coal',
+  'Bakır': 'Copper',
+  'Altın': 'Gold',
+  'Gümüş': 'Silver',
+  'Zümrüt Kristali': 'Emerald Crystal',
+  'Petrol Şisti': 'Oil Shale',
+  'Kehribar Taşı': 'Amber',
+  'Kızıl Elmas': 'Red Diamond',
+  'Göktaşı Demiri': 'Meteoric Iron',
+  'Yıldız Kristali': 'Star Crystal',
+  'Derin İnci': 'Deep Pearl',
+  'Güneş Taşı': 'Sunstone',
+  'Boşluk Camı': 'Void Glass',
+  'Ay Gümüşü': 'Moon Silver',
+  'Alüminyum': 'Aluminum',
+  'İterbiyum': 'Ytterbium',
+  'Çekirdek Taşı': 'Core Stone',
+  'Kükürt': 'Sulfur',
+  'Cıva': 'Mercury',
+  'Titan Kobaltı': 'Titan Cobalt',
+  'Hidrojen İzotopu': 'Hydrogen Isotope',
+  'Oksijen İzotopu': 'Oxygen Isotope',
+  'Karbon İzotopu': 'Carbon Isotope',
+  'Azot İzotopu': 'Nitrogen Isotope',
+  'Neon İzotopu': 'Neon Isotope',
+  'Sodyum İzotopu': 'Sodium Isotope',
+  'Magnezyum İzotopu': 'Magnesium Isotope',
+  'Alüminyum İzotopu': 'Aluminum Isotope',
+  'Silisyum İzotopu': 'Silicon Isotope',
+  'Kükürt İzotopu': 'Sulfur Isotope',
+  'Klor İzotopu': 'Chlorine Isotope',
+  'Argon İzotopu': 'Argon Isotope',
+  'Potasyum İzotopu': 'Potassium Isotope',
+  'Kalsiyum İzotopu': 'Calcium Isotope',
+  'Skandiyum İzotopu': 'Scandium Isotope',
+  'Titanyum İzotopu': 'Titanium Isotope',
+  'Vanadyum İzotopu': 'Vanadium Isotope',
+  'Krom İzotopu': 'Chromium Isotope',
+  'Manganez İzotopu': 'Manganese Isotope',
+  'Demir İzotopu': 'Iron Isotope',
+  'Kobalt İzotopu': 'Cobalt Isotope',
+  'Nikel İzotopu': 'Nickel Isotope',
+  'Bakır İzotopu': 'Copper Isotope',
+  'Çinko İzotopu': 'Zinc Isotope',
+  'Galyum İzotopu': 'Gallium Isotope',
+  'Germanyum İzotopu': 'Germanium Isotope',
+  'Kripton İzotopu': 'Krypton Isotope',
+  'Plütonyum I': 'Plutonium I',
+  'Plütonyum II': 'Plutonium II',
+  'Plütonyum III': 'Plutonium III',
+  'Yapı Malzemesi': 'Building Materials',
+  'Nükleer Enerji': 'Nuclear Energy',
+  'İlk cevherini çıkar': 'Mine your first ore',
+  'Kömür damarına art arda dokun; taş örnekleri ambara düşecek.':
+      'Tap the coal vein repeatedly to collect rock samples in storage.',
+  'KÖMÜR DAMARI': 'COAL VEIN',
+  'Kömürü kasaya çevir': 'Turn Coal into Cash',
+  'İlk damara dokundun. Ambarı açıp kömürünü satarak kasa kazan.': 'You tapped your first vein. Open storage and sell your coal to earn cash.',
+  'Vardiyana madenci kat': 'Hire a Miner for Your Shift',
+  'Satıştan gelen kasayla atölyeyi aç ve ilk madencini işe al.':
+      'Use your sales earnings to open the workshop and hire your first miner.',
+  'ATÖLYE': 'WORKSHOP',
+  'Sondaj ucunu güçlendir': 'Upgrade the Drill Bit',
+  'Madencin hazır. Atölyede sondaj ucuna bir kademe yatırım yap.':
+      'Your miner is ready. Invest in one drill-bit upgrade at the workshop.',
+  'SONDAJ YÜKSELTME': 'DRILL UPGRADE',
+  'Matkabın ilerlemesini izle': 'Watch the Drill Advance',
+  'Sondaj otomatik sürer. 7 km derinliğe ulaştığında bu görev tamamlanır.':
+      'Drilling continues automatically. Reach 7 km to complete this goal.',
+  'OTOMATİK MATKAP': 'AUTOMATIC DRILL',
+  'Görev hattı devam ediyor': 'The Mission Continues',
+  'İlk beş vardiya görevi tamamlandı. Yeni hedefler derinlik, ekip ve keşif sistemlerini sırayla tanıtacak.': 'The first five shift goals are complete. New goals will introduce depth, crew, and exploration systems one by one.',
+  'GÖREV DEFTERİ': 'MISSION LOG',
+  'Başarı kayıtları açıldı': 'Achievements Unlocked',
+  'Kilometre taşları ve kalıcı ödüller burada izlenir. Yeni bir başarı kazandığında bu deftere dön.': 'Track milestones and permanent rewards here. Return to this log whenever you earn an achievement.',
+  'BAŞARIMLAR': 'ACHIEVEMENTS',
+  'Titan kuyusunun son katı': 'Titan Mine: Final Layer',
+  'Son sondaj derinliğine ulaştın. Son katın kaynaklarını ve açılan kayıtları gözden geçir.': 'You reached the final drilling depth. Review the last layer’s resources and your unlocked records.',
+  'Kuyu asansörü açıldı': 'Mine Elevator Unlocked',
+  'Atölyedeki asansör modülü yükü dipten yüzeye taşır. Taşıma kapasitesini ve kuyu basıncını bu binadan yönet.': 'The elevator module in the workshop carries cargo from the bottom to the surface. Manage its capacity and shaft pressure here.',
+  'İlk katman sandığı': 'First Layer Chest',
+  'Derinlikte bulunan sandıkları ambar ve sandık düğmesinden aç; içinden kasa ve malzeme çıkar.': 'Open chests found underground from storage or the chest button to collect cash and materials.',
+  'İLK SANDIK': 'FIRST CHEST',
+  'Kuyu olayları': 'Mine Events',
+  'Zaman zaman kuyuda özel fırsatlar belirir. Süre dolmadan olayı inceleyip ödülünü al.': 'Special opportunities appear in the shaft from time to time. Check each event and claim its reward before time runs out.',
+  'Taşıma ekibini kur': 'Build a Hauling Crew',
+  'Taşıma ekibini açmak için iki madencin olmalı. Gerekirse birini daha işe al; sonra bir kazıcıyı taşıyıcı yap. Her taşıyıcı ambar kapasitesini %4 artırır ama kazı yapmaz.': 'You need two miners to unlock the hauling crew. Hire another if needed, then assign a digger as a hauler. Each hauler adds 4% storage capacity but does not mine.',
+  'TAŞIMA EKİBİ': 'HAULING CREW',
+  'Uzman madenciler': 'Specialist Miners',
+  'Uzman rolleri farklı kaynaklara ve kuyu görevlerine bonus verir. Atölyeden ekibini seç.': 'Specialist roles provide bonuses to resources and shaft tasks. Choose your crew in the workshop.',
+  'UZMAN EKİBİ': 'SPECIALIST CREW',
+  'Tarama ekibini kur': 'Build a Scanning Crew',
+  'İki madencin olduğunda birini tarayıcı yap. Tarayıcılar üretim sırasında sandık bulma olasılığını artırır ama kazı yapmaz.': 'Once you have two miners, assign one as a scanner. Scanners improve chest finds during production but do not mine.',
+  'TARAMA EKİBİ': 'SCANNING CREW',
+  'Tüccar açıldı': 'Trader Unlocked',
+  'Tüccar tekliflerinde bir kaynağı diğerine çevirebilirsin. Ambarını ve rezervlerini kontrol ederek takas yap.': 'Trader offers let you exchange one resource for another. Check your storage and reserves before trading.',
+  'TİCARET': 'TRADING',
+  'Ayıklama ekibini kur': 'Build a Sorting Crew',
+  'İki madencin olduğunda birini ayıklayıcı yap. Her ayıklayıcı satış değerini %2 artırır ama kazı yapmaz.': 'Once you have two miners, assign one as a sorter. Each sorter increases sale value by 2% but does not mine.',
+  'AYIKLAMA EKİBİ': 'SORTING CREW',
+  'Mağara keşifleri': 'Cave Expeditions',
+  'Keşif dronunu bir mağaraya gönder. Rota ve dron sayısı süreyi, tehlikeyi ve ganimeti değiştirir.': 'Send an exploration drone into a cave. The route and number of drones affect duration, danger, and loot.',
+  'Bilim ekibi': 'Science Team',
+  'Bilim insanlarını kalıntı kazısına ata; buluntular kalıcı geliştirmeler ve yazıtlar sağlar.': 'Assign scientists to excavate relics. Their finds provide permanent upgrades and inscriptions.',
+  'ARAŞTIRMA': 'RESEARCH',
+  'Otomatik sandık toplayıcı': 'Automatic Chest Collector',
+  'Toplayıcı, vardiya sürerken belirli aralıklarla yeni sandık bulur. Depolama kapasitesini yükselt.': 'The collector finds a new chest periodically during your shift. Upgrade its storage capacity.',
+  'Sondaj robotu': 'Drilling Robot',
+  'Bulduğun robotu parça ve yapı malzemesiyle onar; daha derin kuyularda ek üretim sağlar.': 'Repair the robot you found with parts and building materials. It provides extra production deeper in the shaft.',
+  'Yeraltı yerleşkesi': 'Underground Outpost',
+  'Petrol pompası kasa üretir. Petrolü satabilir ya da yapı malzemesine dönüştürebilirsin.': 'The oil pump generates cash. You can sell oil or convert it into building materials.',
+  'YERALTI YERLEŞKESİ': 'UNDERGROUND OUTPOST',
+  'Mücevher ocağı': 'Gem Forge',
+  'Tarif için gereken madenleri ayır, iş yükünü seç ve mücevher üretimini başlat.': 'Set aside the ores required by a recipe, choose the workload, and start crafting a gem.',
+  'MÜCEVHER OCAĞI': 'GEM FORGE',
+  'Yeraltı cephaneliği': 'Underground Armory',
+  'Muhafızlar derinlik kapılarını korur. Silahını geliştir ve zayıf noktayı açıp saldır.': 'Guardians protect the deep gates. Upgrade your weapon, expose a weak point, and attack.',
+  'CEPHANELİK': 'ARMORY',
+  'Derin çekirdek': 'Deep Core',
+  'Bilim insanı veya kaynak fedasıyla kalıcı çekirdek parçası kazan ve sonraki vardiyaları güçlendir.': 'Sacrifice a scientist or resources to earn a permanent core fragment and strengthen future shifts.',
+  'DERİN ÇEKİRDEK': 'DEEP CORE',
+  'Sandık sıkıştırıcı': 'Chest Compressor',
+  'Düşük kaliteli sandıkları birleştirerek daha değerli ganimet ve daha fazla kapasite elde et.': 'Combine lower-quality chests for more valuable loot and greater capacity.',
+  'SANDIK SIKIŞTIRICI': 'CHEST COMPRESSOR',
+  'Ay kuyusu': 'Moon Shaft',
+  'Ay katmanında farklı kaynaklar ve ayrı bir derinlik kaydı bulunur. Sefer garajındaki dünya kartlarından geçiş yap.': 'The Moon has different resources and a separate depth record. Switch worlds using the cards in the expedition garage.',
+  'AY DÜNYASI': 'MOON WORLD',
+  'Ay ticaret istasyonu': 'Moon Trading Post',
+  'Ay cevherleri burada daha yüksek karşılık bulur. Dünya kartı ve ticaret panelini kullan.': 'Moon ores fetch a higher price here. Use the world card and trading panel.',
+  'AY TİCARETİ': 'MOON TRADING',
+  'Çekirdek reaktörü': 'Core Reactor',
+  'Yakıt ve soğutma modüllerini dengele; üretilen enerji izotop sentezi ve güç darbelerinde kullanılır.': 'Balance the fuel and cooling modules. Generated energy powers isotope synthesis and power surges.',
+  'REAKTÖR': 'REACTOR',
+  'Buff laboratuvarı': 'Boost Lab',
+  'Reaktör enerjisiyle süreli güçlendirmeler hazırla ve uygun vardiyada etkinleştir.': 'Use reactor energy to prepare timed boosts, then activate them during the right shift.',
+  'Sondaj robotu Mk II': 'Drilling Robot Mk II',
+  'Robot Mk II ile yeni montaj şemaları açılır. Uç, fan ve motor parçalarını birlikte geliştir.': 'Robot Mk II unlocks new assembly blueprints. Upgrade the bit, fan, and motor together.',
+  'Titan kuyusu': 'Titan Shaft',
+  'Titan kendi katmanlarını ve madenlerini kullanır. Sefer garajından dünyalar arasında geçiş yap.': 'Titan has its own layers and ores. Switch between worlds from the expedition garage.',
+  'TİTAN DÜNYASI': 'TITAN WORLD',
+  'Titan ticaret istasyonu': 'Titan Trading Post',
+  'Titan kaynaklarının takas değeri burada yükselir; rezervlerini koruyarak teklifleri kullan.': 'Titan resources have a higher trade value here. Keep your reserves in mind when accepting offers.',
+  'TİTAN TİCARETİ': 'TITAN TRADING',
+  'Sondaj robotu Mk III': 'Drilling Robot Mk III',
+  'Son montaj şemaları Titan derinliklerinde açılır. Üç parçanın gücünü birlikte yükselt.': 'The final assembly blueprints unlock in Titan’s depths. Upgrade all three components together.',
+  'Vardiya cevheri': 'Shift Ore',
+  '25 cevher birimi çıkar.': 'Mine 25 units of ore.',
+  'Bir kat daha derin': 'One Layer Deeper',
+  'Bugün 2.000 metre ilerle.': 'Advance 2,000 meters today.',
+  'Vardiya hasılatı': 'Shift Revenue',
+  'Takımı geliştir': 'Upgrade Your Team',
+  'Bir ekipman yükseltmesi satın al.': 'Buy an equipment upgrade.',
+  'Yeni vardiya arkadaşı': 'A New Shift Partner',
+  'Ekibe bir madenci kat.': 'Add a miner to your crew.',
+  'Damara dokun': 'Tap the Vein',
+  '10 kez cevher damarını elle çıkar.': 'Manually mine an ore vein 10 times.',
+  'Kuyudaki fırsat': 'Opportunity in the Shaft',
+  'Bir maden olayını çöz.': 'Resolve a mine event.',
+  'Altına hücum': 'Gold Rush',
+  'Eski bir damar kısa süreliğine altınla parlıyor.':
+      'An old vein glitters with gold for a short time.',
+  'Derinliğe göre kasa kazan.': 'Earn cash based on your depth.',
+  'Göçük tünel': 'Collapsed Tunnel',
+  'Yan tünel çöktü; ekip enkazın arkasında parlayan bir sandık buldu.': 'A side tunnel collapsed; the crew found a glowing chest behind the rubble.',
+  'Basınç düşer ve bulunduğun dünyaya uygun sandık kazanırsın.':
+      'Pressure drops and you receive a chest suited to your current world.',
+  'Zengin cevher damarı': 'Rich Ore Vein',
+  'Sondaj ışığı yoğun bir cevher damarına vurdu.':
+      'The drill light has revealed a dense ore vein.',
+  'Bulunduğun derinliğin cevherinden üç birime kadar al.':
+      'Collect up to three units of the ore found at your depth.',
+  'Kayıp kâşif': 'Lost Explorer',
+  'Eski bir keşif kapsülünden yardım sinyali geliyor.':
+      'A distress signal is coming from an old exploration capsule.',
+  'Kâşifin bıraktığı yapı malzemelerini ve sondaj parçasını al.': 'Collect the building materials and drill component left by the explorer.',
+  'Gezgin tüccar': 'Wandering Trader',
+  'Gezgin tüccar nadir maden parçalarını uygun fiyata bırakıyor.':
+      'A wandering trader is offering rare mineral fragments at a fair price.',
+  'Ücretsiz kasa ve sondaj parçası kazan.':
+      'Get free cash and a drill component.',
+  'Kadim oda': 'Ancient Chamber',
+  'Kaya duvarının ardında mühürlü bir arşiv odası açıldı.':
+      'A sealed archive chamber has opened behind the rock wall.',
+  'Bulunduğun dünyaya uygun bir sandık kazan.':
+      'Receive a chest suited to your current world.',
+  'Yaratık yuvası': 'Creature Nest',
+  'Sondajın yanında bir cevher yaratığı yuvası bulundu.':
+      'An ore creature’s nest was found beside the drill.',
+  'Muhafız ekibi yuvayı temizleyip kasa ve parçaları getirir.':
+      'The guard crew clears the nest and brings back cash and parts.',
+  'Haritalı Galeri': 'Mapped Gallery',
+  'Dengeli süre ve ganimet; yeni seferler için güvenilir rota.': 'Balanced duration and loot make this a reliable route for new expeditions.',
+  'Güvenli Şaft': 'Safe Shaft',
+  'Daha uzun sürer; düşük miktarlı, düzenli ganimet getirir.':
+      'Takes longer but brings a steady, modest amount of loot.',
+  'Derin Yarık': 'Deep Fissure',
+  'Daha uzun ve belirsiz; yüksek cevher ve kalıntı şansı taşır.':
+      'Takes longer and is less predictable, but offers more ore and relics.',
+  'Titiz arşivci': 'Meticulous Archivist',
+  'Hızlı kazıcı': 'Fast Excavator',
+  'Katman uzmanı': 'Layer Specialist',
+  'Şanslı gözlemci': 'Lucky Observer',
+  'Yöntemci': 'Methodical Researcher',
+  'Görev başarısı +%5.': 'Mission success +5%.',
+  'Kazı süresi -%18.': 'Excavation time −18%.',
+  'Cevher ganimeti +%30.': 'Ore loot +30%.',
+  'Kalıntı bulma olasılığı +%12.': 'Relic chance +12%.',
+  'Görev başarısı +%3, kazı süresi -%5.':
+      'Mission success +3%, excavation time −5%.',
+  'Düşük risk • cevher, kasa ve deneyim.':
+      'Low risk • ore, cash, and experience.',
+  'Orta risk • altın sandık ve kalıntı olasılığı.':
+      'Medium risk • chance of a gold chest and relic.',
+  'Yüksek risk • derin sandık ve ender kalıntı.':
+      'High risk • deep chest and rare relic.',
+  'Hiper Aşırı Yük': 'Hyper Overload',
+  'Sondaj ilerlemesini 2 katına çıkarır.': 'Doubles drilling progress.',
+  'Kuantum Rezonansı': 'Quantum Resonance',
+  'Kazı ekibinin cevher verimini 3 katına çıkarır.':
+      'Triples the crew’s ore yield.',
+  'Dron Kalkanı': 'Drone Shield',
+  'Mağara keşiflerinde tehlike hasarını engeller.':
+      'Prevents hazard damage during cave expeditions.',
+  'Otomatik Satıcı': 'Auto Seller',
+  'Seçilen madeni her saniye satar; satış kilitlerine uyar.':
+      'Sells the selected ore every second and respects sale reserves.',
+  'Sürat Madenci': 'Speed Miner',
+  'Bulunduğu katta ekibin cevher çıkarma hızını artırır.':
+      'Increases the crew’s ore mining speed on its assigned floor.',
+  'Uç Ustası': 'Drill-Bit Specialist',
+  'Bulunduğu katta sondajı hızlandırır.':
+      'Speeds up drilling on its assigned floor.',
+  'Sandık Avcısı': 'Chest Hunter',
+  'Bulunduğu katta eski sandık izlerini daha sık bulur.':
+      'Finds old chest traces more often on its assigned floor.',
+  'Damar Yöneticisi': 'Vein Manager',
+  'Bulunduğu katta ek cevher çıkarır.':
+      'Mines extra ore on its assigned floor.',
+  'İzotop İz Sürücü': 'Isotope Tracker',
+  'Bulunduğu katta nadir kaynak olasılığını yükseltir.':
+      'Improves the chance of rare resources on its assigned floor.',
+  'Kristal Şamanı': 'Crystal Shaman',
+  'Düzenli aralıklarla kısa sondaj buffı üretir.':
+      'Generates a short drilling boost at regular intervals.',
+  'İskele Ustası': 'Rigging Specialist',
+  'Bulunduğu katta depoyu ve basınç direncini destekler.':
+      'Supports storage and pressure resistance on its assigned floor.',
+  'Maden Telsizi & Bildirimler': 'Mine Radio & Notifications',
+  'Kayıt başarıyla yüklendi ve güncellendi!': 'Save imported successfully.',
+  'Oyun kaydedildi.': 'Game saved.',
+  'OYUN SONUNA GİT': 'GO TO THE END',
+  'OYUNU SIFIRLA': 'RESET GAME',
+  'ŞİMDİ KAYDET': 'SAVE NOW',
+  'KAYDI KOPYALA': 'COPY SAVE',
+  'KAYIT YÜKLE': 'LOAD SAVE',
+  'VAZGEÇ': 'CANCEL',
+  'YÜKLE': 'LOAD',
+  'Oyun kaydedildi': 'Game saved',
+  'Ambarın Tıkabasa Doldu Şef!': 'Storage Is Completely Full, Boss!',
+  'Madencilerin kazmayı bıraktı çünkü koyacak yer kalmadı. Gel ve cevherleri satıp servetine servet kat!': 'Your miners stopped because storage is full. Sell your ore and grow your fortune!',
+  'Yeni Günlük Vardiya Başladı!': 'A New Daily Shift Has Started!',
+  'Maden müfettişi yeni görevler ve bolca maden parası getirdi. Vardiyanı kaçırma!': 'The mine inspector brought new goals and plenty of mining cash. Don’t miss your shift!',
+  'Derinliklerde Sismik Hareket!': 'Seismic Activity in the Deep!',
+  'Sensörlerimiz alt katmanlarda gizemli bir elmas damarı tespit etti. Kazmanı kap ve derinlere in!': 'Our sensors detected a mysterious diamond vein in the lower layers. Grab your pickaxe and head down!',
+  'ÜÇ VURUŞ': 'THREE STRIKES',
+  'Saat 03.17. Beş bin metrenin altındaki ölçer üç kez vurdu. Nöbetçi fişi çekti; ses devam etti. Sonra bütün kuyu sustu.': 'At 3:17 a.m., the gauge below five thousand meters struck three times. The night guard pulled the plug, but the sound continued. Then the whole shaft fell silent.',
+  'KARAKOL': 'THE OUTPOST',
+  'Sabah, karakolun paslı panjuru yıllar sonra açıldı. Masada kuyu anahtarı, yarım kalmış vardiya çizelgesi ve sana ayrılmış boş bir satır vardı. Kimse neden seni seçtiklerini açıklamadı.': 'At dawn, the outpost’s rusted shutter opened for the first time in years. On the desk lay the shaft key, an unfinished shift roster, and an empty line with your name on it. No one explained why they chose you.',
+  'SON VARDİYA': 'THE LAST SHIFT',
+  'Asansör defterinin son sayfası on bir yıl önce koparılmış. Karbon kâğıdında tek notun izi kalmış: “Dönüşte yükü almayın.” Kafesin tartısı o günden beri sıfır gösteriyor.': 'The last page of the elevator log was torn out eleven years ago. One note remains on the carbon copy: “Don’t take the load on the way back.” The cage scale has read zero ever since.',
+  '5.000 METRE': '5,000 METERS',
+  'Kafes 5.000 metrede durunca yukarıdaki telsiz sustu. Aşağıdaki matkap kendi kendine bir tur döndü. Senin vardiyan henüz başlamamıştı; kuyu senden önce davranmıştı.': 'When the cage stopped at 5,000 meters, the radio above went silent. The drill below turned once by itself. Your shift had not even started; the shaft had moved first.',
+  'İLK KÖMÜR': 'THE FIRST COAL',
+  'İlk kömür damarı yeni kırılmış; tozu hâlâ sıcak. Çıkardığın birkaç parça bu vardiyanın yakıtını ve ilk satışını karşılayacak. Taşın içindeki çizik, matkap izinden daha derine uzanıyor.': 'The first coal vein has just been cracked; its dust is still warm. The few pieces you mine will fuel this shift and fund your first sale. A scratch inside the stone runs deeper than the drill marks.',
+  'RİTMİN ALTINDA': 'BENEATH THE RHYTHM',
+  'Rehber drone kaydı önüne bıraktı: üç kısa darbe, bir uzun. Aynı ritim aşağıdan geliyor. Ekip senden emir bekliyor; defterdeki “yükü almayın” notuysa hâlâ aklında.': 'The guide drone plays a recording: three short strikes, one long. The same rhythm is coming from below. The crew is waiting for your orders, but the note in the log still lingers: “Don’t take the load.”',
+  'Vardiya başlangıcı. Kuyunun verdiği cevabın peşine düş.':
+      'Shift briefing. Follow the answer coming from the shaft.',
+  'VARDİYA 01  •  5.000 M': 'SHIFT 01  •  5,000 M',
+  'İlk kömürü çıkar, kargoyu yüzeye ulaştır ve kazancını matkabı geliştirmek için kullan. Rehber drone darbelerin izini kat kat takip edecek.': 'Mine your first coal, haul it to the surface, and use the earnings to upgrade the drill. The guide drone will track the strikes layer by layer.',
+  'Asansör defterindeki not: “Dönüşte yükü almayın.”':
+      'Note in the elevator log: “Don’t take the load on the way back.”',
+  'KUYU DEFTERİ': 'SHAFT LOG',
+  'VARDİYA BAŞLANGICI': 'SHIFT BRIEFING',
+  'KUYU GÜNLÜĞÜ • SAHNE {scene} / {total}':
+      'SHAFT LOG • SCENE {scene} / {total}',
+  'ÖYKÜYÜ GEÇ': 'SKIP STORY',
+  'GERİ': 'BACK',
+  'MACERAYA BAŞLA': 'START THE EXPEDITION',
+  'VARDİYAYI DEVRAL': 'TAKE OVER THE SHIFT',
+  'SONRAKİ SAHNE': 'NEXT SCENE',
+  'Kaya Gezgini': 'Rock Rover',
+  'Zırhlı gövde, dar geçitlerde güvenli keşif.':
+      'Armored chassis for safe exploration through tight passages.',
+  'Gök Feneri': 'Sky Lantern',
+  'Uçar; önündeki iki sırayı erkenden görür.':
+      'Flies ahead to reveal the next two rows early.',
+  'Demir Mıknatıs': 'Iron Magnet',
+  'Yan tünellerdeki ganimeti de toplayabilir.':
+      'Can collect loot from side tunnels, too.',
+  'Can Desteği': 'Life Support',
+  'Her düğümde küçük bir onarım uygular.':
+      'Provides a small repair at each node.',
+  'Cevher yığını': 'Ore Stash',
+  'Bir avuç damar örneği.': 'A handful of vein samples.',
+  'Eski kaset': 'Old Tape',
+  'Tüccar kasasında unutulmuş para.': 'Cash forgotten in the trader’s drawer.',
+  'Mühürlü sandık': 'Sealed Chest',
+  'Dünyaya özgü bir sandık.': 'A chest unique to this world.',
+  'Yapı malzemesi': 'Building Materials',
+  'Taşınabilir onarım parçaları.': 'Portable repair parts.',
+  'Rezonans kristali': 'Resonance Crystal',
+  'Kısa süreli sondaj desteği.': 'A short-lived drilling boost.',
+  'Eski yazıt': 'Ancient Inscription',
+  'Kalıntı ya da çekirdek parçası.': 'A relic or a core fragment.',
+  'İlk yardım sandığı': 'First Aid Kit',
+  'Keşif dronunu onarır.': 'Repairs the exploration drone.',
+  'Kayıp araştırmacı': 'Lost Researcher',
+  'Güvenle kurtarılırsa araştırma ekibine katılır.':
+      'Joins the research team if rescued safely.',
+  'Çöken tünel': 'Collapsed Tunnel',
+  'Dron gövdesi hasar alabilir.': 'May damage the drone hull.',
+  'Kaya bloğu': 'Rock Block',
+  'Geçmek için fazladan yakıtla delinir.':
+      'Requires extra fuel to drill through.',
+  'Çamur tabakası': 'Mud Layer',
+  'Yer dronunun bu adımda yakıtını iki kat tüketir.':
+      'Doubles the ground drone’s fuel use for this step.',
+  'Radyasyon cebi': 'Radiation Pocket',
+  'Drona radyasyon hasarı verir; kalkan etkisizleştirir.':
+      'Damages the drone with radiation; a shield blocks it.',
+  'Lav akıntısı': 'Lava Flow',
+  'Derin mağaralarda ağır ısı hasarı verir.':
+      'Deals severe heat damage in deep caves.',
+  'Kömür damarı': 'Coal Vein',
+  'Demir': 'Iron',
+  'Safir Kristali': 'Sapphire Crystal',
+  'Uranyum': 'Uranium',
+  'Kobalt': 'Cobalt',
+  'Elmas Cevheri': 'Diamond Ore',
+  'Titanyum': 'Titanium',
+  'Koltan': 'Coltan',
+  'Painit': 'Painite',
+  'Opal': 'Opal',
+  'Siyah Opal': 'Black Opal',
+  'Mavi Obsidyen': 'Blue Obsidian',
+  'Kaliforniyum': 'Californium',
+  'Ay Buzu': 'Moon Ice',
+  'Selenit': 'Selenite',
+  'Helyum Cevheri': 'Helium Ore',
+  'Karbon': 'Carbon',
+  'Ay Demiri': 'Moon Iron',
+  'Magnezyum': 'Magnesium',
+  'Ay Titanyumu': 'Moon Titanium',
+  'Silisyum': 'Silicon',
+  'Prometyum': 'Promethium',
+  'Neodimyum': 'Neodymium',
+  'Titan Buzu': 'Titan Ice',
+  'Metan Kristali': 'Methane Crystal',
+  'Hidrojen Cevheri': 'Hydrogen Ore',
+  'Oksijen Kristali': 'Oxygen Crystal',
+  'Lityum': 'Lithium',
+  'Kalay': 'Tin',
+  'Manganez': 'Manganese',
+  'Nikel': 'Nickel',
+  'Aleksandrit': 'Alexandrite',
+  'Benitoit': 'Benitoite',
+  'Polonyum I': 'Polonium I',
+  'Polonyum II': 'Polonium II',
+  'Polonyum III': 'Polonium III',
+  'Azot I': 'Nitrogen I',
+  'Azot II': 'Nitrogen II',
+  'Azot III': 'Nitrogen III',
+  'Helyum I': 'Helium I',
+  'Helyum II': 'Helium II',
+  'Helyum III': 'Helium III',
+  'Hidrojen I': 'Hydrogen I',
+  'Hidrojen II': 'Hydrogen II',
+  'Hidrojen III': 'Hydrogen III',
+  'Oksijen I': 'Oxygen I',
+  'Oksijen II': 'Oxygen II',
+  'Oksijen III': 'Oxygen III',
+  'Einsteinyum I': 'Einsteinium I',
+  'Einsteinyum II': 'Einsteinium II',
+  'Einsteinyum III': 'Einsteinium III',
+  'Fermiyum I': 'Fermium I',
+  'Fermiyum II': 'Fermium II',
+  'Fermiyum III': 'Fermium III',
+  'Sefer Bileti': 'Expedition Ticket',
+  'Uranyum yakıt çubuğu': 'Uranium Fuel Rod',
+  'Soğutma fanı': 'Cooling Fan',
+  'Kriyojenik ısı dağıtıcı': 'Cryogenic Heat Sink',
+  'Güç bataryası': 'Power Battery',
+  'Nötron bombardımanı': 'Neutron Bombardment',
+  'YAKIT': 'FUEL',
+  'KRİYO': 'CRYO',
+  'PİL': 'BATTERY',
+  'NÖTRON': 'NEUTRON',
+  'Sondaj ucu': 'Drill Bit',
+  'Sondaj motoru': 'Drill Engine',
+  'Hurda Kargo': 'Scrap Cargo',
+  'Nano Kargo': 'Nano Cargo',
+  'Mikro Kargo': 'Micro Cargo',
+  'Küçük Kargo': 'Small Cargo',
+  'Orta Kargo': 'Medium Cargo',
+  'Büyük Kargo': 'Large Cargo',
+  'Dev Kargo': 'Giant Cargo',
+  'Devin Kargosu': 'Titanic Cargo',
+  'Muazzam Kargo': 'Enormous Cargo',
+  'Endüstriyel Kargo': 'Industrial Cargo',
+  'Altın Kral Kargosu': 'Golden King Cargo',
+  'Şehir Kapasitesi': 'City Capacity',
+  'Ülke Kapasitesi': 'Country Capacity',
+  'Gezegen Kapasitesi': 'Planetary Capacity',
+  'Vakum Paketli Kargo': 'Vacuum-Packed Cargo',
+  'Çift Vakum Paketli Kargo': 'Double Vacuum-Packed Cargo',
+  'Kor Yakutu': 'Ember Ruby',
+  'Satış geliri +%8': 'Sale income +8%',
+  'Derin Zümrüt': 'Deep Emerald',
+  'Sondaj hızı +%8': 'Drilling speed +8%',
+  'Mavi Yıldız': 'Blue Star',
+  'Ambar kapasitesi +%10': 'Storage capacity +10%',
+  'Boşluk Ametisti': 'Void Amethyst',
+  'İzotop bulma olasılığı +%2,5': 'Isotope discovery chance +2.5%',
+  'Çekirdek Elması': 'Core Diamond',
+  'Muhafız hasarı +%12': 'Guardian damage +12%',
+  'Sıradan': 'Common',
+  'Seçkin': 'Uncommon',
+  'Nadir': 'Rare',
+  'Efsanevi': 'Legendary',
+  'Mitik': 'Mythic',
+  'İşçi eğitimi': 'Worker Training',
+  'Kuyu asansörü': 'Mine Elevator',
+  'Kargo ambarı': 'Cargo Hold',
+  'Mineral tarayıcı': 'Mineral Scanner',
+  'Dökümhane': 'Smelter',
+  'Muhafız silahı': 'Guardian Weapon',
+  'Sondaj Montajı': 'Drill Assembly',
+  'İlk kıvılcım': 'First Spark',
+  'Görünen cevher damarına dokun ve ilk taş örneğini çıkar':
+      'Tap the exposed ore vein and mine your first rock sample.',
+  'Yüzeye ilk sevkiyat': 'First Shipment to the Surface',
+  'Ambarından kaynak satarak kasaya gelir aktar':
+      'Sell resources from storage to earn cash.',
+  'kasa değeri': 'cash value',
+  'Vardiyaya bir kişi daha': 'One More for the Shift',
+  'Satıştan gelen kasayla ilk madenciyi işe alıp kazıyı otomatikleştir': 'Use your sales earnings to hire your first miner and automate excavation.',
+  'Sondaj ucunu keskinleştir': 'Sharpen the Drill Bit',
+  'Atölyeden bir ekipman yükseltmesi al':
+      'Buy an equipment upgrade in the workshop.',
+  'İlk katman ölçümü': 'First Layer Survey',
+  'Matkabı 7 km derinliğe ilerlet ve terk edilmiş taş kırma istasyonunu bul':
+      'Drill down to 7 km and find the abandoned stone-crushing station.',
+  'Damar kaydı': 'Vein Record',
+  'yeni örnek çıkar': 'mine a new sample',
+  'kazılan cevher': 'ore mined',
+  'Katman ölçümü': 'Layer Survey',
+  'kuyu işaretini ilerlet': 'advance the shaft marker',
+  'metre': 'meters',
+  'Ekip genişlemesi': 'Expand the Crew',
+  'işe alım': 'hires',
+  'Kasa sevkiyatı': 'Cash Shipment',
+  'satış değerini tamamla': 'complete the sale value',
+  'Montaj bakımı': 'Assembly Maintenance',
+  'Atölyede Sondaj Montajı bölümünden sondaj ucu, fan veya motoru bir seviye yükselt': 'Upgrade the drill bit, fan, or engine by one level in the Drill Assembly section of the workshop.',
+  'montaj yükseltmesi': 'assembly upgrades',
+  'Gömülü emanet': 'Buried Keepsake',
+  'sandığın içindekini teslim al': 'claim the contents of a chest',
+  'açılan sandık': 'chests opened',
+  'Yan galeri keşfi': 'Side Gallery Expedition',
+  'dronu güvenle geri getir': 'bring the drone back safely',
+  'Yazıt parçası': 'Inscription Fragment',
+  'bilimsel kazıda kalıcı buluntu edin':
+      'find a permanent relic during a research excavation',
+  'kalıntı': 'relics',
+  'Kuyu nöbeti': 'Shaft Watch',
+  'muhafızın zayıf noktasını bul ve yen':
+      'find the guardian’s weak point and defeat it',
+  'Araştırma’da diziyi tara, sonra kuyuya dönüp cevher damarlarına sırayla dokun': 'Scan the sequence in Research, then return to the shaft and tap the ore veins in order.',
+  'İlk Vardiya • {objective}': 'First Shift • {objective}',
+  'Bugün {distance} ilerle.': 'Advance {distance} today.',
+  'TAŞ KIRMA İSTASYONU': 'STONE CRUSHING STATION',
+  'İstasyonu onar': 'Repair the Station',
+  'Kırıcı keşfedildi': 'Crusher Discovered',
+  'Önemli bir istasyon keşfettin! Rehber dronu takip et.':
+      'You discovered an important station! Follow the guide drone.',
+  'Makine onarıldı': 'Machine Repaired',
+  'Kat {floor}': 'Floor {floor}',
+  '{count} / {capacity} Ham Parça': '{count} / {capacity} Raw Pieces',
+  'Maden Telsizi': 'Mine Radio',
+  'Sismik damar bulundu': 'Seismic vein discovered',
+  'Görev tamamlandı': 'Mission complete',
+  'Kömür Madencisi': 'Coal Miner',
+  'Bakır Kervanı': 'Copper Caravan',
+  'Kırık Pusula': 'Broken Compass',
+  'Yankı Kuyusu': 'Echo Shaft',
+  'Kayıp İstasyon': 'Lost Station',
+  'Yeraltı Pazarı': 'Underground Market',
+  'Kızıl Damar': 'Crimson Vein',
+  'Derin Arşiv': 'Deep Archive',
+  'Titan Günlüğü': 'Titan Logbook',
+  'Vardiya defterindeki bakır lekeleri, ekibin unutulmuş bir sevkiyat yolunu bulduğunu gösteriyor.': 'Copper stains in the shift log show that the crew has found a forgotten shipping route.',
+  'Pusula her titreştiğinde kuyu duvarında yeni bir işaret beliriyor; ölçümü doğrula.': 'A new mark appears on the shaft wall whenever the compass trembles. Verify the reading.',
+  'Mavi kaya kuşağında cevher yüzeyi ışığı yutuyor; taşı dikkatle tara.':
+      'Ore in the blue rock belt absorbs light. Scan the stone carefully.',
+  'Kuyunun yankısı bir adım önden geliyor. Eski sondaj izlerini karşılaştır.':
+      'The shaft’s echo arrives one step early. Compare the old drill marks.',
+  'Terk edilmiş istasyonun notları, depoda bırakılan malzemelerin yerini tarif ediyor.': 'Notes from the abandoned station describe where supplies were left in storage.',
+  'Sessiz galeride makineler durdu; ekibin küçük ilerlemeleri yeniden başlatması gerek.': 'The machines have stopped in the silent gallery. The crew must restart the smaller operations.',
+  'Yeraltı pazarında herkes aynı cevheri arıyor; adil bir takas için yükünü hazırla.': 'Everyone in the underground market wants the same ore. Prepare your cargo for a fair trade.',
+  'Kızıl damarın çevresinde ısı artıyor. Kaynağı topla ve basıncı izle.': 'Heat is rising around the crimson vein. Collect the resource and monitor the pressure.',
+  'Derin arşivdeki yazıtlar eski bir çekirdek düzenini anlatıyor; bulguları sıraya koy.': 'Inscriptions in the deep archive describe an ancient core pattern. Put the findings in order.',
+  'Ay yüzeyinden gelen yeni örnekler Dünya kayıtlarıyla eşleşmiyor; ayrı bir karşılaştırma yap.': 'New samples from the Moon do not match Earth records. Compare them separately.',
+  'Buz fenerleri sönmeden önce ekipmanını ve sefer yükünü kontrol et.': 'Check your equipment and expedition cargo before the ice beacons go dark.',
+  'Titan günlüğü, sis altında kalan cevher izlerinin yalnızca kısa süre göründüğünü söylüyor.':
+      'The Titan log says ore traces beneath the fog are visible only briefly.',
+  'Eski rezonans çizgileri, doğru damar sırasına dokununca tekrar canlanıyor.': 'The old resonance lines glow again when you tap the veins in the correct order.',
+  'Son haritanın boş bıraktığı bölgeyi kendi vardiya kayıtlarınla tamamla.': 'Fill in the region left blank on the final map using your own shift records.',
+  'HOŞ GELDİN ŞEF!': 'WELCOME BACK, BOSS!',
+  'Sen yokken madencilerin durmaksızın çalıştı.\nİşte vardiya özeti:': 'Your miners kept working while you were away.\nHere is your shift summary:',
+  '{hours} saat {minutes} dakika': '{hours} hr {minutes} min',
+  '{minutes} dakika': '{minutes} min',
+  'Önce yükü çıkar. Sonra defterdeki notu çöz.':
+      'Bring up the load first. Then solve the mystery in the log.',
+  'Önce montaj şemasını keşfet.': 'Discover the assembly blueprint first.',
+  'Eksik cevher: {deficits}.': 'Missing ore: {deficits}.',
+  '{name} • seviye {level}/16': '{name} • level {level}/16',
+  '{cost} KASA': '{cost} COINS',
+  'Kapasite {current} / {capacity}': 'Capacity {current} / {capacity}',
+  'Önceki şemayı keşfet.': 'Discover the previous blueprint first.',
+  '{name} • satış kilidi': '{name} • sale reserve',
+  'Sahip olunan miktar': 'Owned amount',
+  'TAŞIN ALTI — KEŞİF KARNESİ': 'BENEATH THE STONE — EXPLORATION REPORT',
+  'Unvan': 'Title',
+  'Konum': 'Location',
+  'Kasa': 'Cash',
+  'Saat {hour}.{minute}': '{hour}:{minute}',
+  'ÇILGINLIK 2X  •  {seconds}s': 'FRENZY 2X  •  {seconds}s',
+  'Kayıt kodu yükle': 'Load Save Code',
+  'Bu kod, mevcut ilerlemenin taşınabilir bir kopyasını içerir.':
+      'This code contains a portable copy of your current progress.',
+  'Kopya panoya alındı.': 'Copied to clipboard.',
+  'Yükleme tamamlandı.': 'Import complete.',
+  'Derinlik': 'Depth',
+  'Geliştir': 'Upgrade',
+  'Yetenek': 'Skill',
+  'Maden': 'Mine',
+  'Kaynak': 'Resource',
+  'Görev': 'Mission',
+  'Sefer': 'Expedition',
+  'Dünya • Yüzey Karakolu': 'Earth • Surface Outpost',
+  'Dünya • Ay Kolonisi': 'Earth • Moon Colony',
+  'Dünya • Titan Madeni': 'Earth • Titan Mine',
+  'Koşul': 'Requirement',
+  'Ödül': 'Reward',
+  'İlerleme': 'Progress',
+  'Süre': 'Duration',
+  'Tehlike': 'Danger',
+  'Ganım': 'Loot',
+  'İzotop': 'Isotope',
+  'Mücevher': 'Gem',
+  'Kalıntı': 'Relic',
+  'Sandık': 'Chest',
+  'Kutu': 'Crate',
+  'Yükseltme': 'Upgrade',
+  'Montaj': 'Assembly',
+  'Kapasite': 'Capacity',
+  'Hız': 'Speed',
+  'Güç': 'Power',
+  'Derinlik ilerleme hızını artırır.': 'Increases depth progression speed.',
+  'Kazı ekibinin cevher çıkarma hızını artırır.':
+      'Increases the crew’s ore mining speed.',
+  'Kargo kapasitesini ve tahliye hızını artırır.':
+      'Increases cargo capacity and unloading speed.',
+  'Kargo kapasitesini artırır.': 'Increases cargo capacity.',
+  'İzotop ve sandık bulma şansını artırır.':
+      'Increases the chance of finding isotopes and chests.',
+  'Cevher işleme tariflerini ve üretim hızını açar.':
+      'Unlocks ore processing recipes and increases production speed.',
+  'Muhafızlara verilen hasarı artırır.': 'Increases damage dealt to guardians.',
+  'Reaktör ızgarasını büyütür, modül yuvaları açar.':
+      'Expands the reactor grid and unlocks module slots.',
+  'Einsteinyum': 'Einsteinium',
+  'Fermiyum': 'Fermium',
+  'Katman Ölçümü': 'Layer Survey',
+  'Antik Kazı': 'Ancient Excavation',
+  'Titan Kristal Arşivi': 'Titan Crystal Archive',
+  'Çekirdek Kristali': 'Core Crystal',
+  'Rezonans': 'Resonance',
+  'Tek seferlik ödül': 'One-time reward',
+  'Günlük ödül': 'Daily reward',
+  'Haftalık ödül': 'Weekly reward',
+  'Katman {floor}': 'Layer {floor}',
+  '{depth} km derinlik': '{depth} km deep',
+  'Yeni görev açıldı': 'New mission unlocked',
+  'Yeni maden bulundu': 'New ore discovered',
+  'Yeni katman keşfedildi': 'New layer discovered',
+  'Daha fazla bilgi': 'More information',
+  'Ayrıntıları göster': 'Show details',
+  'Geri dön': 'Go back',
+  'Kapat': 'Close',
+  '7 km’deki taş kırma istasyonunu önce onar.':
+      'Repair the stone-crushing station at 7 km first.',
+  'Yıkık taş kırma istasyonu': 'Ruined stone-crushing station',
+  '7 km katında eski bir taş kırma hattı bulundu. ':
+      'An old stone-crushing line was found on the 7 km floor. ',
+  'Vazgeç': 'Cancel',
+  'Onar · 50 kasa': 'Repair · 50 coins',
+  'Oyun başlatılamadı': 'The game could not start',
+  'Sayfayı yenileyip tekrar deneyin.': 'Refresh the page and try again.',
+  'KASA': 'COINS',
+  'BASINÇ': 'PRESSURE',
+  'DERİNLİK': 'DEPTH',
+  'Kırma & Ayrıştırma Tesisi': 'Crushing & Sorting Plant',
+  'Ayarlar': 'Settings',
+  'Atölye, ilk görevleri tamamladığında açılacak.':
+      'The workshop will unlock when you complete the first missions.',
+  'ARAŞTIRMA • DİZİYİ TARA': 'RESEARCH • SCAN SEQUENCE',
+  'MUHAFIZLA SAVAŞ': 'FIGHT THE GUARDIAN',
+  'Maden katmanları': 'Mine layers',
+  'Etkin derinliğin üstündeki ve altındaki katmanları kaydır.':
+      'Scroll through the layers above and below your current depth.',
+  'Aktif derinliğe dön': 'Return to active depth',
+  'KATLARI KAYDIR': 'SCROLL THROUGH FLOORS',
+  'Yeni keşif: taş kırma istasyonu': 'New discovery: stone-crushing station',
+  'YENİ KEŞİF': 'NEW DISCOVERY',
+  'SON KAT': 'DEEPEST FLOOR',
+  'Son kat': 'Deepest floor',
+  'Yeni keşif. Taş kırma istasyonu bulundu.':
+      'New discovery. A stone-crushing station was found.',
+  'YENİ KEŞİF!': 'NEW DISCOVERY!',
+  'Taş kırma istasyonu bulundu': 'Stone-crushing station found',
+  'AYARLAR': 'SETTINGS',
+  'OYUN': 'GAME',
+  'Oyun dili': 'Game language',
+  'Tercih ettiğin dili seç.': 'Choose your preferred language.',
+  'Arka plan müziği': 'Background music',
+  'Ses efektleri': 'Sound effects',
+  'Titreşim (Haptik)': 'Vibration (haptics)',
+  'Kazma ve vuruş geribildirimleri': 'Mining and impact feedback',
+  'Görsel efektler': 'Visual effects',
+  'Maden ve oyun içi hareket efektleri': 'Mine and in-game motion effects',
+  'Ambar dolumu, günlük vardiya ve sismik alarmlar':
+      'Cargo capacity, daily shift, and seismic alerts',
+  'AÇILIŞ ÇİZGİ ROMANINI TEKRAR İZLE': 'REPLAY THE OPENING COMIC',
+  'KAYIT YÖNETİMİ': 'SAVE MANAGEMENT',
+  'Kayıt kodu panoya kopyalandı! Güvenle saklayabilirsiniz.':
+      'Save code copied to clipboard. Store it somewhere safe.',
+  'Oyunu sıfırla?': 'Reset the game?',
+  'Mevcut vardiya ve ilerleme silinecek. Yeni oyun sıfırdan başlayacak.': 'Your current shift and progress will be deleted. A new game will start from scratch.',
+  'Kayıt Kodu Yükle': 'Load Save Code',
+  'Daha önce kopyaladığınız kayıt kodunu veya JSON verisini buraya yapıştırın:':
+      'Paste a save code or JSON data you copied earlier:',
+  'Kayıt kodunu yapıştırın...': 'Paste your save code...',
+  'Bu yükseltme ailesinin tüm şemaları açıldı.':
+      'All blueprints in this upgrade family have been unlocked.',
+  'Önce ilk madenciyi işe al': 'Hire your first miner first',
+  'Vardiya kaydı etkin': 'Shift save is active',
+  'Kayıt uyarısı: {error}': 'Save warning: {error}',
+  'YATIRIM VE MALİYET HESAPLAYICISI': 'INVESTMENT & COST CALCULATOR',
+  'Otomatik satış': 'Automatic selling',
+  'Ucuz cevherden başlayarak eşiğe kadar satar. Kilit ve rezerv korunur.': 'Sells lower-value ore first, up to the threshold. Locks and reserves are protected.',
+  '{percent}%': '{percent}%',
+  'REZERV DIŞI HER ŞEYİ SAT': 'SELL EVERYTHING OUTSIDE RESERVES',
+  'Sondaj montajı nasıl geliştirilir?': 'How do I upgrade the drill assembly?',
+  'Sondaj ucu, soğutma fanı ve sondaj motoru ayrı parçalardır. Her kart yalnızca kendi parçasını bir seviye yükseltir.\n\n1. Kartta bir sonraki seviyenin şemasını, derinlik şartını, kasasını ve cevher tarifini kontrol et. Arşivdeki şema kalıcıdır; yükseltirken harcanmaz.\n\n2. İlk Lv 2–5 şemaları başlangıçta verilir. Sonrakiler için bu bölümde derinlik keşfi kartı çıktığında ŞEMALARI AL’a bas. Golem 50 km’de, Gidget 225 km’de, Robot Mk II 1.257 km’de ve Robot Mk III 2.039 km’de şema keşfi sunar. Altın sandıklar ve gezgin tüccar da şema verebilir.\n\n3. Derinlik şartı şimdi bulunduğun yeri değil, ulaştığın en derin noktayı kullanır. Kartta Robot Mk II veya Mk III yazıyorsa o binayı da açmış olmalısın.\n\n4. En az bir madencin olmalı. Cevher tarifindeki miktarlar ambarındaki kullanılabilir miktarı gösterir; rezerve ayırdığın cevher bu hesaba girmez.\n\n5. Karttaki şartlar tamamlanınca kasa düğmesine bas. Parçanın seviyesi yükselir ve toplam sondaj gücü (W) yeniden hesaplanır. “Kazı hızı” çubuğu ayrı bir geliştirmedir.': 'The drill bit, cooling fan, and drill engine are separate parts. Each card upgrades only its own part by one level.\n\n1. Check the next level’s blueprint, depth requirement, coin cost, and ore recipe on the card. Blueprints in your archive are permanent and are not consumed by upgrades.\n\n2. The first level 2–5 blueprints are provided at the start. For later blueprints, tap GET BLUEPRINTS when a depth-discovery card appears here. Golem reveals a blueprint at 50 km, Gidget at 225 km, Robot Mk II at 1,257 km, and Robot Mk III at 2,039 km. Gold chests and the traveling merchant can also provide blueprints.\n\n3. The depth requirement uses your deepest point reached, not your current location. If a card lists Robot Mk II or Mk III, you must also have unlocked that building.\n\n4. You need at least one miner. Ore amounts on the recipe show what is available in your warehouse; reserved ore does not count.\n\n5. Once the requirements are met, tap the coin button. The part’s level increases and total drill power (W) is recalculated. The “Mining Speed” track is a separate upgrade.',
+  'ANLADIM': 'GOT IT',
+  '{description} • {drain} enerji/sn': '{description} • {drain} energy/s',
+  'GÜVENLİK KAPATMASI': 'SAFETY SHUTDOWN',
+  'ISI DENGESİ STABİL': 'HEAT BALANCED',
+  'ISI DENGESİ AŞILDI': 'HEAT LIMIT EXCEEDED',
+  'Isı {heat} / Soğutma {cooling} • Üretim {output} enerji/sn • Depo {energy}': 'Heat {heat} / Cooling {cooling} • Output {output} energy/s • Stored {energy}',
+  'DENGEYİ KUR VE YENİDEN BAŞLAT': 'BALANCE HEAT & RESTART',
+  'REAKTÖR MODÜLÜ SEÇ': 'SELECT REACTOR MODULE',
+  'Yuvayı boşalt': 'Clear slot',
+  '+{generation} enerji/sn • +{heat} ısı • -{cooling} soğutma':
+      '+{generation} energy/s • +{heat} heat • -{cooling} cooling',
+  'Bilim insanını çekirdeğe ada?': 'Sacrifice this scientist to the core?',
+  '{scientist} kadrodan kalıcı olarak ayrılır. Karşılığında {reward} kalıcı çekirdek parçası alırsın.': '{scientist} will permanently leave your roster. In return, you will receive {reward} permanent core shards.',
+  'ADA': 'SACRIFICE',
+  '{name} • {rarity} • Lv {level}': '{name} • {rarity} • Lv {level}',
+  '{current}/{target} xp': '{current}/{target} XP',
+  '{trait} • {description} • Başarı +%{success} • Süre −%{speed} • Yaralanma {injuries}/2': '{trait} • {description} • Success +{success}% • Duration −{speed}% • Injuries {injuries}/2',
+  'NADİR MÜHÜRLE CANLANDIR': 'REVIVE WITH A RARE SEAL',
+  'CANLANDIRMA MÜHRÜ GEREKİR': 'REVIVAL SEAL REQUIRED',
+  'Yaralı • iyileşmesine {duration} kaldı. Sonraki yaralanma ölümcül olur.':
+      'Injured • heals in {duration}. The next injury will be fatal.',
+  '{mission} sürüyor • {duration} kaldı.':
+      '{mission} in progress • {duration} remaining.',
+  'Sefer tamamlandı; ganimeti teslim al.':
+      'Expedition complete; collect the loot.',
+  'AL': 'COLLECT',
+  '{mission} • {success}%': '{mission} • {success}%',
+  'Haritası çıkarılmamış mağaralarda cevher, yapı malzemesi, sefer bileti ve eski kalıntılar bulunabilir.': 'Unmapped caves may contain ore, building materials, expedition tickets, and ancient relics.',
+  'SEFER ROTASI': 'EXPEDITION ROUTE',
+  'HARİTALI': 'MAPPED',
+  'GÜVENLİ': 'SAFE',
+  'DERİN': 'DEEP',
+  'GÖNDERİLECEK DRON': 'DRONE TO DEPLOY',
+  '{count} / {total}': '{count} / {total}',
+  '4 düğümlü keşif • Ganimet çarpanı {multiplier}×':
+      '4-node exploration • Loot multiplier {multiplier}×',
+  'KEŞİF DRONU': 'EXPLORATION DRONE',
+  '{description} • Can {health} • Görüş {vision} • Yakıt {fuel} • Toplama menzili {range}': '{description} • Health {health} • Vision {vision} • Fuel {fuel} • Pickup range {range}',
+  '{name} • DÜĞÜM {step}/4': '{name} • NODE {step}/4',
+  'YAKIT {fuel}': 'FUEL {fuel}',
+  'Seçili yoldaki düğüme dokun. Dron görüşü sisi deler; mıknatıs yan kola erişir.': 'Tap a node on the selected path. Drone vision clears fog; the magnet reaches side paths.',
+  'Dronun canı tükendi. Kısmi ganimeti güvenceye al.':
+      'The drone ran out of health. Secure the partial loot.',
+  'Rota tamamlandı. Buluntuları ambara ve arşive aktar.':
+      'Route complete. Transfer the finds to your warehouse and archive.',
+  '{health} / {maximum} dayanıklılık': '{health} / {maximum} durability',
+  'SALDIR • {damage} GÜÇ': 'ATTACK • {damage} POWER',
+  'Zafer ödülü: {coins} kasa + {parts} sondaj parçası + {chest}':
+      'Victory rewards: {coins} coins + {parts} drill parts + {chest}',
+  '×{power}': '×{power}',
+  'Satılacak maden': 'Ore to sell',
+  '{floor}. kat': 'Floor {floor}',
+  '5 dk’da kat değiştir': 'Change floor every 5 min',
+  'Lv +1 • {cost}': 'Lv +1 • {cost}',
+  'Yeni çekirdek döngüsü başlatılsın mı?': 'Start a new core cycle?',
+  'Mevcut derinlik, kasa, ambar, sondaj parçası seviyeleri, vardiya yöneticisi ve reaktör ilerlemesi sıfırlanacak. {shards} kalıcı çekirdek parçası korunacak.': 'Your current depth, coins, warehouse, drill part levels, shift manager, and reactor progress will reset. {shards} permanent core shards will be kept.',
+  'YENİDEN DOĞ': 'REBIRTH',
+  '{digging} kazıcı • {transport} taşıyıcı • {scanner} tarayıcı • {sorting} ayıklayıcı': '{digging} diggers • {transport} haulers • {scanner} scanners • {sorting} sorters',
+  'Öncelik 1 en düşük, 4 en yüksek. Yeni görev açılırken düşük öncelikli ekipten kişi alınır; yeni işe alınanlar kazıya katılır.': 'Priority 1 is lowest and 4 is highest. New assignments take workers from the lowest-priority team; newly hired workers join mining.',
+  'Danışman göreviyle açılacak. {benefit}':
+      'Unlocks through an advisor mission. {benefit}',
+  'Öncelik {priority} • {rank}': 'Priority {priority} • {rank}',
+  'YUVADAN ÇIKAR': 'UNEQUIP',
+  'KUŞAN': 'EQUIP',
+  'İŞ YÜKÜ': 'WORKLOAD',
+  'İş yükünü %5 azalt': 'Reduce workload by 5%',
+  'İş yükünü %5 artır': 'Increase workload by 5%',
+  '{amount}%': '{amount}%',
+  'Tarif: {recipe}': 'Recipe: {recipe}',
+  'Mücevher dövülüyor': 'Gem is being crafted',
+  'Ocağa iş ver': 'Assign work to the forge',
+  'Temel süre {seconds} sn • bu tarif için ayırdığın iş yükü %{workload}.':
+      'Base time: {seconds} s • workload assigned to this recipe: {workload}%.',
+  '{duration} KALDI': '{duration} REMAINING',
+  'ÜRET': 'CRAFT',
+  '{subtitle} • {depth} m': '{subtitle} • {depth} m',
+  'AKTİF': 'ACTIVE',
+  'GEÇ': 'SWITCH',
+  'KİLİTLİ': 'LOCKED',
+  'Pencereyi kapat': 'Close window',
+  '×{amount}': '×{amount}',
+  'DEĞERLİ': 'VALUABLE',
+  '{name} • Lv {level}/5': '{name} • Lv {level}/5',
+  'Pasif kazanç: {effect}': 'Passive effect: {effect}',
+  'KOPYA {count} → +1 HURDA': 'DUPLICATE {count} → +1 SCRAP',
+  'ÇIKAR': 'UNEQUIP',
+  'MAKS.': 'MAX',
+  'GELİŞTİR • {cost}': 'UPGRADE • {cost}',
+  '{progress} / {target} • ödül {reward} kasa':
+      '{progress} / {target} • reward: {reward} coins',
+  '✓ +{reward}': '✓ +{reward}',
+  'Montaj geliştirme yardımını aç': 'Open drill assembly help',
+  'Yuva {x}, {y} • {component}': 'Slot {x}, {y} • {component}',
+  'Kilitli yuva': 'Locked slot',
+  'boş': 'empty',
+  'Bir dron çıkar': 'Remove one drone',
+  'Bir dron ekle': 'Add one drone',
+  'Keşfedilmemiş galeri': 'Unexplored gallery',
+  'Hurdaya ayır: +{scrap} hurda': 'Dismantle: +{scrap} scrap',
+  'Bir çalışanı kazıya döndür': 'Return one worker to mining',
+  'Bir kazıcıyı bu göreve ata': 'Assign one miner to this role',
+  'Danışman göreviyle açılacak': 'Unlocks through an advisor mission',
+  'Görev önceliğini değiştir': 'Change role priority',
+  'Rezervi kaldır': 'Remove reserve',
+  'En çok 10 adet rezerve et': 'Reserve up to 10',
+  'Kaynak kilidini aç': 'Unlock resource',
+  'Kaynağı satıştan koru': 'Protect resource from sale',
+  '🔥 ÇILGINLIK MODU! {seconds} saniye boyunca 2x üretim ve kazı!':
+      '🔥 FRENZY MODE! 2× production and mining for {seconds} seconds!',
+  'Ana kayıt açılamadı; son geçerli vardiya yedeği yüklendi.': 'The main save could not be opened. The latest valid shift backup was loaded.',
+  'Çevrimdışı vardiya tamamlandı: {ore} cevher, {depth} m ilerleme.':
+      'Offline shift complete: {ore} ore collected and {depth} m of progress.',
+  'Eski kayıt okunamadı. Yeni vardiya güvenli biçimde başlatıldı.':
+      'The old save could not be read. A new shift started safely.',
+  '{title} başarımı açıldı: +{reward} kasa.':
+      'Achievement unlocked: {title} • +{reward} coins.',
+  'Bu maden damarı bu katta görünmüyor.':
+      'This ore vein is not visible on this floor.',
+  'Katman Rezonansı tamamlandı; üretim beş dakika hızlandı.':
+      'Layer Resonance complete; production is boosted for five minutes.',
+  'Bu damar henüz kazılabilir durumda değil.':
+      'This deposit cannot be mined yet.',
+  'Bu bölge {depth} m derinlikte açılır.':
+      'This region unlocks at a depth of {depth} m.',
+  '{world} vardiyasına geçildi. Derinlik ve ekip bu dünya için kaydedilir; ambar ortaktır.': 'Switched to the {world} shift. Depth and crew are saved separately for each world; the warehouse is shared.',
+  'Reaktör yükseltmesi için {energy} enerji gerekir.':
+      'You need {energy} energy to upgrade the reactor.',
+  'Sondajı geliştirmeden önce ilk madenciyi işe al.':
+      'Hire your first miner before upgrading the drill.',
+  'Yükseltme tarifi için eksik cevher: {ore}.':
+      'Missing ore for this upgrade recipe: {ore}.',
+  'Yükseltme için yeterli kasa yok.':
+      'You do not have enough coins for this upgrade.',
+  '{upgrade} seviyesi {level} oldu.': '{upgrade} upgraded to level {level}.',
+  'Sondaj Robotu Mk II şemaları 1.257 km’de açılır.':
+      'Robot Mk II blueprints unlock at 1,257 km.',
+  'Bu seviye için montaj şeması henüz keşfedilmedi.':
+      'The assembly blueprint for this level has not been discovered yet.',
+  'Şema için eksik kaynak: {resources}.':
+      'Missing resources for the blueprint: {resources}.',
+  'Sondaj takımını geliştirmek için önce bir madenci al.':
+      'Hire a miner before upgrading the drill assembly.',
+  'Bu sondaj parçası için {cost} kasa gerekir.':
+      'You need {cost} coins for this drill part.',
+  '{part} şeması {level}. seviyeye yükseltildi.':
+      '{part} blueprint upgraded to level {level}.',
+  '{discovery} bulundu; yeni montaj şemaları arşive eklendi.': '{discovery} discovered; new assembly blueprints were added to the archive.',
+  'Vardiya yöneticisinin {level}. kademesi {depth} m’de açılır.':
+      'Shift manager level {level} unlocks at {depth} m.',
+  'Yönetici geliştirmesi için eksik kaynak: {resources}.':
+      'Missing resources for the manager upgrade: {resources}.',
+  'Vardiya yöneticisi geliştirildi: çevrimdışı sınır {hours} saat oldu.':
+      'Shift manager upgraded: the offline limit is now {hours} hours.',
+  'Bu dünyanın madenci ekibi 10 kişiye ulaştı.':
+      'This world has reached its limit of 10 miners.',
+  'Madenci işe almak için {cost} kasa gerekir; kömürünü ambar ekranında sat.': 'You need {cost} coins to hire a miner. Sell your coal from the warehouse screen.',
+  'Yeni madenci vardiyaya katıldı.': 'A new miner joined the shift.',
+  'Bu görev için boşta bir madenci veya atanmış ekip gerekir.':
+      'This role needs an unassigned miner or an assigned crew member.',
+  'Bir madenci {role} görevine atandı.': 'A miner was assigned to {role}.',
+  'Bir madenci kazı ekibine döndü.': 'A miner returned to the digging crew.',
+  'Ekip görev önceliği güncellendi.': 'Crew role priority updated.',
+  'Uzman için yeterli kasa veya boş uzmanlık seviyesi yok.':
+      'You need more coins or an available specialist level.',
+  'Uzman madenciler 10 km kilometre taşında açılır.':
+      'Specialist miners unlock at the 10 km milestone.',
+  'Yeni {specialist} vardiyaya katıldı.':
+      'A new {specialist} joined the shift.',
+  '{rarity} {worker} vardiyaya katıldı.': '{rarity} {worker} joined the shift.',
+  'Özel madenci için 10 km, {cost} kasa ve boş kadro gerekir.': 'A special miner requires 10 km depth, {cost} coins, and an open roster slot.',
+  '{worker} söküldü; kadroya {scrap} hurda eklendi.': '{worker} was dismantled; {scrap} scrap was added to your roster materials.',
+  'Özel madenci seviye atladı.': 'Special miner leveled up.',
+  'Bu yükseltme için yeterli özel hurda yok.':
+      'You do not have enough special scrap for this upgrade.',
+  'Özel madenci {world} {floor}. kata yerleştirildi.':
+      'Special miner assigned to {world}, floor {floor}.',
+  'Dökümhanede iki yapı malzemesi üretildi.':
+      'The foundry produced two building materials.',
+  'Tarif için dökümhane Lv 1, 5 bakır ve 10 kömür gerekir.':
+      'This recipe requires Foundry Lv 1, 5 copper, and 10 coal.',
+  'Beş petrol iki yapı malzemesine dönüştürüldü.':
+      'Five oil were refined into two building materials.',
+  'İşleme için yeraltı şehri ve beş petrol gerekir.':
+      'Refining requires the Underground City and five oil.',
+  'Petrol pompası {level}. seviyeye çıktı; üretim ve depo kapasitesi arttı.': 'Oil pump upgraded to level {level}; production and storage capacity increased.',
+  'Petrol pompası en yüksek seviyede.': 'Oil pump is at the maximum level.',
+  'Pompa geliştirmesi için {cost} kasa gerekir.':
+      'You need {cost} coins to upgrade the pump.',
+  '{quantity} petrol varili {value} kasa karşılığında satıldı.':
+      'Sold {quantity} barrels of oil for {value} coins.',
+  'Satılabilecek, rezerve edilmemiş petrol yok.':
+      'There is no unreserved oil available to sell.',
+  'Dökümhane bir sondaj parçası üretti.': 'The foundry produced a drill part.',
+  'Tarif için dökümhane Lv 2, 4 demir, 3 bakır ve 1 yapı malzemesi gerekir.': 'This recipe requires Foundry Lv 2, 4 iron, 3 copper, and 1 building material.',
+  '{gem} Mücevher Ocağına alındı.': '{gem} was added to the Gem Forge.',
+  'Tarif için eksik kaynak: {resources}.':
+      'Missing resources for the recipe: {resources}.',
+  'Bu mücevher üretimde, iş yükü sıfır veya ocak kilitli.': 'This gem is already being crafted, has no workload, or the forge is locked.',
+  '{gem} yuvadan çıkarıldı.': '{gem} was unequipped.',
+  '{gem} yuvaya takıldı.': '{gem} was equipped.',
+  'Mücevheri yuvaya takmak için boş yuva veya mücevher gerekir.':
+      'You need an empty slot and a gem to equip it.',
+  'Satış tamamlandı: +{amount} kasa.': 'Sale complete: +{amount} coins.',
+  'Ambar satışından +{amount} kasa geldi.':
+      'Warehouse sale earned +{amount} coins.',
+  'Kısmi satış tamamlandı: +{amount} kasa.':
+      'Partial sale complete: +{amount} coins.',
+  'Günlük hedef tamamlandı: +{reward} kasa.':
+      'Daily challenge complete: +{reward} coins.',
+  'Bu günlük hedef henüz tamamlanmadı veya ödülü alındı.': 'This daily challenge is incomplete or its reward has already been claimed.',
+  'Haftalık kilometre taşı tamamlandı: +{coins} kasa ve +{shards} çekirdek parçası.':
+      'Weekly milestone complete: +{coins} coins and +{shards} core shards.',
+  'Haftalık kilometre taşı için 12 günlük hedefi tamamla.':
+      'Complete 12 daily challenges to claim the weekly milestone.',
+  '{event} tamamlandı; ödül ambara alındı.':
+      '{event} complete; reward added to the warehouse.',
+  'Maden olayı şu anda tamamlanamıyor.':
+      'The mine event cannot be completed right now.',
+  'Kargo şeması için eksik malzeme: {resources}.':
+      'Missing materials for the cargo blueprint: {resources}.',
+  'Kargo yükseltmesi için yeterli kasa yok.':
+      'You do not have enough coins to upgrade cargo.',
+  'Kargo donanımı {level}. seviyeye yükseltildi.':
+      'Cargo equipment upgraded to level {level}.',
+  'Eğitim için bu dünyada 10 madenci gerekir.':
+      'This world needs 10 miners to unlock training.',
+  'Madenci eğitimi için {cost} kasa gerekir.':
+      'You need {cost} coins to train the miners.',
+  'Bu dünyanın madencileri Lv {level} oldu.':
+      'This world’s miners reached Lv {level}.',
+  'Kayıt başarıyla yüklendi.': 'Save loaded successfully.',
+  'Geçersiz kayıt verisi.': 'Invalid save data.',
+  'Kaynak kilidi kaldırıldı.': 'Resource lock removed.',
+  'Kaynak kilitlendi; toplu ve otomatik satış koruyacak.':
+      'Resource locked; bulk and automatic sales will protect it.',
+  '{tier} açıldı: +{reward} kasa ve cevher ganimeti.':
+      '{tier} opened: +{reward} coins and ore loot.',
+  'Sandık ganimeti için önce ambarda yer aç.':
+      'Make room in the warehouse before collecting chest loot.',
+  '{amount} sandık toplayıcıdan ambara alındı.':
+      'Collected {amount} chests from the collector into the warehouse.',
+  'Toplayıcı kapasitesi için {cost} kasa gerekir.':
+      'You need {cost} coins to upgrade collector capacity.',
+  'Sandık toplayıcı kapasitesi {capacity} oldu.':
+      'Chest collector capacity is now {capacity}.',
+  '{amount} temel sandık altın sandık kuyruğuna girdi.':
+      '{amount} basic chests entered the gold chest queue.',
+  '{amount} altın sandık derin sandık kuyruğuna girdi.':
+      '{amount} gold chests entered the deep chest queue.',
+  'Sıkıştırıcıda boş yuva veya yeterli sandık yok.':
+      'The compressor needs an empty slot and enough chests.',
+  'Sıkıştırıcı yükseltmesi için {cost} kasa gerekir.':
+      'You need {cost} coins to upgrade the compressor.',
+  'Sandık sıkıştırıcı seviyesi {level} oldu.':
+      'Chest compressor upgraded to level {level}.',
+  'Tarayıcıyı kullanmak için 80 kasa gerekir.':
+      'You need 80 coins to use the scanner.',
+  'Damar dizisi: {sequence}. Kuyuya dönüp sırayla seç.':
+      'Vein sequence: {sequence}. Return to the mine and select them in order.',
+  'Katman Rezonansı: beş dakikalık üretim artışı açıldı!':
+      'Layer Resonance: a five-minute production boost is active!',
+  'Dizi bozuldu. Ceza yok; işaretli damardan tekrar başla.':
+      'Sequence broken. No penalty; start again from the marked vein.',
+  'Havalandırma için 90 kasa veya bir yapı malzemesi gerekir.':
+      'Venting requires 90 coins or one building material.',
+  'Mağara keşfi için 45 km derinlik ve hazır bir dron gerekiyor.':
+      'Cave exploration requires 45 km depth and an available drone.',
+  'Harita açıldı. Sağlam bir yol seçip ganimeti topla.':
+      'Map revealed. Choose a safe route and collect the loot.',
+  '{route} expedition route selected.': '{route} expedition route selected.',
+  '{route} sefer rotası seçildi.': '{route} expedition route selected.',
+  '{count} keşif dronu rotaya atandı.':
+      'Assigned {count} exploration drones to the route.',
+  'Sefer dronu: {drone}.': 'Expedition drone: {drone}.',
+  'Keşif: {node}.': 'Discovery: {node}.',
+  'Dron geri çekildi; bulduğun ganimet alınmaya hazır.':
+      'The drone retreated; its loot is ready to collect.',
+  'Keşif rotası tamamlandı; ganimetini garajdan al.':
+      'Exploration route complete; collect your loot from the garage.',
+  'Dron ganimetle geri çağrıldı.': 'Drone recalled with its loot.',
+  'Dron ganimeti ambarına aktarıldı.':
+      'Drone loot transferred to your warehouse.',
+  'Dron ganimeti için önce ambarda yer aç.':
+      'Make room in the warehouse before collecting drone loot.',
+  'Kazı için 50 km derinlik ve bir bilim insanı gerekiyor.':
+      'Excavation requires 50 km depth and a scientist.',
+  'Kalıntı ve sondaj parçası bulundu.': 'Found a relic and a drill part.',
+  '{scientist} bilim ekibine katıldı.': '{scientist} joined the research team.',
+  'Bilim insanları 50 km kilometre taşında bulunur.':
+      'Scientists unlock at the 50 km milestone.',
+  'Bilim insanı için {cost} kasa ve boş kadro gerekir.':
+      'You need {cost} coins and an open roster slot to hire a scientist.',
+  '{mission} seferi başladı.': 'Expedition started: {mission}.',
+  'Bu bilim insanı şu an göreve çıkamaz veya bölge henüz açılmadı.':
+      'This scientist cannot deploy right now, or the region is still locked.',
+  '{scientist} ikinci yaralanmasının ardından hayatını kaybetti. Nadir canlandırma mührüyle geri dönebilir.': '{scientist} died after a second injury. They can return with a rare revival seal.',
+  '{scientist} yaralandı; iyileşmesi bitene kadar yeni sefere çıkamaz.': '{scientist} was injured and cannot start another expedition until healed.',
+  '{scientist} kısmi ganimetle döndü.':
+      '{scientist} returned with partial loot.',
+  '{scientist} başarılı oldu; sefer ganimeti teslim alındı.':
+      '{scientist} succeeded; expedition loot was collected.',
+  'Sefer ganimeti için cevher ambarında yer aç.':
+      'Make room in the ore warehouse before collecting expedition loot.',
+  '{scientist} canlandırıldı.': '{scientist} revived.',
+  'Canlandırmak için bir nadir canlandırma mührü gerekir.':
+      'A rare revival seal is required to revive a scientist.',
+  'Dron alımı için mağara kilometre taşı ve {cost} kasa gerekir.':
+      'Drone purchase requires the cave milestone and {cost} coins.',
+  'Sefer yükseltmesi için {cost} kasa gerekir.':
+      'You need {cost} coins for the expedition upgrade.',
+  'Montaj şemasını almak için yeterli kasa yok.':
+      'You do not have enough coins to buy the assembly blueprint.',
+  'Takas için gereken cevher yok veya rezerve edilmiş.':
+      'The required ore is unavailable or reserved for a trade.',
+  '{blueprint} planı arşive eklendi.':
+      '{blueprint} blueprint added to the archive.',
+  'Bu reaktör modülü bu yuvaya yerleştirilemiyor.':
+      'This reactor module cannot be placed in this slot.',
+  'Isı dengesi aşıldı; reaktör güvenlik için kapandı.':
+      'Heat limit exceeded; the reactor shut down for safety.',
+  'Reaktörü başlatmak için önce ısı dengesini kur.':
+      'Balance the heat before restarting the reactor.',
+  'Reaktör yeniden çalışıyor.': 'Reactor is running again.',
+  '{isotope} üretildi.': '{isotope} produced.',
+  'İzotop üretimi için gereken enerji, derinlik veya ambar yeri yok.': 'Isotope production needs more energy, greater depth, or warehouse space.',
+  'Reaktör buffı için 25 enerji ve açık bir reaktör gerekir.':
+      'Reactor boost requires 25 energy and an active reactor.',
+  '{buff} etkinleştirildi.': '{buff} activated.',
+  '{buff} kapatıldı.': '{buff} deactivated.',
+  'Bu Buff Lab etkisini çalıştırmak için yeterli enerji yok.':
+      'Not enough energy to run this Buff Lab effect.',
+  'Buff Lab etkisi kullanılamıyor.': 'Buff Lab effect is unavailable.',
+  'Bilim insanı çekirdeğe katıldı; kalıcı çekirdek parçası kazanıldı.':
+      'Scientist committed to the core; a permanent core shard was earned.',
+  'Bilim insanı şu anda çekirdeğe adanamıyor.':
+      'This scientist cannot be committed to the core right now.',
+  'Muhafız yenildi! +{reward} kasa ve sondaj parçası kazandın.':
+      'Guardian defeated! You earned +{reward} coins and a drill part.',
+  'Zayıf noktaya kritik isabet! Üç kat hasar verdin.':
+      'Critical weak-point hit! You dealt triple damage.',
+  'Zayıf noktaya isabet! Vuruşa devam et.': 'Weak-point hit! Keep attacking.',
+  'Zayıf nokta dört saniyeliğine açıldı!':
+      'Weak point exposed for four seconds!',
+  'İlk vardiya tamamlandı. Danışman robot yeni sistemleri sırayla tanıtacak.': 'First shift complete. The advisor drone will introduce new systems one at a time.',
+  'Görev tamamlandı: +{reward} kasa.': 'Mission complete: +{reward} coins.',
+  '7 km görevi tamamlandı: +{reward} kasa. Yıkık taş kırma istasyonu bulundu!': '7 km mission complete: +{reward} coins. A ruined stone-crushing station was discovered!',
+  'Taş kırma istasyonunu onarmak için {cost} kasa gerekir.':
+      'You need {cost} coins to repair the stone-crushing station.',
+  'Taş kırma istasyonu onarıldı. Kırıcıyı açmak için istasyona dokun.':
+      'Stone-crushing station repaired. Tap it to open the crusher.',
+  'Kalıntı kopyası söküldü: +1 yazıt hurdası.':
+      'Relic duplicate dismantled: +1 inscription scrap.',
+  'Kalıntı {id} güçlendirildi.': 'Relic {id} upgraded.',
+  'Geliştirme için {cost} yazıt hurdası gerekir.':
+      'You need {cost} inscription scrap for this upgrade.',
+  'Silah üretimi için 2 sondaj parçası ve 400 kasa gerekir.':
+      'Weapon crafting requires 2 drill parts and 400 coins.',
+  'Derinlik silahı üretildi. Boss vuruşların güçlendi.':
+      'Depth weapon crafted. Your boss attacks are stronger.',
+  'Derin çekirdek için 500 km kilometre taşı gerekir.':
+      'The deep core requires the 500 km milestone.',
+  'Çekirdek sıfırlaması tamamlandı; kalıcı çekirdek gücü arttı.':
+      'Core reset complete; permanent core power increased.',
+  'Yeni maden vardiyası başladı.': 'A new mining shift has started.',
+  'Maden Telsizi Bildirimleri': 'Mine Radio Notifications',
+  'Ambar dolumu, günlük vardiyalar ve sismik keşif bildirimleri':
+      'Notifications for full storage, daily shifts, and seismic discoveries',
+  'Tam Vardiya': 'Full Shift',
+  'Kuyu Ekibi': 'Pit Crew',
+  'Kuyu Efsanesi': 'Mine Legend',
+  'Yaygın': 'Common',
+  'Az bulunan': 'Uncommon',
+  'Madenci Ustası': 'Master Miner',
+  'SONDAJ YÜKSELTMESİ': 'DRILL UPGRADE',
+  'Ametist': 'Amethyst',
+  'Kuvars': 'Quartz',
+  'Yakut': 'Ruby',
+  'Platin': 'Platinum',
+  'Obsidyen': 'Obsidian',
+  'Uranyum I': 'Uranium I',
+  'Uranyum II': 'Uranium II',
+  'Uranyum III': 'Uranium III',
+  'Petrol': 'Oil',
+  'Matkabı geliştir ve 2.566 km derinliğe ulaş.':
+      'Upgrade your drill and reach a depth of 2,566 km.',
+  '{chapter} • {objective}': '{chapter} • {objective}',
+  '{story} {objective}: {target} {unit}.':
+      '{story} {objective}: {target} {unit}.',
+  'Mavi Katman': 'Blue Layer',
+  'Sessiz Galeri': 'Silent Gallery',
+  'Ay Ufku': 'Lunar Horizon',
+  'Buz Feneri': 'Ice Lantern',
+  'Eski Rezonans': 'Ancient Resonance',
+  'Son Harita': 'Final Map',
+  'yeni madenci': 'new miner',
+  'toplam ekipman seviyesi': 'total equipment level',
+  'metre derinlik': 'meters deep',
+  'madenciyi vardiyaya kat': 'add a miner to the shift',
+  'tamamlanan sefer': 'completed expedition',
+  'zafer': 'victory',
+  'Matkap üst sınırda': 'Drill at max level',
+  'VARDİYA EKİBİ': 'SHIFT CREW',
+  'Madenciler otomatik kazı yapar. Sondaj ucunu güçlendir, takımını büyüt ve derinlik silahını hazırla.': 'Miners dig automatically. Upgrade the drill, grow your crew, and prepare your depth weapon.',
+  'Madenci işe al': 'Hire a miner',
+  'EKİP TAMAM': 'CREW FULL',
+  'Bu dünyanın 10 işçisi tamamlanınca eğitim açılır.':
+      'Training unlocks when this world has all 10 workers.',
+  'MAKSİMUM': 'MAXIMUM',
+  'KUYU ASANSÖRÜ': 'SHAFT ELEVATOR',
+  'Kuyu basıncı': 'Shaft pressure',
+  'Basıncı boşalt': 'Vent pressure',
+  'Basıncı güvenli düzeye indirir ve 12 enerji üretir. En az %25 basınç gerekir.': 'Lowers pressure to a safe level and generates 12 energy. Requires at least 25% pressure.',
+  'Reaktör güç darbesi': 'Reactor power surge',
+  '25 enerji tüketerek iki dakikalığına sondaj hızını artırır.':
+      'Uses 25 energy to increase drilling speed for two minutes.',
+  'ETKİNLEŞTİR': 'ACTIVATE',
+  'IZGARAYI YÖNET': 'MANAGE GRID',
+  'Reaktör 1.132 km’de açılır; yakıt, soğutma ve enerji modüllerini yerleştir.': 'The reactor unlocks at 1,132 km. Install fuel, cooling, and energy modules.',
+  'Yapı malzemesi erit': 'Refine building materials',
+  'Petrolü yapı malzemesine işle': 'Refine oil into building materials',
+  'Petrol Dünya ambarında tutulur. İşlemek için Dünya’ya geç.':
+      'Oil is stored in the Earth warehouse. Switch to Earth to refine it.',
+  'DÜNYA’YA GEÇ': 'SWITCH TO EARTH',
+  'Sondaj parçası döv': 'Forge a drill part',
+  'Dökümhane Lv 2 • 4 demir + 3 bakır + 1 yapı malzemesi. Parçalar derinlik silahını üretir.': 'Foundry Lv 2 • 4 iron + 3 copper + 1 building material. Parts are used to craft the depth weapon.',
+  '+1 PARÇA': '+1 PART',
+  'UZMAN MADENCİLER': 'MINING SPECIALISTS',
+  'Jeolog, mühendis, kâşif ve muhafız uzmanı 10 km derinlikte keşfedilir.': 'The geologist, engineer, explorer, and guardian specialist unlock at 10 km depth.',
+  'İzotop bulma olasılığını artırır.':
+      'Increases the chance of finding isotopes.',
+  'Sondaj mühendisi': 'Drilling engineer',
+  'Her uzman sondaj hızına %8 katkı verir.':
+      'Each specialist adds 8% to drilling speed.',
+  'Mağara kâşifi': 'Cave explorer',
+  'Dron seferi cevher ganimetini artırır.':
+      'Increases ore rewards from drone expeditions.',
+  'Muhafız avcısı': 'Guardian hunter',
+  'Boss saldırıları her uzmanla %15 güçlenir.':
+      'Boss attacks are 15% stronger for each specialist.',
+  'Muhafız karşılaşması': 'Guardian encounter',
+  'İlk kaya muhafızı 400.000 m derinlikte uyuyor.':
+      'The first stone guardian sleeps 400,000 m below the surface.',
+  'KARGO VE SATIŞ': 'CARGO & SALES',
+  'Dolu kargo otomatik kazıyı durdurur. Kaynakları kasaya çevir veya bir kısmını rezervde tut.': 'Full cargo pauses automatic mining. Sell resources for coins or keep some in reserve.',
+  'Ambar doluluğu': 'Warehouse capacity',
+  'İşleme stoku': 'Refining stock',
+  'KAYNAK ENVANTERİ': 'RESOURCE INVENTORY',
+  'Henüz ambarında kaynak yok. Maden yüzeyindeki cevher düğümlerine dokun.':
+      'Your warehouse is empty. Tap the ore nodes on the mine surface.',
+  'TİCARET NOKTASI': 'TRADING POST',
+  'Gezgin tüccar bazen montaj planlarını kasa karşılığında sunar. Her teklif süre bitene kadar değişmez.': 'The traveling trader sometimes offers assembly blueprints for coins. Each offer stays available until it expires.',
+  'Bilinen montaj şeması': 'Known assembly blueprints',
+  'Gezgin tüccar, kasaya alternatif olarak nadir kaynak takası sunar. Teklif derinliğe göre değişir.': 'The traveling trader sometimes offers rare resource trades instead of coin deals. Offers depend on your depth.',
+  'Gezgin tüccar teklifi': 'Traveling trader offer',
+  'Sandık koleksiyonu': 'Chest collection',
+  'Temel sandık': 'Basic chest',
+  'Altın sandık': 'Gold chest',
+  'Derin sandık': 'Deep chest',
+  'Kasa, derinlik cevheri ve sondaj parçası içerir; ganimet kargo kapasitesini aşabilir.': 'Contains coins, depth ore, and a drill part. Loot may exceed cargo capacity.',
+  'SANDIĞI AÇ': 'OPEN CHEST',
+  'DEPO BOŞ': 'STORAGE EMPTY',
+  'Sıkıştırma kuyruğu': 'Compression queue',
+  'Süre: 20 dakika. Derin sandık en yüksek ganimet havuzudur.':
+      'Time: 20 minutes. Deep chests have the highest loot tier.',
+  'Seviye süreyi kısaltır; her 3 seviye bir kuyruk yuvası açar.': 'Levels shorten processing time; every 3 levels unlocks another queue slot.',
+  'Toplam satış': 'Total sales',
+  'Otomatik toplayıcı': 'Automatic collector',
+  'Her 30 dakikada bir sandık': 'Finds a chest every 30 minutes',
+  'Daha çok cevher ve +%50 kasa': 'More ore and +50% coins',
+  'Yeraltı şehri petrol pompası': 'Underground City oil pump',
+  'Pompa 300 km derinlikte açılır.': 'The pump unlocks at 300 km depth.',
+  '300 KM AÇILIR': 'UNLOCKS AT 300 KM',
+  'EN YÜKSEK KADEME': 'MAX LEVEL',
+  'Pompadaki petrolü sat': 'Sell oil from the pump',
+  'Rezerve edilmeyen her varil 500 kasa getirir. İşleyerek yapı malzemesi üretmek için bir bölümünü saklayabilirsin.': 'Each unreserved barrel sells for 500 coins. Keep some oil to refine into building materials.',
+  'Sondaj ucu, soğutma fanı ve sondaj motoru ayrı parçalardır. Her kart yalnızca kendi parçasını bir seviye yükseltir.': 'The drill bit, cooling fan, and drill engine are separate parts. Each card upgrades only its own part by one level.',
+  'Üç parçayı ayrı ayrı geliştir. Her kart sıradaki seviye için gereken şemayı, derinliği, kasayı ve cevheri gösterir. Ayrıntı için sağ üstteki ? simgesine dokun.': 'Upgrade each part separately. Every card shows the blueprint, depth, coins, and ore needed for the next level. Tap the ? in the upper-right for details.',
+  'UÇ • FAN • MOTOR': 'BIT • FAN • ENGINE',
+  'ŞEMALARI AL': 'CLAIM BLUEPRINTS',
+  'Toplam montaj gücü': 'Total assembly power',
+  'Şema gerekmiyor': 'No blueprint required',
+  'Derinlik şartı yok': 'No depth requirement',
+  'Madenci hazır': 'Miner available',
+  'ŞEMA EKSİK': 'MISSING BLUEPRINT',
+  'İŞÇİ GEREKLİ': 'WORKER REQUIRED',
+  'KASA EKSİK': 'NOT ENOUGH COINS',
+  'MADEN EKSİK': 'MISSING ORE',
+  'GELİŞTİR': 'UPGRADE',
+  'YÖNETİCİYİ GELİŞTİR': 'UPGRADE MANAGER',
+  'Reaktör ızgarası • Maksimum': 'Reactor grid • Maximum',
+  '81 hücreli son ızgara kademesi açıldı.':
+      'The final 81-cell grid tier is unlocked.',
+  'GEREKSİNİMLERİ TOPLA': 'GATHER REQUIREMENTS',
+  'Sürekli etkiler reaktör enerjisi tüketir. Enerji biterse çalışan tüm etkiler kapanır.': 'Continuous effects consume reactor energy. All active effects stop when energy runs out.',
+  'Anlık tüketim': 'Current consumption',
+  'Yakıt üretim sağlar; fanlar ısıyı düşürür. Isı soğutmayı geçerse güvenlik sistemi reaktörü kapatır.': 'Fuel generates power and fans reduce heat. If heat exceeds cooling, the safety system shuts the reactor down.',
+  'İZOTOP ÜRETİMİ': 'ISOTOPE PRODUCTION',
+  'Kısa güç darbesi': 'Short power surge',
+  '25 enerji harca; sondaj rezonansı için iki dakikalık güç desteği başlat.':
+      'Spend 25 energy to boost drilling resonance for two minutes.',
+  'GÜÇ VER': 'POWER UP',
+  'Yankı Aynası': 'Echo Mirror',
+  'Derinlik Pusulası': 'Depth Compass',
+  'Kırık Sondaj': 'Broken Drill',
+  'Ay Yazıtı': 'Lunar Inscription',
+  'Isı Mührü': 'Heat Seal',
+  'Boşluk Madalyonu': 'Void Medallion',
+  'Titan Dişi': 'Titan Fang',
+  'Saat Taşı': 'Clockstone',
+  'Çekirdek Mührü': 'Core Seal',
+  'Atom Kargısı': 'Atomic Spear',
+  'Atom Kargısı+': 'Atomic Spear+',
+  'Atom Kargısı++': 'Atomic Spear++',
+  'Tüy Parçası': 'Feather Fragment',
+  'Nükleer Kargı+': 'Nuclear Spear+',
+  'Nükleer Kargı++': 'Nuclear Spear++',
+  'ARAŞTIRMA GÖZLEMEVİ': 'RESEARCH OBSERVATORY',
+  'Bilim insanları damar dizilerini izler, kalıntıları inceler ve çekirdek teknolojilerini geliştirir.': 'Scientists track vein sequences, study relics, and develop core technology.',
+  'Katman Rezonansı • Damar Akordu': 'Layer Resonance • Vein Tuning',
+  'DİZİYİ TARA': 'SCAN SEQUENCE',
+  'Bilim insanı işe al': 'Hire a scientist',
+  'Araştırma ekibi 50.000 m kilometre taşında bulunur.':
+      'The research team unlocks at the 50,000 m milestone.',
+  '50 km AÇILIR': 'UNLOCKS AT 50 KM',
+  'DERİN ÇEKİRDEK • BİLİM İNSANI ADAMA': 'DEEP CORE • COMMIT A SCIENTIST',
+  'ÇEKİRDEĞE ADA': 'COMMIT TO CORE',
+  'Çekirdeğe adanabilecek, görev dışında yaşayan bilim insanı yok.': 'No living scientist outside an expedition is available to commit to the core.',
+  'Araştırma buluntusu hazır': 'Research discovery ready',
+  'Bilimsel kazı başlat': 'Start scientific excavation',
+  '70 saniyelik otomatik kazı, 50 km sonrasında bir kalıntı, sondaj parçası ve kasa ödülü verir.': 'After 50 km, a 70-second automatic excavation awards a relic, a drill part, and coins.',
+  'SÜRÜYOR': 'IN PROGRESS',
+  'KAZI BAŞLAT': 'START EXCAVATION',
+  'Reaktör ızgarası': 'Reactor grid',
+  'REAKTÖRÜ AÇ': 'OPEN REACTOR',
+  'Reaktör 1.132 km’de, kalıcı çekirdek 500 km’de açılır. Bu sistemler keşif kilometre taşlarıyla gelir.': 'The reactor unlocks at 1,132 km and the permanent core at 500 km. These systems unlock at depth milestones.',
+  'Üç sürekli etkiyi reaktör enerjisiyle çalıştır: sondaj, cevher verimi veya dron kalkanı.': 'Power up to three continuous effects with reactor energy: drilling, ore yield, or a drone shield.',
+  'ETKİLERİ YÖNET': 'MANAGE EFFECTS',
+  'Buff laboratuvarı 1.135 km’de açılır.': 'The Buff Lab unlocks at 1,135 km.',
+  'Muhafızları yenerek sondaj parçaları ve bölge ödülleri kazan.':
+      'Defeat guardians to earn drill parts and regional rewards.',
+  'MUHAFIZLARI YÖNET': 'MANAGE GUARDIANS',
+  'Yeraltı cephaneliği 305 km’de açılır.':
+      'The Underground Arsenal unlocks at 305 km.',
+  'Kuyudaki eski frekansları ve kayıp yapıları aramaya devam et.':
+      'Keep searching the shaft for old frequencies and lost structures.',
+  'ARŞİVE KAYDEDİLDİ': 'SAVED TO ARCHIVE',
+  'Yazıt hurdası': 'Inscription scrap',
+  'İlk kalıntılar sandıklardan veya bilimsel kazılardan çıkar.':
+      'Find your first relics in chests or through scientific excavation.',
+  'Bilinmeyen yazıt': 'Unknown inscription',
+  'İlk bilim insanı 50 km’de araştırma ekibine katılır.':
+      'Your first scientist joins the research team at 50 km.',
+  'Keşif dronları mağaraları haritalar. Ekipman yükseltmeleri dönüş süresini kısaltır ve ganimeti büyütür.': 'Exploration drones map caves. Equipment upgrades shorten return times and increase loot.',
+  'Keşif dronları': 'Exploration drones',
+  'Tamamlanan mağaralar': 'Caves completed',
+  'Mağara tehlikeleri': 'Cave hazards',
+  'Kaya bloğu: +1 yakıt • çamur: yer dronuna +1 yakıt • radyasyon: tüm dronlara hasar • lav (300 km+): yer dronuna hasar. Buff Lab kalkanı hasarı engeller.': 'Rockfall: +1 fuel • mud: +1 fuel for the ground drone • radiation: damages all drones • lava (300 km+): damages the ground drone. The Buff Lab shield blocks damage.',
+  'Yeni keşif dronu': 'New exploration drone',
+  'Mağara kilometre taşı açıldıktan sonra ek dron alabilirsin. Seferler sırayla yürütülür.': 'You can buy another drone after unlocking the cave milestone. Expeditions run one at a time.',
+  'Dron mağaradan döndü': 'Drone returned from the cave',
+  'Mağara haritası açık': 'Cave map revealed',
+  'Keşif seferi sürüyor': 'Exploration expedition in progress',
+  'Mağara seferi başlat': 'Start cave expedition',
+  'GANİMETİ AL': 'COLLECT LOOT',
+  'KEŞİFTE': 'EXPLORING',
+  'SEFER GÖNDER': 'DEPLOY',
+  'Ganimetle geri dön': 'Return with loot',
+  'Şimdi dönersen bulunan ganimet güvende kalır.':
+      'Returning now will secure the loot you have found.',
+  'GERİ ÇAĞIR': 'RECALL',
+  'Her seviye mağara ganimetini %2,5 artırır ve keşif rotalarında yeni buluntu olasılığını yükseltir.': 'Each level increases cave loot by 2.5% and improves the chance of new discoveries on exploration routes.',
+  'Çekirdek sıfırlaması': 'Core reset',
+  'Çekirdek sıfırlaması 500 km’de açılır. Kalıcı parçalar, yeni vardiyanın sondajını güçlendirir.': 'Core reset unlocks at 500 km. Permanent shards strengthen drilling in your next shift.',
+  'BÖLGELER': 'REGIONS',
+  'Başlangıç katmanları': 'Starting layers',
+  'Ay istasyonu • 1.032 km’de açılır': 'Moon Station • unlocks at 1,032 km',
+  'Buz ve metan • 1.782 km’de açılır': 'Ice and methane • unlocks at 1,782 km',
+  'Her dünyanın derinliği, basıncı ve ambarı ayrı kaydedilir. Ekipman yükseltmeleri ve kasa ortak kalır.': 'Each world saves its own depth, pressure, and warehouse. Equipment upgrades and coins are shared.',
+  'sandık': 'chest',
+  'rezonans buffı': 'resonance boost',
+  'araştırmacı': 'researcher',
+  'DERİNLİK MUHAFIZLARI': 'DEPTH GUARDIANS',
+  'Muhafız karşılaşmaları, yeni katmanlara geçiş için sondaj silahı ve takım gücü sınar.': 'Guardian encounters test your depth weapon and crew before you enter new layers.',
+  'Bu bölgede kalan muhafız yok.': 'No guardians remain in this region.',
+  'temel sandık': 'basic chest',
+  'altın sandık': 'gold chest',
+  'derin sandık': 'deep chest',
+  'Hedefli vuruşlar muhafızı zayıflatır. Silahı yükseltip ekiple saldır; zafer kasa, sondaj parçası ve sandık verir.': 'Focused hits weaken the guardian. Upgrade your weapon and attack with your crew; victory rewards coins, a drill part, and a chest.',
+  'Zayıf nokta açık': 'Weak point exposed',
+  'Zayıf noktayı kilitle': 'Lock onto weak point',
+  'Hedef işaretini dört saniyeliğine aç. Süre bitmeden saldırırsan üç kat hasar verirsin.': 'Reveal the target marker for four seconds. Attack before time runs out to deal triple damage.',
+  'HEDEF AÇIK': 'TARGET LOCKED',
+  'Her gün üç hedef ve haftada bir kilometre taşı kasa kazandırır. Uzun vadeli 112 aşamalı görev hattı da burada.': 'Complete three daily goals and a weekly milestone to earn coins. The 112-stage long-term quest line is here too.',
+  'VARDİYA GÖREVLERİ': 'SHIFT QUESTS',
+  'SONRAKİ HEDEFLER': 'NEXT GOALS',
+  'Şu anda kuyuda bekleyen bir maden olayı yok.':
+      'There is no mine event waiting in the shaft right now.',
+  'MADEN BAŞARIMLARI': 'MINING ACHIEVEMENTS',
+  'Her rozet kasa ödülü ve kalıcı %0,5 kazı hızı verir. Etkiler birikerek tüm vardiyalara uygulanır.': 'Each badge grants coins and a permanent 0.5% mining speed bonus. Bonuses stack across all shifts.',
+  'Özel madenciler 10 km derinlikte keşfedilir.':
+      'Special miners unlock at 10 km depth.',
+  'Sekiz farklı yetenekten biriyle kadroya katılır. Her beş dakikada başka kata geçebilir; elle atadığında sabit kalır.': 'Each recruit joins with one of eight abilities. They can move to another floor every five minutes, or stay put when assigned manually.',
+  'Kopya özel madencileri hurdaya çevirip seviye malzemesi kazanabilirsin.':
+      'Dismantle duplicate special miners to earn upgrade scrap.',
+  'EKİP GÖREV DAĞILIMI': 'CREW ROLE ASSIGNMENTS',
+  'Kazı': 'Mining',
+  'Düşük öncelikliyse yeni atamada bu ekipten kişi alınır.':
+      'New assignments draw workers from this team when its priority is lower.',
+  'Taşıma': 'Hauling',
+  'Her çalışan ambar kapasitesini %4 artırır.':
+      'Each worker increases warehouse capacity by 4%.',
+  'Üretim olurken sandık bulma olasılığını artırır.':
+      'Increases the chance to find chests while producing.',
+  'Ayıklama': 'Sorting',
+  'Her çalışan kaynak satışına %2 ekler.':
+      'Each worker adds 2% to resource sale value.',
+  'Mücevher Ocağı 325 km derinlikte açılır. Beş tarif, 100 puanlık paylaştırılabilir üretim iş yükü kullanır.': 'The Gem Forge unlocks at 325 km. Its five recipes share a production workload of 100 points.',
+  'Her saniye ayrılan iş yükü üretim zamanından düşer. İlerleme kaydedilir ve uygulama kapalıyken sürer.': 'Assigned workload reduces crafting time each second. Progress is saved and continues while the app is closed.',
+  'İşçi ekibi, makine yükseltmeleri ve kuyu asansörü':
+      'Worker crew, machine upgrades, and shaft elevator',
+  'Kargo, rezerv ve maden satışları': 'Cargo, reserves, and mine sales',
+  'Tüccar, sandık ve nadir kaynaklar': 'Trader, chests, and rare resources',
+  'Bilim, kalıntı ve katman rezonansı': 'Research, relics, and layer resonance',
+  'ÇEKİRDEK REAKTÖRÜ': 'CORE REACTOR',
+  'Isı dengesi, enerji ve izotop üretimi':
+      'Heat balance, energy, and isotope production',
+  'Sürekli etkiler ve reaktör enerjisi':
+      'Continuous effects and reactor energy',
+  'YERALTI CEPHANELİĞİ': 'UNDERGROUND ARSENAL',
+  'Muhafız savaşları ve sondaj parçaları': 'Guardian battles and drill parts',
+  'Dron keşifleri, mağaralar ve dünyalar':
+      'Drone exploration, caves, and worlds',
+  'Günlük, haftalık ve derinlik hedefleri': 'Daily, weekly, and depth goals',
+  'Maden fırsatı ve keşif ödülü': 'Mine opportunities and discovery rewards',
+  'Vardiyanın kalıcı kilometre taşları': 'Permanent shift milestones',
+  'Derinlik kapısı ve boss karşılaşmaları': 'Depth gates and boss encounters',
+  'Keşif ve geliştirme sistemleri': 'Exploration and upgrade systems',
+  'İzotop T1->T2 bozunma şansı +%1,5 (Azami %10)':
+      'Isotope T1->T2 decay chance +1.5% (max 10%)',
+  'İzotop T1->T2 bozunma şansı +%2 (Azami %10)':
+      'Isotope T1->T2 decay chance +2% (max 10%)',
+  'Gözle görülür bir etkisi yok (Tüy Parçası)':
+      'No visible effect (Feather Fragment)',
+  'İzotop T2->T3 bozunma şansı +%0,5 (Azami %5)':
+      'Isotope T2->T3 decay chance +0.5% (max 5%)',
+  'İzotop T2->T3 bozunma şansı +%1 (Azami %5)':
+      'Isotope T2->T3 decay chance +1% (max 5%)',
+  'Bilinmeyen kalıcı etki': 'Unknown permanent effect',
+  'Önce madenci: {cost} kasa': 'Hire a miner first: {cost} coins',
+  'Bu dünyada {count}/10 madenci var. İşçiler tüm açık katlarda cevher arar.': 'This world has {count}/10 miners. Workers search every unlocked floor for ore.',
+  'Eğitim, her kattaki cevher bulma olasılığını artırır. Sonraki seviye {cost} kasa.': 'Training increases the chance to find ore on each floor. Next level costs {cost} coins.',
+  'Madenci eğitimi • Lv {level}/10': 'Miner training • Lv {level}/10',
+  'Dökümhane Lv 1 • 5 bakır + 10 kömür karşılığında iki yapı malzemesi üret. Ambar: {amount}.': 'Foundry Lv 1 • Produce two building materials for 5 copper and 10 coal. In warehouse: {amount}.',
+  '5 petrol → 2 yapı malzemesi. Dünya pompa stoğu: {amount}.':
+      '5 oil → 2 building materials. Earth pump stock: {amount}.',
+  'Tüccar yeni yük hazırlıyor. {duration} sonra dönecek.':
+      'The trader is preparing a new shipment and will return in {duration}.',
+  'Vardiya yöneticisi': 'Shift manager',
+  'Damar akordu': 'Vein Tuning',
+  'cevher': 'ore',
+  'rezonans dizisi': 'resonance sequence',
+  'ÖDÜLÜ AL': 'CLAIM REWARD',
+  'Haftalık kilometre taşı': 'Weekly milestone',
+  '{challenge} İlerleme: {progress}/{target}. Ödül: {reward} kasa.':
+      '{challenge} Progress: {progress}/{target}. Reward: {reward} coins.',
+  '{progress}/{target} günlük hedefi ödüllendir. Ödül: {coins} kasa ve {shards} çekirdek parçası.': 'Complete {progress}/{target} daily challenges to earn {coins} coins and {shards} core shard pieces.',
+  '{oil} petrol • {materials} yapı malzemesi':
+      'Oil: {oil} barrels • Building materials: {materials}',
+};
+
+class _EnglishTemplate {
+  const _EnglishTemplate({
+    required this.expression,
+    required this.translation,
+    required this.placeholders,
+    required this.literalLength,
+  });
+
+  final RegExp expression;
+  final String translation;
+  final List<String> placeholders;
+  final int literalLength;
+}
+
+final RegExp _translationPlaceholderPattern = RegExp(r'\{([A-Za-z0-9_]+)\}');
+
+final List<_EnglishTemplate> _englishTemplates =
+    _englishSourceText.entries
+        .where((entry) => _translationPlaceholderPattern.hasMatch(entry.key))
+        .map(_compileEnglishTemplate)
+        .toList()
+      ..sort(
+        (left, right) => right.literalLength.compareTo(left.literalLength),
+      );
+
+_EnglishTemplate _compileEnglishTemplate(MapEntry<String, String> entry) {
+  final placeholders = _translationPlaceholderPattern
+      .allMatches(entry.key)
+      .map((match) => match.group(1)!)
+      .toList(growable: false);
+  final expression = StringBuffer('^');
+  var cursor = 0;
+  for (final match in _translationPlaceholderPattern.allMatches(entry.key)) {
+    expression.write(RegExp.escape(entry.key.substring(cursor, match.start)));
+    expression.write('(.+?)');
+    cursor = match.end;
+  }
+  expression.write(RegExp.escape(entry.key.substring(cursor)));
+  expression.write(r'$');
+  return _EnglishTemplate(
+    expression: RegExp(expression.toString(), dotAll: true),
+    translation: entry.value,
+    placeholders: placeholders,
+    literalLength: entry.key
+        .replaceAll(_translationPlaceholderPattern, '')
+        .length,
+  );
+}
+
 String gameText(
   String language,
   String key, [
   Map<String, Object> values = const {},
 ]) {
-  var result = gameWords[language]?[key] ?? gameWords['en']![key] ?? key;
+  String result =
+      gameWords[language]?[key] ??
+      (language == 'en' ? _englishSourceText[key] : null) ??
+      (language == 'en' ? key : gameWords['tr']?[key] ?? key);
   for (final entry in values.entries) {
     result = result.replaceAll('{${entry.key}}', '${entry.value}');
   }
   return result;
+}
+
+String gameUppercase(String language, String value) {
+  if (language != 'tr') return value.toUpperCase();
+  return value.replaceAll('i', 'İ').replaceAll('ı', 'I').toUpperCase();
+}
+
+/// Localizes a complete Turkish UI message using the active Flutter locale.
+///
+/// Dynamic values must be passed as named placeholders in the source string,
+/// e.g. `context.gameText('Kat {floor}', values: {'floor': floor})`.
+extension GameTextContext on BuildContext {
+  String gameText(
+    String turkishSource, {
+    Map<String, Object> values = const {},
+  }) => gameTextForLanguage(
+    Localizations.localeOf(this).languageCode,
+    turkishSource,
+    values,
+  );
+}
+
+String gameTextForLanguage(
+  String language,
+  String turkishSource, [
+  Map<String, Object> values = const {},
+]) {
+  String result =
+      gameWords[language]?[turkishSource] ??
+      (language == 'en' ? _englishSourceText[turkishSource] : null) ??
+      (language == 'en' ? _translateEnglishTemplate(turkishSource) : null) ??
+      (language == 'en'
+          ? turkishSource
+          : gameWords['tr']?[turkishSource] ?? turkishSource);
+  for (final entry in values.entries) {
+    result = result.replaceAll('{${entry.key}}', '${entry.value}');
+  }
+  return result;
+}
+
+String? _translateEnglishTemplate(String source) {
+  for (final entry in _englishTemplates) {
+    final match = entry.expression.firstMatch(source);
+    if (match == null) continue;
+
+    var translated = entry.translation;
+    for (var index = 0; index < entry.placeholders.length; index++) {
+      final placeholder = entry.placeholders[index];
+      final captured = match.group(index + 1)!;
+      final capturedTranslation =
+          gameWords['en']?[captured] ??
+          _englishSourceText[captured] ??
+          captured;
+      translated = translated.replaceFirst(
+        '{$placeholder}',
+        capturedTranslation,
+      );
+    }
+    return translated;
+  }
+  return null;
 }

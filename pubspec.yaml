@@ -30,6 +30,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
   path_provider: ^2.1.6
   shared_preferences: ^2.5.5
   audioplayers: ^6.8.1
@@ -62,6 +64,7 @@ flutter:
 
   assets:
     - assets/packs/
+    - assets/packs/ore-textures/
     - assets/audio/
     - assets/scene/
 

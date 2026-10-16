@@ -7,16 +7,35 @@ import 'package:flutter/services.dart';
 import '../app/game_controller.dart';
 import '../domain/models/game_state.dart';
 import '../domain/models/mr_mine_big_number.dart';
+import '../domain/models/mr_mine_progression.dart';
+import '../domain/models/resource_definition.dart';
 
 const _rockGeometryRadius = .46;
+// Descendants keep splitting while a child can remain visibly breakable.
+// The final retained rock is small enough to read as a chip, while its output
+// shard is separately guided through the physical roller opening.
+const _minimumRecursiveRockRadius = .14;
+const _recursiveRockSizeScale = .58;
+const _maximumRockGeneration = 8;
+const _maximumLiveRocks = 26;
+const _outputShardCount = 3;
+const _outputShardDepthSpacing = .18;
+const _hopperGlassRestitution = .45;
+const _hopperGlassBottomY = .08;
+const _hopperGlassNeckY = 1.52;
+const _hopperGlassTopY = 3.9;
+const _hopperGlassNeckHalfWidth = 1.45;
+const _hopperGlassTopHalfWidth = 1.8;
 const _beltSurfaceY = 4.14;
 const _beltRightX = 6.2;
+const _beltVisibleRightX = 6.4;
 const _conveyorDropX = .42;
 const _baseConveyorSpeed = 1.35;
 const _rollerCenterX = .77;
 const _rollerCenterY = .69;
 const _rollerRadius = .68;
 const _rollerGapWidth = .18;
+const _rollerBodyTopY = _rollerCenterY + _rollerRadius;
 const _chamberNeckHalfWidth = _rollerCenterX + _rollerRadius;
 const _chamberNeckY = 1.52;
 const _outletFunnelTopY = .23;
@@ -65,7 +84,14 @@ class OreMaterial {
   final String visualStyle;
 }
 
-const oreMaterials = <OreMaterial>[
+/// All descendants of one incoming rock share one bounded ore payout.
+/// The first successful crush claims it; later recursive fractures are visual
+/// progression only, so multiplying rock count never multiplies ore yield.
+class CrusherRewardLineage {
+  bool rewardClaimed = false;
+}
+
+const _authoredOreMaterials = <OreMaterial>[
   OreMaterial(
     id: 'coal',
     name: 'Kömür',
@@ -180,6 +206,42 @@ const oreMaterials = <OreMaterial>[
   ),
 ];
 
+final Map<String, OreMaterial> _authoredOreMaterialsById = {
+  for (final material in _authoredOreMaterials) material.id: material,
+};
+
+final List<OreMaterial> oreMaterials = List.unmodifiable([
+  for (var index = 0; index < MrMineProgression.minerals.length; index++)
+    _authoredOreMaterialsById[MrMineProgression.minerals[index].resourceId] ??
+        _progressionOreMaterial(index),
+]);
+
+OreMaterial _progressionOreMaterial(int progressionIndex) {
+  final band = MrMineProgression.minerals[progressionIndex];
+  final resource = ResourceCatalog.byId[band.resourceId]!;
+  final color = Color(resource.colorHex);
+  final highlight = Color.lerp(color, const Color(0xffffffff), .55)!;
+  final shadow = Color.lerp(color, const Color(0xff000000), .55)!;
+  return OreMaterial(
+    id: resource.id,
+    name: resource.name,
+    level: progressionIndex + 1,
+    health: (1.8 + progressionIndex * .42).clamp(1.8, 10.0).toDouble(),
+    value: resource.baseValue.clamp(0, 0x7fffffff).round(),
+    xp: 45 + progressionIndex * 25,
+    radius: (.38 + progressionIndex * .004).clamp(.38, .5).toDouble(),
+    color: color,
+    highlight: highlight,
+    shadow: shadow,
+    glow: Color.lerp(color, const Color(0xffffffff), .28)!,
+    visualStyle: resource.id.contains('obsidian')
+        ? 'obsidian'
+        : resource.id.contains('diamond')
+        ? 'sapphire'
+        : 'quartz',
+  );
+}
+
 OreMaterial oreMaterialById(String id) {
   for (final material in oreMaterials) {
     if (material.id == id) return material;
@@ -213,8 +275,10 @@ class CrusherRock {
     this.stageDamage = 0,
     this.isSpecial = false,
     this.isLarge = false,
+    this.generation = 0,
+    CrusherRewardLineage? rewardLineage,
     required this.seed,
-  });
+  }) : rewardLineage = rewardLineage ?? CrusherRewardLineage();
 
   final OreMaterial material;
   double hp;
@@ -240,8 +304,12 @@ class CrusherRock {
   double stageDamage;
   final bool isSpecial;
   final bool isLarge;
+  final int generation;
+  final CrusherRewardLineage rewardLineage;
   final int seed;
 }
+
+enum CrusherParticleKind { dust, spark, fragment }
 
 class CrusherParticle {
   CrusherParticle({
@@ -254,7 +322,14 @@ class CrusherParticle {
     required this.color,
     required this.size,
     required this.life,
+    this.kind = CrusherParticleKind.dust,
     this.onOutputConveyor = false,
+    this.isProminent = false,
+    this.approachingRollerGap = false,
+    this.fallingThroughRollerGap = false,
+    this.conveyorTargetX,
+    this.rotation = 0,
+    this.vRotation = 0,
   });
 
   double x;
@@ -265,12 +340,20 @@ class CrusherParticle {
   double vz;
   final Color color;
   final double size;
+  final CrusherParticleKind kind;
+  final bool isProminent;
+  final double? conveyorTargetX;
+  double rotation;
+  double vRotation;
   double life;
   bool onOutputConveyor;
+  bool approachingRollerGap;
+  bool fallingThroughRollerGap;
 }
 
 class CrusherGame extends ChangeNotifier {
-  CrusherGame(this.controller) {
+  CrusherGame(this.controller, {math.Random? random})
+    : _random = random ?? math.Random() {
     spawnRock();
   }
 
@@ -280,7 +363,8 @@ class CrusherGame extends ChangeNotifier {
   final ValueNotifier<int> sceneFrame = ValueNotifier<int>(0);
   final List<CrusherRock> rocks = [];
   final List<CrusherParticle> particles = [];
-  final math.Random _random = math.Random();
+  final math.Random _random;
+  int _rockSeedSequence = DateTime.now().microsecondsSinceEpoch;
 
   Timer? _timer;
   DateTime? _lastTick;
@@ -295,8 +379,7 @@ class CrusherGame extends ChangeNotifier {
   int messageId = 0;
   double messageLife = 0;
 
-  bool debugUnlimitedCoins = false;
-  String language = 'tr';
+  String get language => state.languageCode;
   bool get soundEnabled => state.soundEffectsEnabled;
   bool get hapticsEnabled => state.hapticsEnabled;
   int selectedSkin = 0;
@@ -322,6 +405,8 @@ class CrusherGame extends ChangeNotifier {
 
   // Three.js Sahne Parametreleri
   double get rotorAngle => _rotorAngle;
+  // A full raw hopper must still be crushable. addRawOre enforces its limit;
+  // only a full output warehouse should stop the crusher itself.
   bool get isHalted => state.cargoFull;
   int get rpm =>
       isHalted ? 0 : (28 + speedLevel * 8 + (_pressPulse > 0 ? 32 : 0)).round();
@@ -338,6 +423,12 @@ class CrusherGame extends ChangeNotifier {
       : _baseConveyorSpeed * (1 + feedLevel * .14) * depthMultiplier;
   double get shake => _shake;
   int get rockCapacity => state.crusherHopperCapacity;
+  @visibleForTesting
+  int get liveRockCapacity => _liveRockCapacity;
+  int get _liveRockCapacity => math.min(
+    _maximumLiveRocks,
+    5 + storageLevel + (depthMultiplier * 4).round(),
+  );
   double get hopperTopY => 3.9;
   double get hopperHalfWidth => 1.8;
   double get sceneCameraHalfHeight => _cameraHalfHeight;
@@ -358,45 +449,36 @@ class CrusherGame extends ChangeNotifier {
 
   OreMaterial get currentMaterial => _pickMaterialForDepth();
 
+  /// The most valuable ore currently waiting in the crusher hopper.
+  /// Unknown ids are ignored so old or malformed saves cannot be reported as
+  /// the fallback coal material.
+  OreMaterial? get mostValuableRawOre {
+    OreMaterial? mostValuable;
+    for (final entry in state.rawOreInventory.entries) {
+      if (entry.value <= 0) continue;
+      OreMaterial? material;
+      for (final candidate in oreMaterials) {
+        if (candidate.id == entry.key) {
+          material = candidate;
+          break;
+        }
+      }
+      if (material == null) continue;
+      if (mostValuable == null || material.value > mostValuable.value) {
+        mostValuable = material;
+      }
+    }
+    return mostValuable;
+  }
+
   OreMaterial _pickMaterialForDepth() {
-    final rawEntries = state.rawOreInventory.entries
-        .where((e) => e.value > 0)
-        .toList();
-    if (rawEntries.isNotEmpty) {
-      final chosen = rawEntries[_random.nextInt(rawEntries.length)].key;
-      return oreMaterialById(chosen);
-    }
-
     final depthMeters = math.max(state.depthMeters, state.deepestMeters);
-    final depthKm = depthMeters / 1000.0;
-
-    // Alt katlara inildikçe derinlik seviyesine göre açılan madenler
-    final available = oreMaterials.where((m) {
-      if (m.id == 'coal') return true;
-      if (m.id == 'copper') return depthKm >= 0.5 || level >= 2;
-      if (m.id == 'silver') return depthKm >= 3.0 || level >= 5;
-      if (m.id == 'gold') return depthKm >= 8.0 || level >= 10;
-      if (m.id == 'platinum') return depthKm >= 20.0 || level >= 16;
-      if (m.id == 'diamond') return depthKm >= 40.0 || level >= 22;
-      if (m.id == 'coltan') return depthKm >= 80.0 || level >= 30;
-      if (m.id == 'painite') return depthKm >= 120.0 || level >= 40;
-      return false;
-    }).toList();
-
-    // Derine inildikçe nadir madenlerin gelme olasılığı katlanarak artar
-    final weights = available.map((m) {
-      final idx = oreMaterials.indexOf(m);
-      final depthFactor = (depthKm / 8.0).clamp(0.2, 35.0);
-      return math.pow(1.0 + depthFactor * 0.75, idx).toDouble();
-    }).toList();
-
-    final totalWeight = weights.fold<double>(0.0, (sum, w) => sum + w);
-    var roll = _random.nextDouble() * totalWeight;
-    for (var i = 0; i < available.length; i++) {
-      roll -= weights[i];
-      if (roll <= 0) return available[i];
-    }
-    return available.last;
+    final oreId = GameState.pickCrusherMaterialAtDepth(
+      depthMeters,
+      _random,
+      stockedOre: state.rawOreInventory,
+    );
+    return oreMaterialById(oreId);
   }
 
   bool get specialRockActive => rocks.any((r) => r.isSpecial);
@@ -448,13 +530,11 @@ class CrusherGame extends ChangeNotifier {
   void buyUpgrade(String id) {
     if (isUpgradeMaxed(id)) return;
     final cost = upgradeCost(id);
-    if (!debugUnlimitedCoins && state.coins.toDouble() < cost) {
+    if (state.coins.toDouble() < cost) {
       _emit('notEnough');
       return;
     }
-    if (!debugUnlimitedCoins) {
-      state.spendCoins(cost);
-    }
+    state.spendCoins(cost);
     state.crusherUpgrades[id] = (state.crusherUpgrades[id] ?? 1) + 1;
     _emit('upgradeDone', state.crusherUpgrades[id]!);
     notifyListeners();
@@ -499,10 +579,13 @@ class CrusherGame extends ChangeNotifier {
         rock.fractureStage < rock.fractureStages) {
       rock.stageDamage = 0;
       rock.fractureStage++;
-      const passRadius = 0.195;
       final progress = rock.fractureStage / rock.fractureStages;
+      final crushedRadius = math.max(
+        _minimumRecursiveRockRadius,
+        rock.initialRadius * .72,
+      );
       rock.radius =
-          rock.initialRadius + (passRadius - rock.initialRadius) * progress;
+          rock.initialRadius + (crushedRadius - rock.initialRadius) * progress;
       _spawnParticles(rock.x, rock.y, rock.material.highlight, 5);
       _shake = math.min(.5, _shake + .08);
     }
@@ -514,6 +597,11 @@ class CrusherGame extends ChangeNotifier {
 
   void _crushRock(CrusherRock rock) {
     if (isHalted || rock.passedRollers) return;
+    final childCount = _plannedRecursiveChildCount(rock);
+    // Backpressure keeps an eligible parent intact until two child slots are
+    // available. In particular, do not claim its shared reward budget yet.
+    if (childCount == null) return;
+
     _shake = math.min(.6, _shake + .18);
     _spawnParticles(rock.x, rock.y, rock.material.glow, 16);
 
@@ -531,29 +619,132 @@ class CrusherGame extends ChangeNotifier {
         sizeYieldBonus *
         depthYieldBonus;
 
-    // AMBARA SAF KAYNAK AKTARIMI
-    final yieldResult = state.crushRawOre(
-      oreId: oreId,
-      amount: 1,
-      yieldMultiplier: yieldMultiplier,
-      allowWithoutRawOre: (state.rawOreInventory[oreId] ?? 0) <= 0,
-    );
+    // One incoming rock owns one shared payout budget. Descendants may keep
+    // fracturing, but only the first successful break can claim ore. Mark the
+    // budget only after crushRawOre commits, so full storage leaves this rock
+    // available to retry and never consumes a descendant's reward early.
+    var yieldResult = 0;
+    if (!rock.rewardLineage.rewardClaimed) {
+      if ((state.rawOreInventory[oreId] ?? 0) <= 0) {
+        final previousRawCount = state.totalRawOreCount;
+        state.addRawOre(oreId, 1);
+        if (state.totalRawOreCount == previousRawCount) {
+          _emit('hopperFull');
+          return;
+        }
+      }
+
+      yieldResult = state.crushRawOre(
+        oreId: oreId,
+        amount: 1,
+        yieldMultiplier: yieldMultiplier,
+      );
+      if (yieldResult <= 0) {
+        _emit(state.cargoFull ? 'cargoFull' : 'hopperFull');
+        return;
+      }
+      rock.rewardLineage.rewardClaimed = true;
+    }
+
+    _spawnSparks(rock.x, rock.y, rock.material.highlight, 10);
+    _spawnBreakFragments(rock.x, rock.y, rock.material);
+    rocks.remove(rock);
+    _spawnRecursiveChildren(rock, childCount: childCount);
 
     // Kırıcı doğrudan altın üretmez, çıkan maden ambara aktarılır.
     // Oyuncu ambardan satış yaparak gelir elde eder.
-    _emit('crushed', yieldResult > 0 ? yieldResult : 1);
-    controller.notifyListeners();
-
-    // Ezilip tamamen parçalanan taş artık merdanenin arasından geçip alt konveyöre düşer
-    rock.passedRollers = true;
-    rock.inGap = false;
-    rock.radius = 0.18; // Merdane aralığından geçecek boyuta indi
-    rock.hp = 1.0; // Konveyör sonuna kadar sahnede kalır
-    rock.fractureStage = rock.fractureStages;
-    rock.x = rock.x * 0.3; // Merdane merkezine yönelir
-    rock.vx = (rock.x < 0 ? 0.2 : -0.2);
-    rock.vy = -1.4; // Merdanelerin arasından aşağı hızla fırlar
+    _emit('crushed', yieldResult);
+    if (yieldResult > 0) controller.notifyListeners();
   }
+
+  int? _plannedRecursiveChildCount(CrusherRock parent) {
+    if (parent.generation >= _maximumRockGeneration ||
+        parent.initialRadius <= _minimumRecursiveRockRadius) {
+      return 0;
+    }
+
+    // Include the parent slot that will be freed by a successful break.
+    // Eligible parents exert backpressure instead of disappearing if fewer
+    // than two child slots would remain after removal.
+    final freeSlotsAfterBreak = _liveRockCapacity - (rocks.length - 1);
+    if (freeSlotsAfterBreak < 2) return null;
+
+    final childRadius = math.max(
+      _minimumRecursiveRockRadius,
+      parent.initialRadius * _recursiveRockSizeScale,
+    );
+    final spacing = math.max(.30, childRadius * 2.1);
+    final ridingFeederBelt = parent.onBelt && parent.x > _conveyorDropX;
+    final minX = ridingFeederBelt ? _conveyorDropX : -1.95;
+    final maxX = ridingFeederBelt ? _beltVisibleRightX : 1.95;
+    final maxChildrenInRow = 1 + ((maxX - minX) / spacing).floor();
+    final availableChildren = math.min(freeSlotsAfterBreak, maxChildrenInRow);
+    if (availableChildren < 2) return null;
+
+    return math.min(2 + _random.nextInt(2), availableChildren);
+  }
+
+  void _spawnRecursiveChildren(CrusherRock parent, {required int childCount}) {
+    if (childCount == 0) return;
+
+    final childRadius = math.max(
+      _minimumRecursiveRockRadius,
+      parent.initialRadius * _recursiveRockSizeScale,
+    );
+    final childStages = childRadius >= .32 ? 2 : 1;
+    final childIsLarge = childRadius >= .85;
+    final childMaxHp =
+        parent.material.health *
+        (childIsLarge ? 1.8 : 1.0) *
+        (parent.isSpecial ? 2.0 : 1.0);
+    final stageHealth = childMaxHp / childStages;
+    final ridingFeederBelt = parent.onBelt && parent.x > _conveyorDropX;
+    final verticalLaunchY = math.max(
+      parent.y + childRadius * .32,
+      _rollerBodyTopY + childRadius * _rockGeometryRadius + .12,
+    );
+    final spacing = math.max(.30, childRadius * 2.1);
+    final minX = ridingFeederBelt ? _conveyorDropX : -1.95;
+    final maxX = ridingFeederBelt ? _beltVisibleRightX : 1.95;
+    final groupHalfWidth = spacing * (childCount - 1) / 2;
+    final groupCenterX = parent.x
+        .clamp(minX + groupHalfWidth, maxX - groupHalfWidth)
+        .toDouble();
+
+    for (var index = 0; index < childCount; index++) {
+      final side = index - (childCount - 1) / 2;
+      final x = groupCenterX + side * spacing;
+      final y = ridingFeederBelt
+          ? _beltSurfaceY + childRadius * _rockGeometryRadius + .025
+          : verticalLaunchY;
+      rocks.add(
+        CrusherRock(
+          material: parent.material,
+          hp: childMaxHp,
+          maxHp: childMaxHp,
+          initialRadius: childRadius,
+          fractureStages: childStages,
+          stageHealth: stageHealth,
+          radius: childRadius,
+          x: x,
+          y: y,
+          vx: ridingFeederBelt
+              ? 0
+              : side.sign * (.55 + _random.nextDouble() * .3),
+          vy: ridingFeederBelt ? 0 : .85 + _random.nextDouble() * .5,
+          onBelt: ridingFeederBelt,
+          falling: !ridingFeederBelt,
+          isSpecial: parent.isSpecial,
+          isLarge: childIsLarge,
+          generation: parent.generation + 1,
+          rewardLineage: parent.rewardLineage,
+          seed: _nextRockSeed(),
+        ),
+      );
+    }
+  }
+
+  int _nextRockSeed() => _rockSeedSequence++;
 
   void _spawnParticles(double x, double y, Color color, int count) {
     for (var i = 0; i < count; i++) {
@@ -575,13 +766,98 @@ class CrusherGame extends ChangeNotifier {
     }
   }
 
+  void _spawnSparks(double x, double y, Color color, int count) {
+    for (var i = 0; i < count; i++) {
+      final angle = _random.nextDouble() * math.pi * 2;
+      final speed = 1.8 + _random.nextDouble() * 2.4;
+      particles.add(
+        CrusherParticle(
+          x: x,
+          y: y,
+          z: (_random.nextDouble() - .5) * .24,
+          vx: math.cos(angle) * speed,
+          vy: math.sin(angle) * speed,
+          vz: (_random.nextDouble() - .5) * .9,
+          color: color,
+          size: .09 + _random.nextDouble() * .06,
+          life: .28 + _random.nextDouble() * .16,
+          kind: CrusherParticleKind.spark,
+        ),
+      );
+    }
+  }
+
+  void _spawnBreakFragments(double x, double y, OreMaterial material) {
+    // Keep the transient debris burst to two or three fragments. The separate
+    // recursive CrusherRock children remain visible and breakable afterward.
+    final chipCount = 1 + _random.nextInt(2);
+    for (var i = 0; i < chipCount; i++) {
+      final side = i.isEven ? 1.0 : -1.0;
+      final speed = 1.1 + _random.nextDouble() * .9;
+      particles.add(
+        CrusherParticle(
+          x: x + (_random.nextDouble() - .5) * .12,
+          y: y + (_random.nextDouble() - .5) * .12,
+          z: (_random.nextDouble() - .5) * .2,
+          vx: side * speed,
+          vy: 1.1 + _random.nextDouble() * 1.2,
+          vz: (_random.nextDouble() - .5) * .7,
+          color: i.isEven ? material.color : material.highlight,
+          size: .12 + _random.nextDouble() * .07,
+          life: .85 + _random.nextDouble() * .3,
+          kind: CrusherParticleKind.fragment,
+          rotation: _random.nextDouble() * math.pi * 2,
+          vRotation: (_random.nextDouble() - .5) * 13,
+        ),
+      );
+    }
+
+    // Three separate ore pieces travel through the opening and land across
+    // the output belt's depth, making the lower conveyor visibly carry the
+    // broken material. The conservative 2x-size hitbox leaves clearance on
+    // both sides of the 0.18-unit roller gap.
+    const prominentSize = _rollerGapWidth / 2 - .015;
+    const gapCenterX = 0.0;
+    final shardEntryY = math.max(y, _rollerBodyTopY + prominentSize + .025);
+    final canApproachAboveRollers = (x - gapCenterX).abs() > .005;
+    for (var index = 0; index < _outputShardCount; index++) {
+      final depthOffset =
+          (index - (_outputShardCount - 1) / 2) * _outputShardDepthSpacing;
+      particles.add(
+        CrusherParticle(
+          x: canApproachAboveRollers ? x : gapCenterX,
+          y: shardEntryY,
+          z: depthOffset,
+          vx: canApproachAboveRollers ? (gapCenterX - x).sign * 4.0 : 0,
+          vy: 0,
+          vz: 0,
+          color: index == 1 ? material.highlight : material.color,
+          size: prominentSize,
+          // Keep every visible ore shard alive long enough to travel from the
+          // feeder, pass through the roller gap, and ride the full output belt.
+          life: 8.0,
+          kind: CrusherParticleKind.fragment,
+          isProminent: true,
+          approachingRollerGap: canApproachAboveRollers,
+          fallingThroughRollerGap: !canApproachAboveRollers,
+          conveyorTargetX: gapCenterX,
+          // A fixed vertical silhouette is narrow enough to pass the opening.
+          rotation: 0,
+          vRotation: 0,
+        ),
+      );
+    }
+  }
+
+  /// Advances only particle simulation for deterministic renderer/physics tests.
+  @visibleForTesting
+  void advanceParticlesForTesting(double dt) {
+    _advanceParticles(dt, 9.8 * (1 + gravityLevel * .15));
+  }
+
   void spawnRock({bool force = false}) {
     if (isHalted) return;
-    final maxRocks = math.min(
-      26,
-      (5 + storageLevel + (depthMultiplier * 4).round()),
-    );
-    if (!force && rocks.length >= maxRocks) return;
+    if (!force && rocks.length >= _liveRockCapacity) return;
 
     final mat = currentMaterial;
     final depthMeters = math.max(state.depthMeters, state.deepestMeters);
@@ -618,7 +894,7 @@ class CrusherGame extends ChangeNotifier {
       onBelt: true,
       isSpecial: isSpecial,
       isLarge: isLarge,
-      seed: DateTime.now().microsecondsSinceEpoch ^ _random.nextInt(10000),
+      seed: _nextRockSeed(),
     );
     rocks.add(rock);
   }
@@ -656,7 +932,7 @@ class CrusherGame extends ChangeNotifier {
         final gapRocks = rocks.where((r) => r.inGap).toList();
         if (gapRocks.isNotEmpty) {
           final r = gapRocks[_random.nextInt(gapRocks.length)];
-          final autoDmg = (0.1 + powerLevel * .2) * (1 + teethLevel * .12);
+          final autoDmg = (0.25 + powerLevel * .35) * (1 + teethLevel * .12);
           _damageRock(r, autoDmg);
         }
       }
@@ -833,21 +1109,63 @@ class CrusherGame extends ChangeNotifier {
     // Ölen / sahne dışına çıkan taşları temizle
     rocks.removeWhere((r) => r.hp <= 0);
 
+    _advanceParticles(dt, grav);
+
+    // Sahne güncellemesi (30 FPS)
+    if (now.difference(_lastUiUpdate).inMilliseconds >= 32) {
+      _lastUiUpdate = now;
+      sceneFrame.value++;
+    }
+  }
+
+  void _advanceParticles(double dt, double grav) {
     // Partiküller (Ezilme kıvılcımları ve tozları)
     for (final p in particles) {
-      if (p.onOutputConveyor) {
+      if (p.approachingRollerGap) {
+        final targetX = p.conveyorTargetX!;
+        final deltaX = targetX - p.x;
+        final travel = 4.0 * dt;
+        if (deltaX.abs() <= travel) {
+          p.x = targetX;
+          p.approachingRollerGap = false;
+          p.fallingThroughRollerGap = true;
+          p.vx = 0;
+          p.vy = 0;
+        } else {
+          p.x += deltaX.sign * travel;
+          p.vx = deltaX.sign * 4.0;
+        }
+      } else if (p.fallingThroughRollerGap) {
+        // Keep the shard centered and unrotated while it crosses the actual
+        // body gap, then snap it to the output belt's top surface.
+        p.x = p.conveyorTargetX!;
+        p.vy -= grav * dt;
+        p.y += p.vy * dt;
+        final targetY = _outputBeltSurfaceY + p.size + .018;
+        if (p.y <= targetY) {
+          p.y = targetY;
+          p.fallingThroughRollerGap = false;
+          p.onOutputConveyor = true;
+          p.vx = -_outputBeltSpeed * math.cos(_outputBeltAngle);
+          p.vy = 0;
+          p.vz = _outputBeltSpeed * math.sin(_outputBeltAngle);
+        }
+      } else if (p.onOutputConveyor) {
         p.x -= _outputBeltSpeed * math.cos(_outputBeltAngle) * dt;
         p.z += _outputBeltSpeed * math.sin(_outputBeltAngle) * dt;
         p.y = _outputBeltSurfaceY + p.size + .018;
         p.vx = -_outputBeltSpeed * math.cos(_outputBeltAngle);
         p.vy = 0;
         p.vz = _outputBeltSpeed * math.sin(_outputBeltAngle);
-        if (p.x <= -4.2 || p.life <= 0) p.life = 0;
+        // The prominent ore shard is removed by the belt exit, not by a
+        // timer. This guarantees it remains visible after it reaches the belt.
+        if (p.x <= -4.2 || (!p.isProminent && p.life <= 0)) p.life = 0;
       } else {
         p.vy -= 9.8 * dt;
         p.x += p.vx * dt;
         p.y += p.vy * dt;
         p.z += p.vz * dt;
+        p.rotation += p.vRotation * dt;
         final pFloor = _outputBeltSurfaceY + p.size + .018;
         if (p.y <= pFloor) {
           p.onOutputConveyor = true;
@@ -857,14 +1175,34 @@ class CrusherGame extends ChangeNotifier {
           p.vz = _outputBeltSpeed * math.sin(_outputBeltAngle);
         }
       }
-      p.life -= dt;
+      if (!p.isProminent) _bounceEffectParticleOffGlass(p);
+      if (!p.onOutputConveyor || !p.isProminent) p.life -= dt;
     }
     particles.removeWhere((p) => p.life <= 0);
+  }
 
-    // Sahne güncellemesi (30 FPS)
-    if (now.difference(_lastUiUpdate).inMilliseconds >= 32) {
-      _lastUiUpdate = now;
-      sceneFrame.value++;
+  void _bounceEffectParticleOffGlass(CrusherParticle particle) {
+    if (particle.y < _hopperGlassBottomY || particle.y > _hopperGlassTopY) {
+      return;
+    }
+
+    final halfWidth = particle.y <= _hopperGlassNeckY
+        ? _hopperGlassNeckHalfWidth
+        : _hopperGlassNeckHalfWidth +
+              (particle.y - _hopperGlassNeckY) /
+                  (_hopperGlassTopY - _hopperGlassNeckY) *
+                  (_hopperGlassTopHalfWidth - _hopperGlassNeckHalfWidth);
+    final centerLimit = halfWidth - particle.size;
+    if (particle.x > centerLimit) {
+      particle.x = centerLimit;
+      if (particle.vx > 0) {
+        particle.vx = -particle.vx * _hopperGlassRestitution;
+      }
+    } else if (particle.x < -centerLimit) {
+      particle.x = -centerLimit;
+      if (particle.vx < 0) {
+        particle.vx = -particle.vx * _hopperGlassRestitution;
+      }
     }
   }
 

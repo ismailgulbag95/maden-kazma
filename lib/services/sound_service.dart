@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart';
 
 class SoundService {
   SoundService._();
@@ -42,6 +43,8 @@ class SoundService {
   Future<void> playOreCollect() => _playEffect('ore_collect.wav', .35);
 
   Future<void> playCargoFull() => _playEffect('cargo_full.wav', .24);
+
+  Future<void> playButtonTap() => _playEffect('ui_click.wav', .24);
 
   Future<void> _playEffect(String fileName, double volume) async {
     if (!sfxEnabled) return;
@@ -103,8 +106,19 @@ class SoundService {
     sfxEnabled = enabled;
     if (!enabled) {
       unawaited(stopReactorAlarm());
-      unawaited(_effects.stop());
+      try {
+        await _effects.stop();
+      } catch (_) {
+        // Audio plugins can be unavailable in tests or unsupported hosts.
+      }
     }
+  }
+
+  Future<void> setAllAudioEnabled(bool enabled) async {
+    await Future.wait([
+      setMusicEnabled(enabled),
+      setSoundEffectsEnabled(enabled),
+    ]);
   }
 
   void toggleBgm() {
@@ -132,4 +146,20 @@ class SoundService {
     }
     _initialized = false;
   }
+}
+
+VoidCallback? withButtonTapSound(VoidCallback? action) {
+  if (action == null) return null;
+  return () {
+    unawaited(SoundService.instance.playButtonTap());
+    action();
+  };
+}
+
+ValueChanged<T>? withButtonTapSoundValue<T>(ValueChanged<T>? action) {
+  if (action == null) return null;
+  return (value) {
+    unawaited(SoundService.instance.playButtonTap());
+    action(value);
+  };
 }

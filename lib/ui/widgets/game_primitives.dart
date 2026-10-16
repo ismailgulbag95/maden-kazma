@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../../app/game_controller.dart';
 import '../../core/design/palette.dart';
+import '../../crusher/localization.dart';
 import '../../domain/models/upgrade_definition.dart';
 import '../../domain/models/resource_definition.dart';
 import '../../domain/models/mr_mine_big_number.dart';
 import '../../domain/simulation/game_engine.dart';
+import '../../services/sound_service.dart';
 
 class GamePanel extends StatelessWidget {
   const GamePanel({
@@ -48,7 +50,7 @@ class GamePanel extends StatelessWidget {
               const SizedBox(width: 7),
               Expanded(
                 child: Text(
-                  title,
+                  context.gameText(title),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -91,7 +93,7 @@ class UpgradeRow extends StatelessWidget {
         : UpgradeCatalog.byId[track]?.maxLevel ?? 100;
     final cost = GameEngine.upgradeCost(state, track);
     final costBig = MrMineBigNumber.fromNum(cost);
-    final missing = state.debugMoneyEnabled || state.canAfford(cost)
+    final missing = state.canAfford(cost)
         ? MrMineBigNumber.zero
         : costBig.subtract(state.coins);
     final materialRequirements = GameEngine.upgradeMaterialRequirements(
@@ -104,12 +106,11 @@ class UpgradeRow extends StatelessWidget {
           final name = ResourceCatalog.byId[entry.key]?.name ?? entry.key;
           final available = (state.amount(entry.key) - state.reserve(entry.key))
               .clamp(0, 1000000000);
-          return '$name $available/${entry.value}';
+          return '${context.gameText(name)} $available/${entry.value}';
         })
         .join(' • ');
     final tutorialLocked =
         state.guidedProgression &&
-        !state.debugModeEnabled &&
         !state.initialTutorialComplete &&
         state.tutorialStep < 3;
     final canBuy =
@@ -163,7 +164,7 @@ class UpgradeRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  name,
+                  context.gameText(name),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -201,19 +202,46 @@ class UpgradeRow extends StatelessWidget {
                   const SizedBox(height: 3),
                   Text(
                     level >= maxLevel
-                        ? 'Bu yükseltme ailesinin tüm şemaları açıldı.'
+                        ? context.gameText(
+                            'Bu yükseltme ailesinin tüm şemaları açıldı.',
+                          )
                         : [
-                            UpgradeCatalog.byId[track]?.effect ??
-                                'Etkisi gelişir.',
-                            'Sonraki şema: $cost kasa',
+                            context.gameText(
+                              UpgradeCatalog.byId[track]?.effect ??
+                                  'Etkisi gelişir.',
+                            ),
+                            context.gameText(
+                              'Sonraki şema: {cost} kasa',
+                              values: {'cost': cost},
+                            ),
                             if (track == 'drill' && state.crewCount == 0)
-                              'Önce ilk madenciyi işe al',
+                              context.gameText('Önce ilk madenciyi işe al'),
                             if (materialText.isNotEmpty)
-                              'Cevher: $materialText',
+                              context.gameText(
+                                'Cevher: {materials}',
+                                values: {'materials': materialText},
+                              ),
                             if (missing.greaterThan(MrMineBigNumber.zero))
-                              'Eksik kasa: $missing',
+                              context.gameText(
+                                'Eksik kasa: {missing}',
+                                values: {'missing': missing},
+                              ),
                             if (materialDeficits.isNotEmpty)
-                              'Cevher eksiği: ${materialDeficits.entries.map((entry) => '${entry.value} ${ResourceCatalog.byId[entry.key]?.name ?? entry.key}').join(', ')}',
+                              context.gameText(
+                                'Cevher eksiği: {materials}',
+                                values: {
+                                  'materials': materialDeficits.entries
+                                      .map((entry) {
+                                        final resourceName =
+                                            ResourceCatalog
+                                                .byId[entry.key]
+                                                ?.name ??
+                                            entry.key;
+                                        return '${entry.value} ${context.gameText(resourceName)}';
+                                      })
+                                      .join(', '),
+                                },
+                              ),
                           ].join(' • '),
                     style: const TextStyle(
                       color: MinePalette.muted,
@@ -239,18 +267,26 @@ class UpgradeRow extends StatelessWidget {
                     )
                   : const BoxDecoration(),
               child: IconButton.filled(
-                tooltip: highlighted
-                    ? 'Görev için bu yükseltme düğmesine dokun'
-                    : level >= maxLevel
-                    ? 'Şema ailesi tamamlandı'
-                    : track == 'drill' && state.crewCount == 0
-                    ? 'Önce bir madenci işe al'
-                    : canBuy
-                    ? 'Yükselt • $cost kasa'
-                    : 'Eksik $missing kasa'
-                          '${materialText.isEmpty ? '' : ' • $materialText'}',
+                tooltip: context.gameText(
+                  highlighted
+                      ? 'Görev için bu yükseltme düğmesine dokun'
+                      : level >= maxLevel
+                      ? 'Şema ailesi tamamlandı'
+                      : track == 'drill' && state.crewCount == 0
+                      ? 'Önce bir madenci işe al'
+                      : canBuy
+                      ? 'Yükselt • {cost} kasa'
+                      : 'Eksik {missing} kasa{materials}',
+                  values: {
+                    'cost': cost,
+                    'missing': missing,
+                    'materials': materialText.isEmpty ? '' : ' • $materialText',
+                  },
+                ),
                 padding: EdgeInsets.zero,
-                onPressed: canBuy ? () => controller.upgrade(track) : null,
+                onPressed: withButtonTapSound(
+                  canBuy ? () => controller.upgrade(track) : null,
+                ),
                 style: IconButton.styleFrom(
                   backgroundColor: MinePalette.amber,
                   foregroundColor: MinePalette.ink,
@@ -283,6 +319,7 @@ class ActionTile extends StatelessWidget {
     this.enabled = true,
     this.accent = MinePalette.amber,
     this.highlighted = false,
+    this.buttonSoundEnabled = true,
   });
 
   final IconData icon;
@@ -293,6 +330,7 @@ class ActionTile extends StatelessWidget {
   final bool enabled;
   final Color accent;
   final bool highlighted;
+  final bool buttonSoundEnabled;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -327,7 +365,7 @@ class ActionTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                title,
+                context.gameText(title),
                 style: const TextStyle(
                   color: MinePalette.cream,
                   fontSize: 12,
@@ -336,7 +374,7 @@ class ActionTile extends StatelessWidget {
               ),
               const SizedBox(height: 3),
               Text(
-                description,
+                context.gameText(description),
                 style: const TextStyle(
                   color: MinePalette.muted,
                   fontSize: 10,
@@ -350,7 +388,11 @@ class ActionTile extends StatelessWidget {
         SizedBox(
           height: 40,
           child: FilledButton(
-            onPressed: enabled ? onPressed : null,
+            onPressed: buttonSoundEnabled
+                ? withButtonTapSound(enabled ? onPressed : null)
+                : enabled
+                ? onPressed
+                : null,
             style: FilledButton.styleFrom(
               backgroundColor: accent,
               foregroundColor: MinePalette.ink,
@@ -359,7 +401,7 @@ class ActionTile extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 10),
             ),
             child: Text(
-              buttonLabel,
+              context.gameText(buttonLabel),
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w900),
             ),

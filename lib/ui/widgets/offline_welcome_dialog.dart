@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../app/game_controller.dart';
 import '../../core/design/palette.dart';
+import '../../crusher/localization.dart';
 import '../../services/haptic_service.dart';
+import '../../services/sound_service.dart';
 
 class OfflineWelcomeDialog extends StatelessWidget {
   const OfflineWelcomeDialog({
@@ -14,13 +16,16 @@ class OfflineWelcomeDialog extends StatelessWidget {
   final OfflineShiftReport report;
   final VoidCallback onDismiss;
 
-  String _formatDuration(int seconds) {
+  String _formatDuration(BuildContext context, int seconds) {
     final hours = seconds ~/ 3600;
     final minutes = (seconds % 3600) ~/ 60;
     if (hours > 0) {
-      return '$hours saat $minutes dakika';
+      return context.gameText(
+        '{hours} saat {minutes} dakika',
+        values: {'hours': hours, 'minutes': minutes},
+      );
     }
-    return '$minutes dakika';
+    return context.gameText('{minutes} dakika', values: {'minutes': minutes});
   }
 
   @override
@@ -53,8 +58,8 @@ class OfflineWelcomeDialog extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 14),
-              const Text(
-                'HOŞ GELDİN ŞEF!',
+              Text(
+                context.gameText('HOŞ GELDİN ŞEF!'),
                 style: TextStyle(
                   color: MinePalette.cream,
                   fontSize: 20,
@@ -64,7 +69,9 @@ class OfflineWelcomeDialog extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Text(
-                'Sen yokken madencilerin durmaksızın çalıştı.\nİşte vardiya özeti:',
+                context.gameText(
+                  'Sen yokken madencilerin durmaksızın çalıştı.\nİşte vardiya özeti:',
+                ),
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: MinePalette.cream.withValues(alpha: 0.8),
@@ -76,7 +83,10 @@ class OfflineWelcomeDialog extends StatelessWidget {
 
               // Shift Statistics Card
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFF0D1B22),
                   borderRadius: BorderRadius.circular(12),
@@ -87,21 +97,21 @@ class OfflineWelcomeDialog extends StatelessWidget {
                     _StatRow(
                       icon: Icons.hourglass_top_rounded,
                       iconColor: MinePalette.cyan,
-                      label: 'Geçen Süre',
-                      value: _formatDuration(report.durationSeconds),
+                      label: context.gameText('Geçen Süre'),
+                      value: _formatDuration(context, report.durationSeconds),
                     ),
                     const Divider(color: MinePalette.border, height: 16),
                     _StatRow(
                       icon: Icons.terrain_rounded,
                       iconColor: MinePalette.amber,
-                      label: 'Çıkarılan Cevher',
+                      label: context.gameText('Çıkarılan Cevher'),
                       value: '+${report.oreGained}',
                     ),
                     const Divider(color: MinePalette.border, height: 16),
                     _StatRow(
                       icon: Icons.south_rounded,
                       iconColor: const Color(0xFF64FFDA),
-                      label: 'Sondaj İlerlemesi',
+                      label: context.gameText('Sondaj İlerlemesi'),
                       value: '+${report.depthGained.toStringAsFixed(0)} m',
                     ),
                   ],
@@ -121,13 +131,13 @@ class OfflineWelcomeDialog extends StatelessWidget {
                       borderRadius: BorderRadius.circular(10),
                     ),
                   ),
-                  onPressed: () {
+                  onPressed: withButtonTapSound(() {
                     HapticService.instance.mediumImpact();
                     onDismiss();
-                  },
+                  }),
                   icon: const Icon(Icons.check_circle_rounded),
-                  label: const Text(
-                    'VARDİYAYI KASAYA AKTAR',
+                  label: Text(
+                    context.gameText('VARDİYAYI KASAYA AKTAR'),
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w900,

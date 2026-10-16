@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../core/design/palette.dart';
+import '../../crusher/localization.dart';
 import 'atlas_sprite.dart';
 import 'character_animation.dart';
 
@@ -76,7 +77,7 @@ class MineLoadingScreen extends StatelessWidget {
                         _LoadingMineScene(size: figureSize),
                         SizedBox(height: compact ? 18 : 24),
                         Text(
-                          'MADEN HAZIRLANIYOR',
+                          context.gameText('MADEN HAZIRLANIYOR'),
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: MinePalette.cream,
@@ -86,8 +87,10 @@ class MineLoadingScreen extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 7),
-                        const Text(
-                          'Asansör ve sondaj ekibi vardiyaya hazırlanıyor.',
+                        Text(
+                          context.gameText(
+                            'Asansör ve sondaj ekibi vardiyaya hazırlanıyor.',
+                          ),
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: MinePalette.muted,
@@ -108,7 +111,7 @@ class MineLoadingScreen extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 10),
-                        const Row(
+                        Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
@@ -118,7 +121,9 @@ class MineLoadingScreen extends StatelessWidget {
                             ),
                             SizedBox(width: 5),
                             Text(
-                              'YERALTI SİSTEMLERİ KONTROL EDİLİYOR',
+                              context.gameText(
+                                'YERALTI SİSTEMLERİ KONTROL EDİLİYOR',
+                              ),
                               style: TextStyle(
                                 color: MinePalette.muted,
                                 fontSize: 8,
@@ -172,7 +177,7 @@ class _LoadingHeader extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'TAŞIN ALTI',
+              context.gameText('TAŞIN ALTI'),
               style: TextStyle(
                 color: MinePalette.cream,
                 fontSize: compact ? 17 : 20,
@@ -181,8 +186,8 @@ class _LoadingHeader extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 2),
-            const Text(
-              'YERALTI MADENİ',
+            Text(
+              context.gameText('YERALTI MADENİ'),
               style: TextStyle(
                 color: MinePalette.muted,
                 fontSize: 8,
@@ -200,13 +205,13 @@ class _LoadingHeader extends StatelessWidget {
           border: Border.all(color: MinePalette.border),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: const Row(
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(Icons.circle, color: MinePalette.cyan, size: 7),
             SizedBox(width: 5),
             Text(
-              'VARDİYA',
+              context.gameText('VARDİYA'),
               style: TextStyle(
                 color: MinePalette.cream,
                 fontSize: 8,

@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 
 import '../../app/game_controller.dart';
 import '../../core/design/palette.dart';
+import '../../crusher/localization.dart';
+import '../../services/sound_service.dart';
 
 class SettingsDialog extends StatelessWidget {
   const SettingsDialog({
@@ -49,9 +51,9 @@ class SettingsDialog extends StatelessWidget {
                         color: MinePalette.cyan,
                       ),
                       const SizedBox(width: 10),
-                      const Expanded(
+                      Expanded(
                         child: Text(
-                          'AYARLAR',
+                          context.gameText('AYARLAR'),
                           style: TextStyle(
                             color: MinePalette.cream,
                             fontSize: 18,
@@ -61,8 +63,10 @@ class SettingsDialog extends StatelessWidget {
                         ),
                       ),
                       IconButton(
-                        tooltip: 'Kapat',
-                        onPressed: () => Navigator.pop(context),
+                        tooltip: context.gameText('Kapat'),
+                        onPressed: withButtonTapSound(
+                          () => Navigator.pop(context),
+                        ),
                         icon: const Icon(Icons.close_rounded),
                       ),
                     ],
@@ -73,82 +77,132 @@ class SettingsDialog extends StatelessWidget {
                     shrinkWrap: true,
                     padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
                     children: [
-                      const _SettingsSectionTitle('OYUN'),
+                      _SettingsSectionTitle(context.gameText('OYUN')),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.language_rounded),
+                        title: Text(context.gameText('Oyun dili')),
+                        subtitle: Text(
+                          context.gameText('Tercih ettiğin dili seç.'),
+                        ),
+                        trailing: DropdownButton<String>(
+                          value: state.languageCode,
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'tr',
+                              child: Text('Türkçe'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'en',
+                              child: Text('English'),
+                            ),
+                          ],
+                          onChanged: withButtonTapSoundValue<String?>((
+                            languageCode,
+                          ) {
+                            if (languageCode != null) {
+                              controller.setLanguageCode(languageCode);
+                            }
+                          }),
+                        ),
+                      ),
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
                         secondary: const Icon(Icons.music_note_rounded),
-                        title: const Text('Arka plan müziği'),
+                        title: Text(context.gameText('Arka plan müziği')),
                         value: state.musicEnabled,
-                        onChanged: controller.setMusicEnabled,
+                        onChanged: withButtonTapSoundValue(
+                          controller.setMusicEnabled,
+                        ),
                       ),
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
                         secondary: const Icon(Icons.volume_up_rounded),
-                        title: const Text('Ses efektleri'),
+                        title: Text(context.gameText('Ses efektleri')),
                         value: state.soundEffectsEnabled,
-                        onChanged: controller.setSoundEffectsEnabled,
+                        onChanged: withButtonTapSoundValue(
+                          controller.setSoundEffectsEnabled,
+                        ),
                       ),
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
                         secondary: const Icon(Icons.vibration_rounded),
-                        title: const Text('Titreşim (Haptik)'),
-                        subtitle: const Text('Kazma ve vuruş geribildirimleri'),
+                        title: Text(context.gameText('Titreşim (Haptik)')),
+                        subtitle: Text(
+                          context.gameText('Kazma ve vuruş geribildirimleri'),
+                        ),
                         value: state.hapticsEnabled,
-                        onChanged: controller.setHapticsEnabled,
+                        onChanged: withButtonTapSoundValue(
+                          controller.setHapticsEnabled,
+                        ),
                       ),
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
                         secondary: const Icon(Icons.auto_awesome_rounded),
-                        title: const Text('Görsel efektler'),
-                        subtitle: const Text(
-                          'Maden ve oyun içi hareket efektleri',
+                        title: Text(context.gameText('Görsel efektler')),
+                        subtitle: Text(
+                          context.gameText(
+                            'Maden ve oyun içi hareket efektleri',
+                          ),
                         ),
                         value: state.visualEffectsEnabled,
-                        onChanged: controller.setVisualEffectsEnabled,
+                        onChanged: withButtonTapSoundValue(
+                          controller.setVisualEffectsEnabled,
+                        ),
                       ),
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
                         secondary: const Icon(
                           Icons.notifications_active_rounded,
                         ),
-                        title: const Text('Maden Telsizi & Bildirimler'),
-                        subtitle: const Text(
-                          'Ambar dolumu, günlük vardiya ve sismik alarmlar',
+                        title: Text(
+                          context.gameText('Maden Telsizi & Bildirimler'),
+                        ),
+                        subtitle: Text(
+                          context.gameText(
+                            'Ambar dolumu, günlük vardiya ve sismik alarmlar',
+                          ),
                         ),
                         value: state.notificationsEnabled,
-                        onChanged: (val) => controller.setNotificationsEnabled(val),
+                        onChanged: withButtonTapSoundValue(
+                          (val) => controller.setNotificationsEnabled(val),
+                        ),
                       ),
                       if (onReplayOpeningComic != null) ...[
                         const SizedBox(height: 6),
                         OutlinedButton.icon(
-                          onPressed: () {
+                          onPressed: withButtonTapSound(() {
                             Navigator.of(context).pop();
                             onReplayOpeningComic!.call();
-                          },
+                          }),
                           icon: const Icon(Icons.auto_stories_rounded),
-                          label: const Text(
-                            'AÇILIŞ ÇİZGİ ROMANINI TEKRAR İZLE',
+                          label: Text(
+                            context.gameText(
+                              'AÇILIŞ ÇİZGİ ROMANINI TEKRAR İZLE',
+                            ),
                           ),
                         ),
                       ],
                       const Divider(height: 20, color: MinePalette.border),
-                      const _SettingsSectionTitle('KAYIT YÖNETİMİ'),
+                      _SettingsSectionTitle(context.gameText('KAYIT YÖNETİMİ')),
                       Row(
                         children: [
                           Expanded(
                             child: OutlinedButton.icon(
-                              onPressed: () async {
+                              onPressed: withButtonTapSound(() async {
                                 await controller.saveNow();
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Oyun kaydedildi.'),
+                                    SnackBar(
+                                      content: Text(
+                                        context.gameText('Oyun kaydedildi.'),
+                                      ),
                                     ),
                                   );
                                 }
-                              },
+                              }),
                               icon: const Icon(Icons.save_rounded, size: 18),
-                              label: const Text('ŞİMDİ KAYDET'),
+                              label: Text(context.gameText('ŞİMDİ KAYDET')),
                             ),
                           ),
                         ],
@@ -158,87 +212,60 @@ class SettingsDialog extends StatelessWidget {
                         children: [
                           Expanded(
                             child: OutlinedButton.icon(
-                              onPressed: () {
+                              onPressed: withButtonTapSound(() {
                                 final exportCode = controller.exportSaveData();
                                 Clipboard.setData(
                                   ClipboardData(text: exportCode),
                                 );
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
+                                  SnackBar(
                                     content: Text(
-                                      'Kayıt kodu panoya kopyalandı! Güvenle saklayabilirsiniz.',
+                                      context.gameText(
+                                        'Kayıt kodu panoya kopyalandı! Güvenle saklayabilirsiniz.',
+                                      ),
                                     ),
                                   ),
                                 );
-                              },
+                              }),
                               icon: const Icon(Icons.copy_rounded, size: 18),
-                              label: const Text('KAYDI KOPYALA'),
+                              label: Text(context.gameText('KAYDI KOPYALA')),
                             ),
                           ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: OutlinedButton.icon(
-                              onPressed: () => _showImportSaveDialog(context),
+                              onPressed: withButtonTapSound(
+                                () => _showImportSaveDialog(context),
+                              ),
                               icon: const Icon(
                                 Icons.file_upload_rounded,
                                 size: 18,
                               ),
-                              label: const Text('KAYIT YÜKLE'),
+                              label: Text(context.gameText('KAYIT YÜKLE')),
                             ),
                           ),
                         ],
                       ),
-                      const Divider(height: 20, color: MinePalette.border),
-                      const _SettingsSectionTitle('GELİŞTİRİCİ'),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        secondary: const Icon(Icons.bug_report_rounded),
-                        title: const Text('Debug modu'),
-                        subtitle: const Text('Geliştirici araçlarını aç'),
-                        value: state.debugModeEnabled,
-                        onChanged: controller.setDebugModeEnabled,
-                      ),
-                      if (state.debugModeEnabled) ...[
-                        SwitchListTile(
-                          contentPadding: EdgeInsets.zero,
-                          secondary: const Icon(Icons.all_inclusive_rounded),
-                          title: const Text('Sınırsız para'),
-                          subtitle: const Text(
-                            'Satın alımlar para düşürmeden çalışır',
-                          ),
-                          value: state.debugUnlimitedMoney,
-                          onChanged: controller.setDebugUnlimitedMoney,
+                      const SizedBox(height: 6),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: MinePalette.danger,
                         ),
-                        const SizedBox(height: 6),
-                        OutlinedButton.icon(
-                          onPressed: () => _confirmAction(
+                        onPressed: withButtonTapSound(
+                          () => _confirmAction(
                             context,
-                            title: 'Oyunun sonuna git?',
-                            message: 'Derinlik Titan madeninin son açık katına alınacak ve tüm dünya bölgeleri açılacak.',
-                            label: 'SON DERİNLİĞE GİT',
-                            icon: Icons.south_rounded,
-                            action: controller.debugJumpToEnd,
-                          ),
-                          icon: const Icon(Icons.south_rounded),
-                          label: const Text('OYUN SONUNA GİT'),
-                        ),
-                        const SizedBox(height: 6),
-                        OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: MinePalette.danger,
-                          ),
-                          onPressed: () => _confirmAction(
-                            context,
-                            title: 'Oyunu sıfırla?',
-                            message: 'Mevcut vardiya ve ilerleme silinecek. Yeni oyun sıfırdan başlayacak.',
-                            label: 'OYUNU SIFIRLA',
+                            title: context.gameText('Oyunu sıfırla?'),
+                            message: context.gameText(
+                              'Mevcut vardiya ve ilerleme silinecek. Yeni oyun sıfırdan başlayacak.',
+                            ),
+                            label: context.gameText('OYUNU SIFIRLA'),
                             icon: Icons.restart_alt_rounded,
                             action: controller.startNewGame,
                           ),
-                          icon: const Icon(Icons.restart_alt_rounded),
-                          label: const Text('OYUNU SIFIRLA'),
                         ),
-                      ],
+                        icon: const Icon(Icons.restart_alt_rounded),
+                        label: Text(context.gameText('OYUNU SIFIRLA')),
+                      ),
                     ],
                   ),
                 ),
@@ -262,17 +289,21 @@ class SettingsDialog extends StatelessWidget {
       context: context,
       builder: (dialogContext) => AlertDialog(
         backgroundColor: MinePalette.panel,
-        title: Text(title),
-        content: Text(message),
+        title: Text(context.gameText(title)),
+        content: Text(context.gameText(message)),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('VAZGEÇ'),
+            onPressed: withButtonTapSound(
+              () => Navigator.pop(dialogContext, false),
+            ),
+            child: Text(context.gameText('VAZGEÇ')),
           ),
           FilledButton.icon(
-            onPressed: () => Navigator.pop(dialogContext, true),
+            onPressed: withButtonTapSound(
+              () => Navigator.pop(dialogContext, true),
+            ),
             icon: Icon(icon),
-            label: Text(label),
+            label: Text(context.gameText(label)),
           ),
         ],
       ),
@@ -289,13 +320,15 @@ class SettingsDialog extends StatelessWidget {
         context: context,
         builder: (dialogContext) => AlertDialog(
           backgroundColor: MinePalette.panel,
-          title: const Text('Kayıt Kodu Yükle'),
+          title: Text(context.gameText('Kayıt Kodu Yükle')),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Daha önce kopyaladığınız kayıt kodunu veya JSON verisini buraya yapıştırın:',
+              Text(
+                context.gameText(
+                  'Daha önce kopyaladığınız kayıt kodunu veya JSON verisini buraya yapıştırın:',
+                ),
                 style: TextStyle(fontSize: 13),
               ),
               const SizedBox(height: 12),
@@ -303,8 +336,8 @@ class SettingsDialog extends StatelessWidget {
                 controller: textController,
                 maxLines: 4,
                 style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-                decoration: const InputDecoration(
-                  hintText: 'Kayıt kodunu yapıştırın...',
+                decoration: InputDecoration(
+                  hintText: context.gameText('Kayıt kodunu yapıştırın...'),
                   border: OutlineInputBorder(),
                 ),
               ),
@@ -312,18 +345,20 @@ class SettingsDialog extends StatelessWidget {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('VAZGEÇ'),
+              onPressed: withButtonTapSound(
+                () => Navigator.pop(dialogContext, false),
+              ),
+              child: Text(context.gameText('VAZGEÇ')),
             ),
             FilledButton.icon(
-              onPressed: () {
+              onPressed: withButtonTapSound(() {
                 final text = textController.text.trim();
                 if (text.isEmpty) return;
                 final success = controller.importSaveData(text);
                 Navigator.pop(dialogContext, success);
-              },
+              }),
               icon: const Icon(Icons.file_upload_rounded),
-              label: const Text('YÜKLE'),
+              label: Text(context.gameText('YÜKLE')),
             ),
           ],
         ),
@@ -332,8 +367,10 @@ class SettingsDialog extends StatelessWidget {
       if (imported == true && context.mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Kayıt başarıyla yüklendi ve güncellendi!'),
+          SnackBar(
+            content: Text(
+              context.gameText('Kayıt başarıyla yüklendi ve güncellendi!'),
+            ),
           ),
         );
       }

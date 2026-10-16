@@ -19,6 +19,7 @@ import '../domain/models/reactor_definition.dart';
 import '../domain/models/drill_assembly_definition.dart';
 import '../domain/models/buff_lab_definition.dart';
 import '../domain/simulation/game_engine.dart';
+import '../crusher/localization.dart';
 import '../services/sound_service.dart';
 import '../services/haptic_service.dart';
 import '../services/notification_service.dart';
@@ -190,7 +191,11 @@ class GameController extends ChangeNotifier {
   List<String> takeNotices() {
     final result = List<String>.of(_notices);
     _notices.clear();
-    return state.notificationsEnabled ? result : const [];
+    return state.notificationsEnabled
+        ? result
+              .map((notice) => gameTextForLanguage(state.languageCode, notice))
+              .toList(growable: false)
+        : const [];
   }
 
   Future<void> initialize() async {
@@ -957,6 +962,17 @@ class GameController extends ChangeNotifier {
     _refreshState();
   }
 
+  bool get allAudioEnabled => state.musicEnabled || state.soundEffectsEnabled;
+
+  void toggleAllAudio() => setAllAudioEnabled(!allAudioEnabled);
+
+  void setAllAudioEnabled(bool enabled) {
+    state.musicEnabled = enabled;
+    state.soundEffectsEnabled = enabled;
+    unawaited(SoundService.instance.setAllAudioEnabled(enabled));
+    _refreshState();
+  }
+
   void setSoundEffectsEnabled(bool enabled) {
     state.soundEffectsEnabled = enabled;
     unawaited(SoundService.instance.setSoundEffectsEnabled(enabled));
@@ -1039,6 +1055,7 @@ class GameController extends ChangeNotifier {
     if (state.cargoFull) {
       await NotificationService.instance.scheduleCargoFullNotification(
         const Duration(minutes: 15),
+        language: state.languageCode,
       );
     } else {
       final ratio = state.cargoRatio;
@@ -1047,27 +1064,27 @@ class GameController extends ChangeNotifier {
           : (ratio >= 0.4
                 ? const Duration(hours: 1)
                 : const Duration(hours: 2));
-      await NotificationService.instance.scheduleCargoFullNotification(delay);
+      await NotificationService.instance.scheduleCargoFullNotification(
+        delay,
+        language: state.languageCode,
+      );
     }
 
-    await NotificationService.instance.scheduleDailyDutyNotification();
-    await NotificationService.instance.scheduleInactivityNotification();
+    await NotificationService.instance.scheduleDailyDutyNotification(
+      language: state.languageCode,
+    );
+    await NotificationService.instance.scheduleInactivityNotification(
+      language: state.languageCode,
+    );
   }
 
-  void setDebugModeEnabled(bool enabled) {
-    state.debugModeEnabled = enabled;
-    if (!enabled) state.debugUnlimitedMoney = false;
-    _refreshState();
-  }
-
-  void setDebugUnlimitedMoney(bool enabled) {
-    state.debugUnlimitedMoney = enabled && state.debugModeEnabled;
-    _refreshState();
-  }
-
-  void debugJumpToEnd() {
-    GameEngine.debugJumpToEnd(state);
-    _notices.add('Oyunun son derinliğine geçildi.');
+  void setLanguageCode(String languageCode) {
+    final normalized = languageCode == 'en' ? 'en' : 'tr';
+    if (state.languageCode == normalized) return;
+    state.languageCode = normalized;
+    if (state.notificationsEnabled) {
+      unawaited(schedulePendingNotifications());
+    }
     _refreshState();
   }
 
@@ -1687,8 +1704,10 @@ class GameController extends ChangeNotifier {
   void startNewGame() {
     final wasMusicEnabled = state.musicEnabled;
     final wereSoundEffectsEnabled = state.soundEffectsEnabled;
+    final languageCode = state.languageCode;
     _notices.clear();
-    state = GameState.newGame(lastSavedAt: DateTime.now());
+    state = GameState.newGame(lastSavedAt: DateTime.now())
+      ..languageCode = languageCode;
     if (!wasMusicEnabled) {
       unawaited(SoundService.instance.setMusicEnabled(state.musicEnabled));
     }

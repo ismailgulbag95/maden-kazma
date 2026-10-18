@@ -70,7 +70,11 @@ class _TasinAltiAppState extends State<TasinAltiApp>
     ],
     debugShowCheckedModeBanner: false,
     theme: MinePalette.theme,
-    home: GameScreen(controller: widget.controller),
+    home: GameScreen(
+      controller: widget.controller,
+      showLoadingScreen: true,
+      postLoadDelay: const Duration(seconds: 6),
+    ),
   );
 
   @override

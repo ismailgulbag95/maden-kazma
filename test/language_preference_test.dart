@@ -22,6 +22,144 @@ void main() {
     expect(restored.languageCode, 'en');
   });
 
+  test('English HUD labels and screenshot task copy are translated', () {
+    const labels = {
+      'KARGO': 'CARGO',
+      'AMBAR': 'WAREHOUSE',
+      'TİCARET': 'TRADING',
+      'ATÖLYE': 'WORKSHOP',
+      'ARAŞTIRMA': 'RESEARCH',
+      'SEFER': 'EXPEDITION',
+      'ROZET': 'BADGES',
+      'GÖREV': 'GOALS',
+      'KAPAT': 'CLOSE',
+    };
+    for (final entry in labels.entries) {
+      expect(
+        gameTextForLanguage('en', entry.key),
+        entry.value,
+        reason: 'Expected ${entry.key} to have an English translation.',
+      );
+    }
+
+    expect(
+      gameTextForLanguage('en', 'Dünya • Yüzey Karakolu'),
+      'Earth • Surface Outpost',
+    );
+    expect(
+      gameTextForLanguage('en', '{world} • Yüzey Karakolu', {
+        'world': gameTextForLanguage('en', 'Dünya'),
+      }),
+      'Earth • Surface Outpost',
+    );
+    expect(
+      gameTextForLanguage(
+        'en',
+        'Satış hedefi: 40 kasa • toplam satış: {sold}.',
+        {'sold': r'$1,234.50'},
+      ),
+      r'Sales target: 40 coins • total sales: $1,234.50.',
+    );
+  });
+
+  test('English workshop assembly templates preserve and translate values', () {
+    expect(
+      gameTextForLanguage('en', 'Montaj: Sondaj ucu • Lv 1/43'),
+      'Assembly: Drill Bit • Lv 1/43',
+    );
+    expect(gameTextForLanguage('en', 'Sondaj ucu • Lv 2'), 'Drill Bit • Lv 2');
+    expect(gameTextForLanguage('en', 'Soğutma fanı'), 'Cooling Fan');
+    expect(gameTextForLanguage('en', 'Sondaj motoru'), 'Drill Engine');
+    expect(
+      gameTextForLanguage(
+        'en',
+        'Güç {current} W ×{currentMultiplier} → {next} W ×{nextMultiplier}',
+        {'current': 5, 'currentMultiplier': 1, 'next': 5, 'nextMultiplier': 1},
+      ),
+      'Power 5 W ×1 → 5 W ×1',
+    );
+    expect(
+      gameTextForLanguage('en', 'Sonraki seviye Lv {level}', {'level': 2}),
+      'Next level: Lv 2',
+    );
+
+    final blueprint = gameTextForLanguage(
+      'en',
+      'Şema {name} • {level} • {status}',
+      {
+        'name': gameTextForLanguage('en', 'Sondaj ucu'),
+        'level': 'Lv 2',
+        'status': gameTextForLanguage('en', 'arşivde'),
+      },
+    );
+    expect(blueprint, 'Blueprint: Drill Bit • Lv 2 • archived');
+    expect(
+      gameTextForLanguage('en', 'Derinlik {current}/{required} km • {status}', {
+        'current': 1,
+        'required': 2,
+        'status': gameTextForLanguage('en', 'eksik'),
+      }),
+      'Depth 1/2 km • missing',
+    );
+    expect(
+      gameTextForLanguage('en', 'Bina {name} • {status}', {
+        'name': 'Robot Mk II',
+        'status': gameTextForLanguage('en', 'gerekli'),
+      }),
+      'Building Robot Mk II • required',
+    );
+    expect(
+      gameTextForLanguage('en', 'Kasa {cost} • {status}', {
+        'cost': '1,234.50',
+        'status': gameTextForLanguage('en', 'hazır'),
+      }),
+      'Cost: 1,234.50 coins • ready',
+    );
+    expect(
+      gameTextForLanguage('en', 'Maden: {recipe}', {'recipe': 'Copper 2/2'}),
+      'Ore: Copper 2/2',
+    );
+    expect(
+      gameTextForLanguage('en', 'Son şema tamamlandı • {power} W.', {
+        'power': 5,
+      }),
+      'Final blueprint complete • 5 W.',
+    );
+    expect(
+      gameTextForLanguage('en', '{power} W • derinliğe göre hesaplanır', {
+        'power': 5,
+      }),
+      '5 W • calculated based on depth',
+    );
+
+    const statuses = {
+      'eksik': 'missing',
+      'arşivde': 'archived',
+      'tamam': 'complete',
+      'hazır': 'ready',
+      'gerekli': 'required',
+      'açık': 'unlocked',
+    };
+    for (final entry in statuses.entries) {
+      expect(gameTextForLanguage('en', entry.key), entry.value);
+    }
+    expect(
+      gameTextForLanguage('en', 'Şema gerekmiyor'),
+      'No blueprint required',
+    );
+    expect(
+      gameTextForLanguage('en', 'Derinlik şartı yok'),
+      'No depth requirement',
+    );
+    expect(gameTextForLanguage('en', 'Kasa gerekmez'), 'No coin cost');
+    expect(gameTextForLanguage('en', 'Maden gerekmez'), 'No ore required');
+    expect(
+      gameTextForLanguage('en', 'En az 1 madenci gerekli'),
+      'Requires at least 1 miner',
+    );
+    expect(gameTextForLanguage('en', 'Madenci hazır'), 'Miner ready');
+  });
+
   test('legacy debug save fields cannot restore debug privileges', () {
     final state = GameState.fromJson({
       'schema': 28,

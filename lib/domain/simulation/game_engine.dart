@@ -2336,7 +2336,8 @@ abstract final class GameEngine {
           (1 + state.upgradeLevel('scanner') * .02) *
           (state.activeBuffIds.contains('buff_resonance')
               ? BuffLabCatalog.oreYieldMultiplier
-              : 1.0);
+              : 1.0) *
+          (state.isAdBoostActive ? 2.0 : 1.0);
       final isotopeStatMultiplier = 1 + state.upgradeLevel('scanner') * .03;
       final mineralBonusByBand = <int, double>{};
       final isotopeBonusByBand = <int, double>{};

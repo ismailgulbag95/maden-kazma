@@ -369,8 +369,51 @@ const Map<String, String> _englishSourceText = {
   'MADEN HAZIRLANIYOR': 'PREPARING THE MINE',
   'Asansör ve sondaj ekibi vardiyaya hazırlanıyor.':
       'The elevator and drilling crew are getting ready for the shift.',
+  'Yeraltı katmanları ve sismik sensörler taranıyor.':
+      'Scanning underground layers and seismic sensors.',
+  'Kuyu hattı, raylar ve cevher siloları kontrol ediliyor.':
+      'Checking shaft line, tracks, and ore silos.',
+  'Tüm sistemler devrede! Yeraltına iniş başlıyor.':
+      'All systems active! Descent to the underground begins.',
+  'Matkap motorları ısıtılıyor ve ekip sahaya iniyor.':
+      'Warming up drill engines and deploying the crew.',
+  'YÜKLENİYOR...': 'LOADING...',
+  'GİRİŞ YAPILIYOR...': 'ENTERING...',
   'YERALTI SİSTEMLERİ KONTROL EDİLİYOR': 'CHECKING UNDERGROUND SYSTEMS',
   'KIRICI': 'CRUSHER',
+  'KARGO': 'CARGO',
+  'AMBAR': 'WAREHOUSE',
+  'SEFER': 'EXPEDITION',
+  'ROZET': 'BADGES',
+  'GÖREV': 'GOALS',
+  'KAPAT': 'CLOSE',
+  '{world} • Yüzey Karakolu': '{world} • Surface Outpost',
+  'Satış hedefi: 40 kasa • toplam satış: {sold}.':
+      'Sales target: 40 coins • total sales: {sold}.',
+  'Montaj: {component} • Lv {level}/{max}':
+      'Assembly: {component} • Lv {level}/{max}',
+  'Güç {current} W ×{currentMultiplier} → {next} W ×{nextMultiplier}':
+      'Power {current} W ×{currentMultiplier} → {next} W ×{nextMultiplier}',
+  'Sonraki seviye Lv {level}': 'Next level: Lv {level}',
+  '{part} • Lv {level}': '{part} • Lv {level}',
+  'Şema {name} • {level} • {status}': 'Blueprint: {name} • {level} • {status}',
+  'Derinlik {current}/{required} km • {status}':
+      'Depth {current}/{required} km • {status}',
+  'Bina {name} • {status}': 'Building {name} • {status}',
+  'Kasa {cost} • {status}': 'Cost: {cost} coins • {status}',
+  'Maden: {recipe}': 'Ore: {recipe}',
+  'Son şema tamamlandı • {power} W.': 'Final blueprint complete • {power} W.',
+  '{power} W • derinliğe göre hesaplanır':
+      '{power} W • calculated based on depth',
+  'Kasa gerekmez': 'No coin cost',
+  'Maden gerekmez': 'No ore required',
+  'En az 1 madenci gerekli': 'Requires at least 1 miner',
+  'eksik': 'missing',
+  'arşivde': 'archived',
+  'tamam': 'complete',
+  'hazır': 'ready',
+  'gerekli': 'required',
+  'açık': 'unlocked',
   'Kırıcı Giriş Haznesi:': 'Crusher Feed Hopper:',
   '{count} Ham Parça': '{count} Raw Pieces',
   'Oto Kırma: {rate}/sn': 'Auto Crushing: {rate}/sec',
@@ -1670,7 +1713,7 @@ const Map<String, String> _englishSourceText = {
   'Toplam montaj gücü': 'Total assembly power',
   'Şema gerekmiyor': 'No blueprint required',
   'Derinlik şartı yok': 'No depth requirement',
-  'Madenci hazır': 'Miner available',
+  'Madenci hazır': 'Miner ready',
   'ŞEMA EKSİK': 'MISSING BLUEPRINT',
   'İŞÇİ GEREKLİ': 'WORKER REQUIRED',
   'KASA EKSİK': 'NOT ENOUGH COINS',
@@ -1856,6 +1899,72 @@ const Map<String, String> _englishSourceText = {
   '{progress}/{target} günlük hedefi ödüllendir. Ödül: {coins} kasa ve {shards} çekirdek parçası.': 'Complete {progress}/{target} daily challenges to earn {coins} coins and {shards} core shard pieces.',
   '{oil} petrol • {materials} yapı malzemesi':
       'Oil: {oil} barrels • Building materials: {materials}',
+  'Danışman robotun görevini tamamlayınca bu sistem açılacak.':
+      'This system unlocks after completing the advisor drone\'s mission.',
+  'Önce danışman robotun {target} tanıtımını tamamla.':
+      'Complete the advisor drone\'s {target} introduction first.',
+  'Bu sistem henüz açılmadı.': 'This system is not unlocked yet.',
+  '{amount} {resource}': '{amount} {resource}',
+  '{resource} cevher taşı': '{resource} ore rock',
+  'Kırmak için dokun.': 'Tap to crush.',
+  'BAŞARIMLAR • {count}': 'ACHIEVEMENTS • {count}',
+  '{count} SANDIĞI AÇ': 'OPEN {count} CHESTS',
+  '+{reward} kasa': '+{reward} coins',
+  '{speed} m/sn': '{speed} m/s',
+  '{minutes} dk {seconds} sn': '{minutes}m {seconds}s',
+  'Sıradaki kata kalan süre: {minutes} dakika {seconds} saniye':
+      'Time until next floor: {minutes} minutes {seconds} seconds',
+  '{minutes} dk': '{minutes}m',
+  '{seconds} sn': '{seconds}s',
+  '{world} • {depth}': '{world} • {depth}',
+  'DAMAR AKORDU  {progress}/{length}  •  {sequence}':
+      'VEIN TUNING  {progress}/{length}  •  {sequence}',
+  'Sıradaki: {target}': 'Next: {target}',
+  'REZONANS • {duration}': 'RESONANCE • {duration}',
+  'Matkap {level}. kademe: {cost} kasa{materials}':
+      'Drill Tier {level}: {cost} coins{materials}',
+  'Sonraki madenci: {cost} kasa': 'Next miner: {cost} coins',
+  '{drill} • {hire}': '{drill} • {hire}',
+  '{drill}   {hire}': '{drill}   {hire}',
+  'Sonraki şema: {cost} kasa': 'Next blueprint: {cost} coins',
+  'Cevher: {materials}': 'Ore: {materials}',
+  'Eksik kasa: {missing}': 'Missing coins: {missing}',
+  'Cevher eksiği: {materials}': 'Missing ore: {materials}',
+  'Bazalt Yüreği': 'Heart of Basalt',
+  'Kor Boynuz': 'Ember Horn',
+  'Bakır Oyukçu': 'Copper Burrower',
+  'Yitik Maden Bekçisi': 'Lost Mine Warden',
+  'Kurşun Kabuklu': 'Lead Shell',
+  'Gece Yarası': 'Midnight Crawler',
+  'Ay Nöbetçisi': 'Moon Sentinel',
+  'Regolit Yılanı': 'Regolith Serpent',
+  'Gümüş Hâkim': 'Silver Arbiter',
+  'Buz Leviathanı': 'Ice Leviathan',
+  'Metan Dikenlisi': 'Methane Spiner',
+  'Halkalı Arşivci': 'Ringed Archivist',
+  '✓ {name}': '✓ {name}',
+  '○ {name}': '○ {name}',
+  '{depth} m • {health} dayanıklılık': '{depth} m • {health} durability',
+  '{current} / {max} dayanıklılık': '{current} / {max} durability',
+  'Zafer ödülü: {reward} kasa + {parts} sondaj parçası + {chest}':
+      'Victory reward: {reward} coins + {parts} drill parts + {chest}',
+  'Sıradaki muhafız: {name} • {depth} m. Şu an: {current} m.':
+      'Next guardian: {name} • {depth} m. Current: {current} m.',
+  '{boss} kuyuda belirdi. Muhafızları yenerek parça ve sandık kazan.':
+      '{boss} appeared in the shaft. Defeat guardians to earn parts and chests.',
+  'Kritik vuruş için {seconds} saniyen var.':
+      'You have {seconds} seconds for a critical hit.',
+  'HEDEFLE': 'TARGET',
+  'SON KATMAN': 'FINAL LAYER',
+  'KUYU OLAYI': 'SHAFT EVENT',
+  'SEFER GARAJI': 'EXPEDITION GARAGE',
+  'SANDIK TOPLAYICI': 'CHEST COLLECTOR',
+  'SONDAJ ROBOTU': 'DRILL DRONE',
+  'BUFF LABORATUVARI': 'BUFF LAB',
+  'ROBOT MK II': 'ROBOT MK II',
+  'ROBOT MK III': 'ROBOT MK III',
+  'İlk Vardiya • {title}': 'First Shift • {title}',
+  '{chapter} • {title}': '{chapter} • {title}',
 };
 
 class _EnglishTemplate {

@@ -105,6 +105,7 @@ class GameState {
     this.excavationReadyAt,
     this.excavationCompletedPending = false,
     this.resonanceBuffUntil,
+    this.adBoostUntil,
     this.merchantReadyAt,
     this.chestCompressionReadyAt,
     this.activeWorldIndex = 0,
@@ -358,6 +359,7 @@ class GameState {
   DateTime? excavationReadyAt;
   bool excavationCompletedPending;
   DateTime? resonanceBuffUntil;
+  DateTime? adBoostUntil;
   DateTime? merchantReadyAt;
   DateTime? chestCompressionReadyAt;
   int activeWorldIndex;
@@ -475,11 +477,12 @@ class GameState {
 
   bool get initialTutorialComplete =>
       !guidedProgression ||
-      (tutorialStep >= 5 &&
-          const [0, 1, 2, 3, 4].every(claimedQuestIds.contains));
+      (tutorialStep >= 6 &&
+          const [0, 1, 2, 3, 4, 5].every(claimedQuestIds.contains));
 
   bool canOpenBuilding(String id) {
     if (!guidedProgression) return true;
+    if (id == 'crusher') return crusherRepaired;
     if (id == 'quests') {
       return !initialTutorialComplete ||
           completedAdvisorGuideIds.contains('ongoing_quests');
@@ -505,10 +508,8 @@ class GameState {
       'research' => 'scientists',
       'expedition' => 'caves',
       'boss' => 'armory',
-      'crusher' => 'crusher',
       _ => id,
     };
-    if (buildingId == 'crusher') return true;
     return unlockedBuildings.contains(buildingId);
   }
 
@@ -821,6 +822,11 @@ class GameState {
     return true;
   }
 
+  void addInventory(String resourceId, int amount) {
+    if (amount <= 0) return;
+    inventory[resourceId] = (inventory[resourceId] ?? 0) + amount;
+  }
+
   int get cargoCapacityLevel => cargoLevel.clamp(1, 16).toInt();
 
   int get activeMinerCount =>
@@ -859,6 +865,13 @@ class GameState {
   bool get resonanceActive =>
       resonanceBuffUntil != null && resonanceBuffUntil!.isAfter(DateTime.now());
 
+  bool get isAdBoostActive =>
+      adBoostUntil != null && adBoostUntil!.isAfter(DateTime.now());
+
+  int get adBoostRemainingSeconds => isAdBoostActive
+      ? adBoostUntil!.difference(DateTime.now()).inSeconds
+      : 0;
+
   double get drillRateMetersPerSecond {
     final drill = upgrades['drill'] ?? 1;
     final scanner = upgrades['scanner'] ?? 0;
@@ -881,7 +894,7 @@ class GameState {
     );
     final depthDifficulty = MrMineDrillDifficulty.atDepthMeters(depthMeters);
     final drillSpeedMultiplier =
-        1 +
+        (1 +
         relicBonus +
         engineerBonus +
         specialDrillBonus +
@@ -893,7 +906,8 @@ class GameState {
         scanner * .012 +
         (activeBuffIds.contains('buff_overdrive')
             ? BuffLabCatalog.overdriveMultiplier - 1
-            : 0);
+            : 0)) *
+        (isAdBoostActive ? 2.0 : 1.0);
     return 1000 *
         assemblyWatts /
         depthDifficulty *
@@ -928,6 +942,7 @@ class GameState {
     QuestKind.relic => relicsFound,
     QuestKind.boss => bossesDefeated,
     QuestKind.resonance => resonanceChains,
+    QuestKind.crusher => crusherRepaired ? 1 : 0,
   };
 
   void storeActiveWorldSnapshot() {
@@ -1008,6 +1023,7 @@ class GameState {
       'excavationReadyAt': excavationReadyAt?.toIso8601String(),
       'excavationCompletedPending': excavationCompletedPending,
       'resonanceBuffUntil': resonanceBuffUntil?.toIso8601String(),
+      'adBoostUntil': adBoostUntil?.toIso8601String(),
       'merchantReadyAt': merchantReadyAt?.toIso8601String(),
       'chestCompressionReadyAt': chestCompressionReadyAt?.toIso8601String(),
       'chestCompressionQueue': chestCompressionQueue,
@@ -1253,6 +1269,7 @@ class GameState {
       excavationCompletedPending:
           json['excavationCompletedPending'] as bool? ?? false,
       resonanceBuffUntil: readDate('resonanceBuffUntil'),
+      adBoostUntil: readDate('adBoostUntil'),
       merchantReadyAt: readDate('merchantReadyAt'),
       chestCompressionReadyAt: readDate('chestCompressionReadyAt'),
       gems: readIntMap('gems'),

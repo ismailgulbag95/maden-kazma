@@ -10,6 +10,7 @@ enum QuestKind {
   relic,
   boss,
   resonance,
+  crusher,
 }
 
 class QuestDefinition {
@@ -116,6 +117,13 @@ abstract final class QuestCatalog {
       'metre derinlik',
       7000,
     ),
+    (
+      QuestKind.crusher,
+      'Kayıp istasyonu onar',
+      '7 km katındaki yıkık taş kırma istasyonuna dokun ve 50 kasa ile hattı onar',
+      'istasyon onarımı',
+      1,
+    ),
   ];
 
   static const _objectives = [
@@ -209,6 +217,7 @@ abstract final class QuestCatalog {
       QuestKind.relic => 1 + (chapter ~/ 4),
       QuestKind.boss => 1 + (chapter ~/ 5),
       QuestKind.resonance => 1 + (chapter ~/ 2),
+      QuestKind.crusher => 1,
     };
     final story = _chapterBriefs[chapter];
     return QuestDefinition(

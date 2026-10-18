@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/game_controller.dart';
 import '../../core/design/palette.dart';
 import '../../crusher/localization.dart';
+import '../../services/ad_service.dart';
 import '../../services/haptic_service.dart';
 import '../../services/sound_service.dart';
 
@@ -10,10 +11,12 @@ class OfflineWelcomeDialog extends StatelessWidget {
   const OfflineWelcomeDialog({
     super.key,
     required this.report,
+    required this.controller,
     required this.onDismiss,
   });
 
   final OfflineShiftReport report;
+  final GameController controller;
   final VoidCallback onDismiss;
 
   String _formatDuration(BuildContext context, int seconds) {
@@ -26,6 +29,25 @@ class OfflineWelcomeDialog extends StatelessWidget {
       );
     }
     return context.gameText('{minutes} dakika', values: {'minutes': minutes});
+  }
+
+  Future<void> _claimDoubleReward(BuildContext context) async {
+    final success = await AdService.instance.showRewardedAd(
+      context: context,
+      placement: 'offline_double_reward',
+      rewardTitle: context.gameText('2X ÇEVRİMDİŞİ KAZANÇ KATLAMA'),
+      rewardSubtitle: context.gameText(
+        '+{ore} ekstra cevher ve +{depth}m derinlik',
+        values: {
+          'ore': report.oreGained,
+          'depth': report.depthGained.toStringAsFixed(0),
+        },
+      ),
+    );
+    if (success && context.mounted) {
+      controller.doubleOfflineRewards(report);
+      Navigator.of(context).pop();
+    }
   }
 
   @override
@@ -117,31 +139,65 @@ class OfflineWelcomeDialog extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 22),
+              const SizedBox(height: 20),
 
-              // Confirm Button
-              SizedBox(
+              // 1. STRATEJİK REKLAM BUTONU: 2X AL (YÜKSEK CTR)
+              Container(
                 width: double.infinity,
-                height: 46,
+                height: 52,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFFFB300), Color(0xFFFF8F00)],
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.amber.withValues(alpha: 0.4),
+                      blurRadius: 14,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
                 child: FilledButton.icon(
                   style: FilledButton.styleFrom(
-                    backgroundColor: MinePalette.cyan,
-                    foregroundColor: MinePalette.ink,
+                    backgroundColor: Colors.transparent,
+                    shadowColor: Colors.transparent,
+                    foregroundColor: const Color(0xFF1E1100),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(12),
                     ),
+                  ),
+                  onPressed: withButtonTapSound(() => _claimDoubleReward(context)),
+                  icon: const Icon(Icons.bolt_rounded, size: 24),
+                  label: Text(
+                    context.gameText('2X AL · REKLAM İZLE'),
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              // Normal Confirm Button (Pasif / İkincil)
+              SizedBox(
+                width: double.infinity,
+                height: 40,
+                child: TextButton(
+                  style: TextButton.styleFrom(
+                    foregroundColor: MinePalette.cream.withValues(alpha: 0.7),
                   ),
                   onPressed: withButtonTapSound(() {
                     HapticService.instance.mediumImpact();
                     onDismiss();
                   }),
-                  icon: const Icon(Icons.check_circle_rounded),
-                  label: Text(
-                    context.gameText('VARDİYAYI KASAYA AKTAR'),
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.6,
+                  child: Text(
+                    context.gameText('Normal Aktar (+${report.oreGained})'),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),

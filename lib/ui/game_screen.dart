@@ -17,6 +17,7 @@ import '../domain/models/quest_definition.dart';
 import '../domain/models/resource_definition.dart';
 import '../domain/models/ore_deposit.dart';
 import '../domain/simulation/game_engine.dart';
+import '../services/ad_service.dart';
 import '../services/sound_service.dart';
 import 'widgets/atlas_sprite.dart';
 import 'widgets/building_dialog.dart';
@@ -33,9 +34,16 @@ import '../crusher/crusher_view.dart';
 import 'widgets/notification_permission_dialog.dart';
 
 class GameScreen extends StatefulWidget {
-  const GameScreen({super.key, required this.controller});
+  const GameScreen({
+    super.key,
+    required this.controller,
+    this.showLoadingScreen = false,
+    this.postLoadDelay = const Duration(seconds: 6),
+  });
 
   final GameController controller;
+  final bool showLoadingScreen;
+  final Duration postLoadDelay;
 
   @override
   State<GameScreen> createState() => _GameScreenState();
@@ -46,18 +54,22 @@ class _GameScreenState extends State<GameScreen> {
   bool _notificationDialogShown = false;
   bool _hasRenderedReadyState = false;
   bool _showOpeningComic = false;
+  late bool _loadingFinished;
   String? _activeNotice;
   Timer? _noticeTimer;
 
   @override
   void initState() {
     super.initState();
+    _loadingFinished = !widget.showLoadingScreen;
     widget.controller.addListener(_onControllerChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && widget.controller.state.musicEnabled) {
-        unawaited(SoundService.instance.startBgm());
+      if (_loadingFinished) {
+        if (mounted && widget.controller.state.musicEnabled) {
+          unawaited(SoundService.instance.startBgm());
+        }
+        _checkOfflineDialog();
       }
-      _checkOfflineDialog();
     });
   }
 
@@ -83,6 +95,7 @@ class _GameScreenState extends State<GameScreen> {
         context: context,
         builder: (dialogContext) => OfflineWelcomeDialog(
           report: report,
+          controller: widget.controller,
           onDismiss: () => Navigator.of(dialogContext).pop(),
         ),
       );
@@ -112,9 +125,28 @@ class _GameScreenState extends State<GameScreen> {
     });
   }
 
+  void _onLoadingAnimationFinished() {
+    if (!mounted || _loadingFinished) return;
+    setState(() {
+      _loadingFinished = true;
+    });
+    if (!_hasRenderedReadyState && widget.controller.isReady) {
+      _hasRenderedReadyState = true;
+      if (widget.controller.state.musicEnabled) {
+        unawaited(SoundService.instance.startBgm());
+      }
+      _checkOfflineDialog();
+      _checkNotificationPermissionDialog();
+    }
+  }
+
   void _onControllerChanged() {
     if (!mounted) return;
     if (!widget.controller.isReady) return;
+    if (!_loadingFinished) {
+      setState(() {});
+      return;
+    }
     if (!_hasRenderedReadyState) {
       _hasRenderedReadyState = true;
       _checkOfflineDialog();
@@ -155,31 +187,39 @@ class _GameScreenState extends State<GameScreen> {
       _openCrusher();
       return;
     }
+    final canRepair = widget.controller.canRepairCrusherStation;
     final repair = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text(context.gameText('Yıkık taş kırma istasyonu')),
         content: Text(
-          context.gameText(
-            '7 km katında eski bir taş kırma hattı bulundu. '
-            'Dişli ve konveyörü onarıp cevher akışını yeniden başlat.',
-          ),
+          canRepair
+              ? context.gameText(
+                  '7 km katında eski bir taş kırma hattı bulundu. '
+                  'Dişli ve konveyörü onarıp cevher akışını yeniden başlat.',
+                )
+              : context.gameText(
+                  '7 km katında eski bir taş kırma hattı enkazı bulundu.\n\n'
+                  '⚠️ ONARIM KİLİTLİ: Bu istasyonu onarmak için önce sıradaki '
+                  'vardiya görevlerini (Ambar Satışı, Madenci ve Sondaj Ölçümü) tamamlamalısın.',
+                ),
         ),
         actions: [
           TextButton(
             onPressed: withButtonTapSound(
               () => Navigator.pop(dialogContext, false),
             ),
-            child: Text(context.gameText('Vazgeç')),
+            child: Text(context.gameText(canRepair ? 'Vazgeç' : 'Kapat')),
           ),
-          FilledButton(
-            onPressed: withButtonTapSound(
-              state.canAfford(GameState.crusherRepairCost)
-                  ? () => Navigator.pop(dialogContext, true)
-                  : null,
+          if (canRepair)
+            FilledButton(
+              onPressed: withButtonTapSound(
+                state.canAfford(GameState.crusherRepairCost)
+                    ? () => Navigator.pop(dialogContext, true)
+                    : null,
+              ),
+              child: Text(context.gameText('Onar · 50 kasa')),
             ),
-            child: Text(context.gameText('Onar · 50 kasa')),
-          ),
         ],
       ),
     );
@@ -279,8 +319,13 @@ class _GameScreenState extends State<GameScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (!widget.controller.isReady) {
-      return const MineLoadingScreen();
+    if (!_loadingFinished) {
+      return MineLoadingScreen(
+        key: const ValueKey('mine-loading-screen'),
+        isLoaded: widget.controller.isReady,
+        postLoadDuration: widget.postLoadDelay,
+        onFinished: _onLoadingAnimationFinished,
+      );
     }
     if (widget.controller.initializationError != null) {
       return Scaffold(
@@ -325,12 +370,16 @@ class _GameScreenState extends State<GameScreen> {
       );
     }
     return Scaffold(
+      key: const ValueKey('mine-game-screen'),
       body: SafeArea(
         bottom: false,
         child: AnimatedBuilder(
           animation: widget.controller,
           builder: (context, _) => LayoutBuilder(
             builder: (context, constraints) {
+              if (constraints.maxWidth <= 100 || constraints.maxHeight <= 100) {
+                return const SizedBox();
+              }
               final compact = constraints.maxWidth < 1120;
               final hudHeight = constraints.maxWidth < 560
                   ? 92.0
@@ -351,6 +400,7 @@ class _GameScreenState extends State<GameScreen> {
                     child: Column(
                       children: [
                         _HudBar(
+                          controller: widget.controller,
                           state: widget.controller.state,
                           onSettings: withButtonTapSound(_openSettings)!,
                           onToggleSound: widget.controller.toggleAllAudio,
@@ -434,6 +484,9 @@ class _GameScreenState extends State<GameScreen> {
                   Positioned.fill(
                     child: FrenzyOverlay(controller: widget.controller),
                   ),
+                  Positioned.fill(
+                    child: _LuckyDroneOverlay(controller: widget.controller),
+                  ),
                   if (_showOpeningComic ||
                       !widget.controller.state.openingComicSeen)
                     Positioned.fill(
@@ -459,6 +512,7 @@ class _GameScreenState extends State<GameScreen> {
 
 class _HudBar extends StatelessWidget {
   const _HudBar({
+    required this.controller,
     required this.state,
     required this.onSettings,
     required this.onToggleSound,
@@ -466,6 +520,7 @@ class _HudBar extends StatelessWidget {
     this.onOpenCrusher,
   });
 
+  final GameController controller;
   final GameState state;
   final VoidCallback onSettings;
   final VoidCallback onToggleSound;
@@ -478,6 +533,7 @@ class _HudBar extends StatelessWidget {
       final portraitPhone = constraints.maxWidth < 560;
       final compact = constraints.maxWidth < 1120;
       final chips = [
+        _AdBoostHudChip(controller: controller, compact: compact),
         _HudChip(
           icon: Icons.currency_exchange_rounded,
           label: context.gameText('KASA'),
@@ -732,6 +788,472 @@ class _GameTitle extends StatelessWidget {
       ),
     ),
   );
+}
+
+class _AdBoostHudChip extends StatelessWidget {
+  const _AdBoostHudChip({
+    required this.controller,
+    required this.compact,
+  });
+
+  final GameController controller;
+  final bool compact;
+
+  String _formatRemaining(int totalSeconds) {
+    final hours = totalSeconds ~/ 3600;
+    final minutes = (totalSeconds % 3600) ~/ 60;
+    final seconds = totalSeconds % 60;
+    if (hours > 0) {
+      return '${hours}s ${minutes.toString().padLeft(2, '0')}d';
+    }
+    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = controller.state;
+    final isActive = state.isAdBoostActive;
+    final remainingSeconds = state.adBoostRemainingSeconds;
+
+    return InkWell(
+      onTap: () => _showAdBoostDialog(context, controller),
+      borderRadius: BorderRadius.circular(7),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        width: compact ? 92 : 148,
+        height: compact ? 37 : 51,
+        margin: EdgeInsets.only(right: compact ? 4 : 7),
+        padding: EdgeInsets.symmetric(horizontal: compact ? 6 : 8),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: isActive
+                ? [const Color(0xFFFF8F00), const Color(0xFFE65100)]
+                : [const Color(0xFF1E3A4A), const Color(0xFF0F232D)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(7),
+          border: Border.all(
+            color: isActive ? Colors.amber : const Color(0xFFFFB300).withValues(alpha: 0.5),
+            width: isActive ? 1.5 : 1.0,
+          ),
+          boxShadow: isActive
+              ? [
+                  BoxShadow(
+                    color: Colors.amber.withValues(alpha: 0.4),
+                    blurRadius: 8,
+                    spreadRadius: 1,
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.bolt_rounded,
+              color: isActive ? Colors.white : MinePalette.amber,
+              size: compact ? 18 : 22,
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isActive ? context.gameText('2X BOOST') : context.gameText('2X HIZ AL'),
+                    style: TextStyle(
+                      color: isActive ? Colors.white : MinePalette.amber,
+                      fontSize: compact ? 9 : 11,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  Text(
+                    isActive
+                        ? _formatRemaining(remainingSeconds)
+                        : context.gameText('+10 Dk'),
+                    style: TextStyle(
+                      color: isActive ? Colors.white.withValues(alpha: 0.9) : MinePalette.cream,
+                      fontSize: compact ? 8 : 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+void _showAdBoostDialog(BuildContext context, GameController controller) {
+  showDialog<void>(
+    context: context,
+    builder: (dialogContext) => Dialog(
+      backgroundColor: MinePalette.ink,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: MinePalette.amber, width: 1.5),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Padding(
+          padding: const EdgeInsets.all(22),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  gradient: const RadialGradient(
+                    colors: [Color(0xFFFFB300), Color(0xFFE65100)],
+                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.amber.withValues(alpha: 0.4),
+                      blurRadius: 16,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.bolt_rounded,
+                  color: Colors.white,
+                  size: 36,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                context.gameText('2X SÜPER ŞARJ (BOOST)'),
+                style: const TextStyle(
+                  color: MinePalette.cream,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.8,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                context.gameText(
+                  '1 Kısa Reklam = +10 Dakika boyunca TÜM madencilik üretimini ve sondaj hızını 2 katına çıkarır!\n(Maksimum 40 dakikaya kadar istiflenebilir)',
+                ),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: MinePalette.cream.withValues(alpha: 0.8),
+                  fontSize: 12,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 18),
+              if (controller.state.isAdBoostActive)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1B3B28),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFF64FFDA)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.check_circle_rounded, color: Color(0xFF64FFDA), size: 18),
+                      const SizedBox(width: 8),
+                      Text(
+                        context.gameText(
+                          'Aktif Kalan Süre: {mins} dk',
+                          values: {'mins': (controller.state.adBoostRemainingSeconds / 60).ceil()},
+                        ),
+                        style: const TextStyle(
+                          color: Color(0xFF64FFDA),
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: MinePalette.amber,
+                    foregroundColor: MinePalette.ink,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  onPressed: withButtonTapSound(() async {
+                    Navigator.of(dialogContext).pop();
+                    final success = await AdService.instance.showRewardedAd(
+                      context: context,
+                      placement: 'global_2x_boost',
+                      rewardTitle: context.gameText('2X SÜPER ŞARJ (+10 DK)'),
+                      rewardSubtitle: context.gameText('Sondaj hızı ve maden üretimi ikiye katlandı'),
+                    );
+                    if (success) {
+                      controller.activateAdBoost();
+                    }
+                  }),
+                  icon: const Icon(Icons.play_circle_fill_rounded, size: 22),
+                  label: Text(
+                    context.gameText('+10 DK BOOST EKLE (REKLAM)'),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: Text(
+                  context.gameText('Kapat'),
+                  style: TextStyle(
+                    color: MinePalette.cream.withValues(alpha: 0.6),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _LuckyDroneOverlay extends StatefulWidget {
+  const _LuckyDroneOverlay({required this.controller});
+
+  final GameController controller;
+
+  @override
+  State<_LuckyDroneOverlay> createState() => _LuckyDroneOverlayState();
+}
+
+class _LuckyDroneOverlayState extends State<_LuckyDroneOverlay>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _anim;
+  bool _droneVisible = false;
+  Timer? _checkTimer;
+  double _randomY = 160.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _anim = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 14),
+    );
+    _anim.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        if (mounted) setState(() => _droneVisible = false);
+      }
+    });
+
+    _checkTimer = Timer.periodic(const Duration(seconds: 12), (_) {
+      _checkSpawn();
+    });
+  }
+
+  void _checkSpawn() {
+    if (!mounted || _droneVisible) return;
+    if (AdService.instance.canSpawnLuckyDrone) {
+      if (math.Random().nextDouble() < 0.35) {
+        AdService.instance.markDroneSpawned();
+        final screenHeight = MediaQuery.maybeOf(context)?.size.height ?? 600;
+        setState(() {
+          _droneVisible = true;
+          _randomY = 120.0 + math.Random().nextDouble() * (screenHeight - 260).clamp(50.0, 400.0);
+        });
+        _anim.forward(from: 0.0);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _checkTimer?.cancel();
+    _anim.dispose();
+    super.dispose();
+  }
+
+  void _onDroneTap() {
+    _anim.stop();
+    setState(() => _droneVisible = false);
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: MinePalette.ink,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Color(0xFF64FFDA), width: 1.5),
+        ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 400),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF004D40),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: const Color(0xFF64FFDA), width: 1.5),
+                  ),
+                  child: const Icon(Icons.rocket_launch_rounded, color: Color(0xFF64FFDA), size: 32),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  context.gameText('ŞANS DRONE\'U YAKALANDI!'),
+                  style: const TextStyle(
+                    color: MinePalette.cream,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  context.gameText('Maden derinliklerinden gelen bu drone değerli bir fırsat taşıyor. Hangi hediyeyi istersin?'),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: MinePalette.cream.withValues(alpha: 0.8),
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: MinePalette.amber,
+                    foregroundColor: MinePalette.ink,
+                    minimumSize: const Size(double.infinity, 46),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: withButtonTapSound(() async {
+                    Navigator.of(dialogContext).pop();
+                    final ok = await AdService.instance.showRewardedAd(
+                      context: context,
+                      placement: 'lucky_drone_frenzy',
+                      rewardTitle: context.gameText('60 SANİYE ÇILGINLIK MODU'),
+                      rewardSubtitle: context.gameText('10x kazı hızı ve 250 cevher'),
+                    );
+                    if (ok) {
+                      widget.controller.claimLuckyDroneReward(frenzyMode: true);
+                    }
+                  }),
+                  icon: const Icon(Icons.local_fire_department_rounded),
+                  label: Text(
+                    context.gameText('60s MEGA ÇILGINLIK (REKLAM)'),
+                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF64FFDA),
+                    side: const BorderSide(color: Color(0xFF64FFDA)),
+                    minimumSize: const Size(double.infinity, 46),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: withButtonTapSound(() async {
+                    Navigator.of(dialogContext).pop();
+                    final ok = await AdService.instance.showRewardedAd(
+                      context: context,
+                      placement: 'lucky_drone_loot',
+                      rewardTitle: context.gameText('ANINDA HAZİNE DESTEĞİ'),
+                      rewardSubtitle: context.gameText('5.000 Kasa ve 500 Cevher'),
+                    );
+                    if (ok) {
+                      widget.controller.claimLuckyDroneReward(frenzyMode: false);
+                    }
+                  }),
+                  icon: const Icon(Icons.savings_rounded),
+                  label: Text(
+                    context.gameText('+5.000 KASA & 500 CEVHER (REKLAM)'),
+                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: Text(
+                    context.gameText('Pas Geç'),
+                    style: TextStyle(color: MinePalette.cream.withValues(alpha: 0.5)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_droneVisible) return const SizedBox.shrink();
+
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (context, child) {
+        final currentX = screenWidth - (_anim.value * (screenWidth + 80));
+        final floatOffset = math.sin(_anim.value * math.pi * 6) * 12;
+
+        return Positioned(
+          left: currentX,
+          top: _randomY + floatOffset,
+          child: GestureDetector(
+            onTap: _onDroneTap,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF00BFA5), Color(0xFF004D40)],
+                ),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFF64FFDA), width: 1.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF64FFDA).withValues(alpha: 0.5),
+                    blurRadius: 14,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.rocket_rounded, color: Colors.white, size: 20),
+                  const SizedBox(width: 6),
+                  Text(
+                    context.gameText('ŞANS!'),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
 class _HudChip extends StatelessWidget {
@@ -5506,6 +6028,9 @@ String _goalRequirementLine(
         'length': math.max(1, state.resonancePattern.length),
       },
     ),
+    QuestKind.crusher => t(
+      '7 km katındaki Kırıcı İstasyonuna git ve istasyonu onar.',
+    ),
   };
 }
 
@@ -5518,7 +6043,7 @@ String? _questTargetPanel(QuestDefinition quest) => switch (quest.kind) {
   QuestKind.cave => 'expedition',
   QuestKind.relic => 'research',
   QuestKind.boss => 'boss',
-  QuestKind.mine || QuestKind.depth => null,
+  QuestKind.mine || QuestKind.depth || QuestKind.crusher => null,
   QuestKind.resonance => 'research',
 };
 

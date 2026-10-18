@@ -103,6 +103,91 @@ class GameController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 1. Reklam Stratejisi: 2x Çevrimdışı Kazanç Katlama
+  void doubleOfflineRewards(OfflineShiftReport report) {
+    if (report.oreGained > 0) {
+      final coal = ResourceCatalog.byId['coal'] ?? ResourceCatalog.minerals.first;
+      state.addInventory(coal.id, report.oreGained);
+      state.totalMined += report.oreGained;
+    }
+    if (report.depthGained > 0) {
+      state.depthMeters = (state.depthMeters + report.depthGained).clamp(0, 1e12);
+      state.deepestMeters = (state.deepestMeters + report.depthGained).clamp(0, 1e12);
+    }
+    clearOfflineReport();
+    HapticService.instance.heavyImpact();
+    if (state.soundEffectsEnabled) {
+      unawaited(SoundService.instance.playChestOpen());
+    }
+    _notices.add('🎁 2X VARDİYA ÖDÜLÜ! +${report.oreGained} cevher ve +${report.depthGained.toStringAsFixed(0)}m eklendi!');
+    notifyListeners();
+  }
+
+  /// 2. Reklam Stratejisi: 2x Global Maden & Kazı Hızı Boost'u
+  void activateAdBoost([Duration duration = const Duration(minutes: 10)]) {
+    final now = DateTime.now();
+    final currentUntil = state.adBoostUntil;
+    DateTime newUntil;
+    if (currentUntil != null && currentUntil.isAfter(now)) {
+      newUntil = currentUntil.add(duration);
+    } else {
+      newUntil = now.add(duration);
+    }
+    // Maksimum 40 dakikaya kadar istiflenebilir (Stacking limit)
+    final maxAllowed = now.add(const Duration(minutes: 40));
+    if (newUntil.isAfter(maxAllowed)) {
+      newUntil = maxAllowed;
+    }
+    state.adBoostUntil = newUntil;
+    HapticService.instance.heavyImpact();
+    if (state.soundEffectsEnabled) {
+      unawaited(SoundService.instance.playChestOpen());
+    }
+    final remainingMinutes = newUntil.difference(now).inMinutes;
+    _notices.add('⚡ 2X KAZANÇ & HIZ BOOSTU AKTİF! ($remainingMinutes dakika kaldı)');
+    notifyListeners();
+  }
+
+  /// 3. Reklam Stratejisi: Şans Drone'u Ödülü (Frenzy veya Hazine)
+  void claimLuckyDroneReward({required bool frenzyMode}) {
+    if (frenzyMode) {
+      triggerFrenzy(60); // 60 saniye mega çılgınlık modu
+      final coal = ResourceCatalog.byId['coal'] ?? ResourceCatalog.minerals.first;
+      state.addInventory(coal.id, 250);
+      state.totalMined += 250;
+      _notices.add('🛸 ŞANS DRONE\'U: 60 SANİYE MEGA ÇILGINLIK + 250 CEVHER!');
+    } else {
+      final coal = ResourceCatalog.byId['coal'] ?? ResourceCatalog.minerals.first;
+      state.addInventory(coal.id, 500);
+      state.totalMined += 500;
+      state.addCoins(5000);
+      _notices.add('🛸 ŞANS DRONE\'U: 500 CEVHER + 5.000 KASA KAZANILDI!');
+    }
+    HapticService.instance.heavyImpact();
+    if (state.soundEffectsEnabled) {
+      unawaited(SoundService.instance.playChestOpen());
+    }
+    notifyListeners();
+  }
+
+  /// 5. Reklam Stratejisi: Bilim İnsanını Reklamla Ücretsiz Kurtarma/Diriltme
+  bool reviveScientistWithAd(String scientistId) {
+    final scientist = state.scientistById(scientistId);
+    if (scientist == null || !scientist.dead) return false;
+    scientist
+      ..dead = false
+      ..injuryCount = 0
+      ..injuredUntil = null;
+    state.scientists = state.livingScientistCount;
+    HapticService.instance.heavyImpact();
+    if (state.soundEffectsEnabled) {
+      unawaited(SoundService.instance.playChestOpen());
+    }
+    _notices.add('💉 ${scientist.name} kurtarıldı ve göreve geri döndü!');
+    notifyListeners();
+    return true;
+  }
+
   void triggerFrenzy([int seconds = 10]) {
     _frenzyEndTime = DateTime.now().add(Duration(seconds: seconds));
     HapticService.instance.heavyImpact();
@@ -169,13 +254,14 @@ class GameController extends ChangeNotifier {
   bool isQuestAvailable(QuestDefinition quest) => _isQuestAvailable(quest);
 
   bool _isQuestAvailable(QuestDefinition quest) {
-    if (quest.id < 5) return true;
+    if (quest.id < 6) return true;
     final starterTutorialClaimed = const [
       0,
       1,
       2,
       3,
       4,
+      5,
     ].every(state.claimedQuestIds.contains);
     if (!state.initialTutorialComplete && !starterTutorialClaimed) return false;
     return switch (quest.kind) {
@@ -269,6 +355,20 @@ class GameController extends ChangeNotifier {
       _notices.add(
         'Eski kayıt okunamadı. Yeni vardiya güvenli biçimde başlatıldı.',
       );
+    }
+    // Self-healing: Oyuncu ambarı açıp kömürü kasaya çevirmeden önce kırıcıyı onardıysa oluşan bug'ı düzelt
+    if (state.guidedProgression && !state.claimedQuestIds.contains(1)) {
+      if (state.crusherRepaired) {
+        state.crusherRepaired = false;
+        state.claimedQuestIds.remove(4);
+        state.claimedQuestIds.remove(5);
+      }
+      if (state.rawOreInventory.isNotEmpty) {
+        for (final entry in state.rawOreInventory.entries) {
+          state.addInventory(entry.key, entry.value);
+        }
+        state.rawOreInventory.clear();
+      }
     }
     GameEngine.prepareChallengeWindows(state, now);
     GameEngine.ensureOpenMineDeposits(state);
@@ -1579,8 +1679,23 @@ class GameController extends ChangeNotifier {
     _refreshState();
   }
 
+  bool get canRepairCrusherStation {
+    if (!state.guidedProgression) return true;
+    // Görev sırası gelmeden kesinlikle izin verme:
+    // 0: mine, 1: sell, 2: hire, 3: upgrade tamamlanmış ve 7 km'ye inilmiş olmalı
+    return state.tutorialStep >= 4 &&
+        const [0, 1, 2, 3].every(state.claimedQuestIds.contains) &&
+        state.deepestMeters >= 7000;
+  }
+
   void _completeSevenKmQuest() {
-    if (state.deepestMeters < 7000 || !state.claimedQuestIds.add(4)) return;
+    if (state.deepestMeters < 7000) return;
+    if (state.guidedProgression &&
+        !const [0, 1, 2, 3].every(state.claimedQuestIds.contains)) {
+      return;
+    }
+    if (!state.claimedQuestIds.add(4)) return;
+    state.tutorialStep = 5;
     final quest = QuestCatalog.all[4];
     final reward =
         (quest.reward *
@@ -1592,16 +1707,20 @@ class GameController extends ChangeNotifier {
     state.inventory['ticket'] = state.amount('ticket') + 1;
     state.relicScrap++;
     state.workerScrap++;
-    if (state.initialTutorialComplete) {
-      GameEngine.completeStarterTutorial(state, _notices);
-    }
     _notices.add(
-      '7 km görevi tamamlandı: +$reward kasa. Yıkık taş kırma istasyonu bulundu!',
+      '7 km katmanına ulaşıldı! Yıkık taş kırma istasyonu bulundu. Onarım için istasyona dokun.',
     );
   }
 
   bool repairCrusherStation() {
     if (!state.crusherStationDiscovered || state.crusherRepaired) return false;
+    if (!canRepairCrusherStation) {
+      _notices.add(
+        'Taş kırma istasyonunu onarmak için önce sıradaki vardiya görevlerini tamamla.',
+      );
+      notifyListeners();
+      return false;
+    }
     if (!state.spendCoins(GameState.crusherRepairCost)) {
       _notices.add(
         'Taş kırma istasyonunu onarmak için ${GameState.crusherRepairCost} kasa gerekir.',
@@ -1610,9 +1729,23 @@ class GameController extends ChangeNotifier {
       return false;
     }
     state.crusherRepaired = true;
+    state.unlockedBuildings.add('crusher');
+    state.tutorialStep = 6;
     _notices.add(
-      'Taş kırma istasyonu onarıldı. Kırıcıyı açmak için istasyona dokun.',
+      'Taş kırma istasyonu onarıldı! Artık kırıcı hattını kullanabilirsin.',
     );
+    // 5. görevi (crusher repair) tamamla
+    if (state.claimedQuestIds.add(5)) {
+      final quest = QuestCatalog.all[5];
+      state.addCoins(quest.reward);
+      _notices.add('Görev tamamlandı: +${quest.reward} kasa.');
+    }
+    if (state.initialTutorialComplete) {
+      GameEngine.completeStarterTutorial(state, _notices);
+      _notices.add(
+        'İlk vardiya tamamlandı. Danışman robot yeni sistemleri sırayla tanıtacak.',
+      );
+    }
     _refreshState();
     return true;
   }

@@ -22,6 +22,7 @@ import '../../domain/models/reactor_definition.dart';
 import '../../domain/models/buff_lab_definition.dart';
 import '../../domain/simulation/game_engine.dart';
 import '../../crusher/localization.dart';
+import '../../services/ad_service.dart';
 import '../../services/sound_service.dart';
 import 'atlas_sprite.dart';
 import 'game_primitives.dart';
@@ -954,7 +955,17 @@ class BuildingDialog extends StatelessWidget {
       _statTile('Bilinen montaj şeması', '${state.knownBlueprintIds.length}'),
       _statTile(
         'Toplam montaj gücü',
-        '${DrillAssemblyCatalog.power(bitLevel: state.drillBitLevel, fanLevel: state.drillFanLevel, engineLevel: state.drillEngineLevel).toStringAsFixed(0)} W • derinliğe göre hesaplanır',
+        gameTextForLanguage(
+          state.languageCode,
+          '{power} W • derinliğe göre hesaplanır',
+          {
+            'power': DrillAssemblyCatalog.power(
+              bitLevel: state.drillBitLevel,
+              fanLevel: state.drillFanLevel,
+              engineLevel: state.drillEngineLevel,
+            ).toStringAsFixed(0),
+          },
+        ),
       ),
       for (final component in DrillAssemblyCatalog.all)
         _drillAssemblyUpgradeTile(state, component),
@@ -965,6 +976,9 @@ class BuildingDialog extends StatelessWidget {
     GameState state,
     DrillAssemblyDefinition component,
   ) {
+    String t(String source, [Map<String, Object> values = const {}]) =>
+        gameTextForLanguage(state.languageCode, source, values);
+
     final level = GameEngine.drillAssemblyLevel(state, component.id);
     final nextLevel = level + 1;
     final cost = GameEngine.drillAssemblyUpgradeCost(state, component.id);
@@ -1002,9 +1016,13 @@ class BuildingDialog extends StatelessWidget {
           final available = (state.amount(entry.key) - state.reserve(entry.key))
               .clamp(0, 0x7fffffff)
               .toInt();
-          final resourceName =
-              ResourceCatalog.byId[entry.key]?.name ?? entry.key;
-          return '$resourceName $available/${entry.value}${available >= entry.value ? ' ✓' : ' • eksik'}';
+          final resourceName = t(
+            ResourceCatalog.byId[entry.key]?.name ?? entry.key,
+          );
+          final requirementStatus = available >= entry.value
+              ? ' ✓'
+              : ' • ${t('eksik')}';
+          return '$resourceName $available/${entry.value}$requirementStatus';
         })
         .join(' • ');
     final currentWatts = component.wattsAt(level);
@@ -1019,28 +1037,52 @@ class BuildingDialog extends StatelessWidget {
         ? currentMultiplier
         : DrillAssemblyCatalog.wattMultiplierAt(component.id, nextLevel);
     final blueprintText = blueprintId == null
-        ? 'Şema gerekmiyor'
-        : 'Şema ${GameEngine.blueprintName(blueprintId)} • ${blueprintLocked ? 'eksik' : 'arşivde'}';
+        ? t('Şema gerekmiyor')
+        : t('Şema {name} • {level} • {status}', {
+            'name': t(component.name),
+            'level': 'Lv $nextLevel',
+            'status': t(blueprintLocked ? 'eksik' : 'arşivde'),
+          });
     final depthText = requiredDepth == 0
-        ? 'Derinlik şartı yok'
-        : 'Derinlik ${(state.deepestMeters / 1000).floor()}/${(requiredDepth / 1000).ceil()} km${depthLocked ? ' • eksik' : ' • tamam'}';
+        ? t('Derinlik şartı yok')
+        : t('Derinlik {current}/{required} km • {status}', {
+            'current': (state.deepestMeters / 1000).floor(),
+            'required': (requiredDepth / 1000).ceil(),
+            'status': t(depthLocked ? 'eksik' : 'tamam'),
+          });
     final buildingText = requiredBuilding == null
         ? null
-        : 'Bina $requiredBuildingName • ${buildingLocked ? 'gerekli' : 'açık'}';
+        : t('Bina {name} • {status}', {
+            'name': requiredBuildingName,
+            'status': t(buildingLocked ? 'gerekli' : 'açık'),
+          });
     final cashText = cost <= 0
-        ? 'Kasa gerekmez'
-        : 'Kasa ${_compactCash(cost)} • ${state.canAfford(cost.toDouble()) ? 'hazır' : 'eksik'}';
+        ? t('Kasa gerekmez')
+        : t('Kasa {cost} • {status}', {
+            'cost': _compactCash(cost),
+            'status': t(state.canAfford(cost.toDouble()) ? 'hazır' : 'eksik'),
+          });
     final materialText = requirements.isEmpty
-        ? 'Maden gerekmez'
-        : 'Maden: $recipeText';
+        ? t('Maden gerekmez')
+        : t('Maden: {recipe}', {'recipe': recipeText});
     final crewText = state.crewCount > 0
-        ? 'Madenci hazır'
-        : 'En az 1 madenci gerekli';
+        ? t('Madenci hazır')
+        : t('En az 1 madenci gerekli');
     final description = level >= DrillAssemblyCatalog.maxLevel
-        ? 'Son şema tamamlandı • ${currentWatts.toStringAsFixed(0)} W.'
+        ? t('Son şema tamamlandı • {power} W.', {
+            'power': currentWatts.toStringAsFixed(0),
+          })
         : [
-            'Sonraki seviye Lv $nextLevel',
-            'Güç ${currentWatts.toStringAsFixed(0)} W ×${_compactCash(currentMultiplier)} → ${nextWatts.toStringAsFixed(0)} W ×${_compactCash(nextMultiplier)}',
+            t('Sonraki seviye Lv {level}', {'level': nextLevel}),
+            t(
+              'Güç {current} W ×{currentMultiplier} → {next} W ×{nextMultiplier}',
+              {
+                'current': currentWatts.toStringAsFixed(0),
+                'currentMultiplier': _compactCash(currentMultiplier),
+                'next': nextWatts.toStringAsFixed(0),
+                'nextMultiplier': _compactCash(nextMultiplier),
+              },
+            ),
             blueprintText,
             depthText,
             ?buildingText,
@@ -1057,8 +1099,11 @@ class BuildingDialog extends StatelessWidget {
         'fan' => Icons.toys_rounded,
         _ => Icons.settings_rounded,
       },
-      title:
-          'Montaj: ${component.name} • Lv $level/${DrillAssemblyCatalog.maxLevel}',
+      title: t('Montaj: {component} • Lv {level}/{max}', {
+        'component': t(component.name),
+        'level': level,
+        'max': DrillAssemblyCatalog.maxLevel,
+      }),
       description: description,
       buttonLabel: level >= DrillAssemblyCatalog.maxLevel
           ? 'MAKSİMUM'
@@ -1596,7 +1641,7 @@ class BuildingDialog extends StatelessWidget {
           onPressed: controller.hireScientist,
           accent: MinePalette.teal,
         ),
-        _scientistRosterSection(state),
+        _scientistRosterSection(context, state),
         if (state.unlockedBuildings.contains('deep_core')) ...[
           _subheading('DERİN ÇEKİRDEK • BİLİM İNSANI ADAMA'),
           for (final scientist in state.scientistRoster)
@@ -1723,7 +1768,7 @@ class BuildingDialog extends StatelessWidget {
     );
   }
 
-  Widget _scientistRosterSection(GameState state) {
+  Widget _scientistRosterSection(BuildContext context, GameState state) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1736,12 +1781,16 @@ class BuildingDialog extends StatelessWidget {
             'İlk bilim insanı 50 km’de araştırma ekibine katılır.',
           ),
         for (final scientist in state.scientistRoster)
-          _scientistCard(scientist, state),
+          _scientistCard(context, scientist, state),
       ],
     );
   }
 
-  Widget _scientistCard(ScientistState scientist, GameState state) {
+  Widget _scientistCard(
+    BuildContext context,
+    ScientistState scientist,
+    GameState state,
+  ) {
     final active = state.activeScientistId == scientist.id;
     final readyAt = active ? state.scientistExpeditionReadyAt : null;
     final rarityColor = switch (scientist.rarityId) {
@@ -1811,22 +1860,56 @@ class BuildingDialog extends StatelessWidget {
           if (scientist.dead)
             Padding(
               padding: const EdgeInsets.only(top: 7),
-              child: OutlinedButton.icon(
-                onPressed: withButtonTapSound(
-                  state.revivalTokens > 0
-                      ? () => controller.reviveScientist(scientist.id)
-                      : null,
-                ),
-                icon: const Icon(Icons.favorite_rounded, size: 15),
-                label: _LocalizedText(
-                  state.revivalTokens > 0
-                      ? 'NADİR MÜHÜRLE CANLANDIR'
-                      : 'CANLANDIRMA MÜHRÜ GEREKİR',
-                  style: const TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w900,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: MinePalette.amber,
+                      foregroundColor: MinePalette.ink,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                    ),
+                    onPressed: withButtonTapSound(() async {
+                      final success = await AdService.instance.showRewardedAd(
+                        context: context,
+                        placement: 'scientist_revive',
+                        rewardTitle: 'BİLİM İNSANI SAĞLIKLA KURTARILDI',
+                        rewardSubtitle: '${scientist.name} ekibe kayıpsız geri dönüyor',
+                      );
+                      if (success) {
+                        controller.reviveScientistWithAd(scientist.id);
+                      }
+                    }),
+                    icon: const Icon(Icons.medical_services_rounded, size: 15),
+                    label: const _LocalizedText(
+                      'ACİL KURTAR · REKLAM İZLE',
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
                   ),
-                ),
+                  if (state.revivalTokens > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: OutlinedButton.icon(
+                        onPressed: withButtonTapSound(
+                          () => controller.reviveScientist(scientist.id),
+                        ),
+                        icon: const Icon(Icons.favorite_rounded, size: 15),
+                        label: const _LocalizedText(
+                          'NADİR MÜHÜRLE CANLANDIR',
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
             )
           else if (scientist.injured)
